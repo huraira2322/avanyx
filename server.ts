@@ -10,7 +10,7 @@ import { memoryService } from './second brain/src/services/memory/memoryService'
 import { createReferralRouter } from './src/server/referralRouter';
 import { createMasterPaymentRouter } from './src/server/masterPaymentRouter';
 import { masterPaymentEngine } from './src/server/masterPaymentEngine';
-import { VelcoraCreditSystem, ADMIN_CONFIG } from './src/server/creditManager';
+import { VelcoraCreditSystem, ADMIN_CONFIG, ensureCentralAIConfigLoaded, db as adminDb } from './src/server/creditManager';
 import {
   authenticateStaff,
   registerStaffCredentials,
@@ -2343,7 +2343,7 @@ function generateHighAestheticCommercialSvg(
 
 // 2. Ask Velcora AI Endpoint (Ultra-Smart Multi-Turn with Resilient Cascade, Second Brain Grounding & Action Agent)
 app.post('/api/ai/ask', async (req, res) => {
-  const { message, history, businessContext, modelId, attachment, tenantId: bodyTenantId, userId: bodyUserId, simulateQuotaExhaustion } = req.body;
+  const { message, history, businessContext, modelId, attachment, tenantId: bodyTenantId, userId: bodyUserId, simulateQuotaExhaustion, sessionId, pendingMsgId } = req.body;
   const tenantId = (req.headers['x-tenant-id'] as string) || bodyTenantId || 'velcora-default-store';
   const userId = (req.headers['x-user-id'] as string) || bodyUserId || 'default-user';
   const requestId = `req-ask-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -2673,6 +2673,36 @@ ${engineSpecializedPrompt}`;
     const actualCost = Math.min(maxCost, VelcoraCreditSystem.calculateMaxCost(requestedEngine.id, totalEstTokens, 0));
 
     await VelcoraCreditSystem.settleCredits(userId, requestId, actualCost);
+
+    // Save AI response to Firestore if session is provided (for background persistence)
+    if (sessionId && pendingMsgId && adminDb) {
+      try {
+        const docRef = adminDb.collection('businesses').doc(tenantId).collection('chatSessions').doc(sessionId);
+        const snap = await docRef.get();
+        if (snap.exists) {
+          const data = snap.data();
+          const msgs = data?.messages || [];
+          const idx = msgs.findIndex((m: any) => m.id === pendingMsgId);
+          const assistantMsg = {
+            id: pendingMsgId,
+            role: 'assistant',
+            content: rawReply,
+            timestamp: new Date().toISOString(),
+            modelUsed: modelUsed,
+            actionProposal: extractedActionProposal || null,
+          };
+          if (idx >= 0) {
+            msgs[idx] = assistantMsg;
+          } else {
+            msgs.push(assistantMsg);
+          }
+          await docRef.set({ messages: msgs, updatedAt: new Date().toISOString() }, { merge: true });
+          console.log('[Velcora Ask] Background AI response saved to Firestore for session', sessionId);
+        }
+      } catch (dbErr) {
+        console.error('[Velcora Ask] Failed to save background response to Firestore:', dbErr);
+      }
+    }
 
     res.json({
       success: true,

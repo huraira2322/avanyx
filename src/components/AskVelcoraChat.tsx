@@ -8,9 +8,8 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, UserCheck, ShieldCheck,
   RefreshCw, Clock, Bot, Cpu, History
 } from 'lucide-react';
-import Markdown from 'react-markdown';
 import { AiActionProposal } from '../types';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getApiUrl } from '../lib/apiConfig';
 import { VELCORA_COLOR_PALETTES } from '../constants/themeColors';
@@ -19,6 +18,8 @@ import { VelcoraMascot } from './VelcoraMascot';
 import { LivingLine } from './LivingLine';
 import { ChatModelLogo, OmniModelLogo, FlashModelLogo, AxiomModelLogo } from './VelcoraAiModelLogos';
 import { resolveActivePlan, isFeatureAllowed } from '../utils/planLimitsEngine';
+import { VelcoraAiActivityIndicator } from './VelcoraAiActivityIndicator';
+import { VelcoraMarkdownRenderer } from './VelcoraMarkdownRenderer';
 
 interface ChatMessage {
   id: string;
@@ -28,6 +29,7 @@ interface ChatMessage {
   modelUsed?: string;
   attachmentPreview?: string;
   actionProposal?: AiActionProposal;
+  isProcessing?: boolean;
 }
 
 interface ChatSession {
@@ -198,6 +200,9 @@ export const AskVelcoraChat: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<string>('');
+  const [pendingHasAttachment, setPendingHasAttachment] = useState<boolean>(false);
+  const [processingStartTime, setProcessingStartTime] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
   const [attachedFile, setAttachedFile] = useState<{ name: string; mimeType: string; base64: string } | null>(null);
@@ -295,78 +300,90 @@ export const AskVelcoraChat: React.FC = () => {
     }
   };
 
-  // Load Sessions
+  // Load Sessions with real-time onSnapshot to support background AI responses
   useEffect(() => {
     let active = true;
-    const loadSessions = async () => {
+    let unsubscribe: () => void;
+
+    const loadInitialLocal = () => {
       const raw = localStorage.getItem(sessionKey);
-      let loadedSessions: ChatSession[] = [];
       if (raw) {
         try {
-          loadedSessions = JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.length > 0 && active) {
+            setSessions(parsed);
+            const lastId = localStorage.getItem(`velcora_active_session_${tenantId}_${userId}`);
+            if (lastId && parsed.some((s: any) => s.id === lastId)) {
+              setActiveSessionId(lastId);
+            } else {
+              setActiveSessionId(parsed[0].id);
+            }
+          }
         } catch (e) {
           console.error('Failed to parse local sessions', e);
         }
       }
+    };
 
-      if (db && authUser && tenantId) {
-        try {
-          const sessionsCol = collection(db, 'businesses', tenantId, 'chatSessions');
-          const q = query(sessionsCol, where('userId', '==', authUser.uid));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const cloudSessions: ChatSession[] = [];
-            snap.forEach(docSnap => {
-              const data = docSnap.data();
-              cloudSessions.push({
-                id: docSnap.id,
-                title: data.title || 'Untitled',
-                messages: data.messages || [],
-                updatedAt: data.updatedAt || new Date().toISOString(),
-              });
+    loadInitialLocal();
+
+    if (db && authUser && tenantId) {
+      const sessionsCol = collection(db, 'businesses', tenantId, 'chatSessions');
+      const q = query(sessionsCol, where('userId', '==', authUser.uid));
+      
+      unsubscribe = onSnapshot(q, (snap) => {
+        if (!active) return;
+        if (!snap.empty) {
+          const cloudSessions: ChatSession[] = [];
+          snap.forEach(docSnap => {
+            const data = docSnap.data();
+            cloudSessions.push({
+              id: docSnap.id,
+              title: data.title || 'Untitled',
+              messages: data.messages || [],
+              updatedAt: data.updatedAt || new Date().toISOString(),
             });
-            cloudSessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-            if (active && cloudSessions.length > 0) {
-              loadedSessions = cloudSessions;
-              safeSetLocalStorageSessions(sessionKey, cloudSessions);
-            }
-          }
-        } catch (err) {
-          console.warn('Failed to load cloud sessions, using local storage:', err);
-        }
-      }
+          });
+          cloudSessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+          
+          setSessions(cloudSessions);
+          safeSetLocalStorageSessions(sessionKey, cloudSessions);
 
-      if (loadedSessions.length === 0) {
-        const defaultSessionId = `session-${Date.now()}`;
-        const defaultSession: ChatSession = {
-          id: defaultSessionId,
-          title: 'Business Intelligence',
-          messages: [],
-          updatedAt: new Date().toISOString(),
-        };
-        loadedSessions = [defaultSession];
-        if (db && authUser && tenantId) {
+          // Only set active session if none is set or current is invalid
+          setSessions(prev => {
+             const lastId = localStorage.getItem(`velcora_active_session_${tenantId}_${userId}`);
+             const validCurrent = cloudSessions.some(s => s.id === lastId);
+             if (validCurrent && lastId) {
+                // If it already exists, no need to call setActiveSessionId since it might already be correct
+                // But let's just make sure it's set:
+                setTimeout(() => setActiveSessionId(prevId => prevId || lastId), 0);
+             } else if (cloudSessions.length > 0) {
+                setTimeout(() => setActiveSessionId(cloudSessions[0].id), 0);
+             }
+             return cloudSessions;
+          });
+        } else {
+          // Empty, create default
+          const defaultSessionId = `session-${Date.now()}`;
+          const defaultSession: ChatSession = {
+            id: defaultSessionId,
+            title: 'Business Intelligence',
+            messages: [],
+            updatedAt: new Date().toISOString(),
+          };
+          setSessions([defaultSession]);
+          setActiveSessionId(defaultSessionId);
           const docRef = doc(db, 'businesses', tenantId, 'chatSessions', defaultSessionId);
           setDoc(docRef, { ...defaultSession, userId: authUser.uid }).catch(() => {});
         }
-      }
-
-      if (active) {
-        setSessions(loadedSessions);
-        const lastActiveSessionId = localStorage.getItem(`velcora_active_session_${tenantId}_${userId}`);
-        const exists = loadedSessions.some(s => s.id === lastActiveSessionId);
-        if (exists && lastActiveSessionId) {
-          setActiveSessionId(lastActiveSessionId);
-        } else {
-          setActiveSessionId(loadedSessions[0].id);
-        }
-      }
-    };
-
-    loadSessions();
+      }, (err) => {
+        console.warn('Failed to listen to cloud sessions:', err);
+      });
+    }
 
     return () => {
       active = false;
+      if (unsubscribe) unsubscribe();
     };
   }, [tenantId, userId, authUser?.uid]);
 
@@ -575,9 +592,22 @@ export const AskVelcoraChat: React.FC = () => {
       attachmentPreview: attachedFile?.base64,
     };
 
-    const nextMessages = [...messages, userMsg];
+    const pendingMsgId = `ai-pending-${Date.now()}`;
+    const pendingMsg: ChatMessage = {
+      id: pendingMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+      isProcessing: true,
+    };
+
+    const nextMessages = [...messages, userMsg, pendingMsg];
     updateSessionMessages(nextMessages);
+    
     const outgoingAttachment = attachedFile;
+    setPendingPrompt(text || (attachedFile ? `[Attached Document: ${attachedFile.name}]` : ''));
+    setPendingHasAttachment(!!attachedFile);
+    setProcessingStartTime(Date.now());
     setInputMessage('');
     setAttachedFile(null);
     setIsLoading(true);
@@ -649,12 +679,13 @@ export const AskVelcoraChat: React.FC = () => {
         })),
       };
 
-      const historyPayload = nextMessages.slice(-8).map(m => ({
+      const historyPayload = messages.slice(-8).map(m => ({
         role: m.role,
         content: m.content,
       }));
 
-      const res = await fetch(getApiUrl('/api/ai/ask'), {
+      // Fire the request and process responses natively without awaiting json parse blocking the UI
+      fetch(getApiUrl('/api/ai/ask'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -669,101 +700,46 @@ export const AskVelcoraChat: React.FC = () => {
           modelId: activeModelId || 'flash-omni-1',
           tenantId,
           userId,
+          sessionId: activeSessionId,
+          pendingMsgId: pendingMsgId
         }),
-      });
-
-      const data = await res.json();
-
-      if (data.success === false) {
-        const errorContent = `⚠️ **${data.error || 'AI Provider Error'}**\n\n${data.message || 'Unable to complete request with selected model.'}`;
-        const assistantMsg: ChatMessage = {
-          id: `ai-err-${Date.now()}`,
-          role: 'assistant',
-          content: errorContent,
-          timestamp: new Date().toISOString(),
-          modelUsed: data.modelUsed || activeModelId,
-        };
-        updateSessionMessages([...nextMessages, assistantMsg]);
-        return;
-      }
-
-      if (!data.reply || typeof data.reply !== 'string' || data.reply.trim().length === 0) {
-        const assistantMsg: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: 'assistant',
-          content: 'No response was returned by the AI engine. Please verify the query and try again.',
-          timestamp: new Date().toISOString(),
-          modelUsed: data.modelUsed || activeModelId,
-        };
-        updateSessionMessages([...nextMessages, assistantMsg]);
-        return;
-      }
-
-      const fullReply = data.reply;
-      const finalMsgId = `ai-${Date.now()}`;
-      const finalModelUsed = data.modelUsed || activeModelId;
-      const finalActionProposal = data.actionProposal || undefined;
-      const finalTimestamp = new Date().toISOString();
-
-      setIsLoading(false);
-
-      let currentIdx = 0;
-      const length = fullReply.length;
-      const baseChunkSize = length > 1200 ? 30 : length > 500 ? 15 : 6;
-      const intervalMs = 25;
-
-      setStreamingMessage({
-        id: finalMsgId,
-        role: 'assistant',
-        content: '',
-        timestamp: finalTimestamp,
-        modelUsed: finalModelUsed,
-        actionProposal: undefined,
-      });
-
-      if (typewriterTimerRef.current) {
-        clearInterval(typewriterTimerRef.current);
-      }
-
-      typewriterTimerRef.current = setInterval(() => {
-        currentIdx += baseChunkSize;
-        if (currentIdx >= length) {
-          if (typewriterTimerRef.current) {
-            clearInterval(typewriterTimerRef.current);
-            typewriterTimerRef.current = null;
-          }
-          setStreamingMessage(null);
-          
+      }).then(res => res.json()).then(data => {
+        // Only handle explicit errors returned by the AI provider that wouldn't have been saved to Firestore by the backend
+        if (data.success === false) {
+          const errorContent = `⚠️ **${data.error || 'AI Provider Error'}**\n\n${data.message || 'Unable to complete request with selected model.'}`;
           const assistantMsg: ChatMessage = {
-            id: finalMsgId,
+            id: pendingMsgId, // Replace the pending msg
             role: 'assistant',
-            content: fullReply,
-            timestamp: finalTimestamp,
-            modelUsed: finalModelUsed,
-            actionProposal: finalActionProposal,
+            content: errorContent,
+            timestamp: new Date().toISOString(),
+            modelUsed: data.modelUsed || activeModelId,
           };
-          updateSessionMessages([...nextMessages, assistantMsg]);
-        } else {
-          setStreamingMessage(prev => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              content: fullReply.substring(0, currentIdx)
-            };
-          });
+          updateSessionMessages([...messages, userMsg, assistantMsg]);
         }
-      }, intervalMs);
+      }).catch(err => {
+        console.error('Fetch background err', err);
+        updateSessionMessages([
+          ...messages, userMsg,
+          {
+            id: pendingMsgId, // Replace pending message with error
+            role: 'assistant',
+            content: 'Unable to connect to the Velcora AI intelligence engine right now. Please verify your connection or try again shortly.',
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }).finally(() => {
+        setIsLoading(false);
+      });
     } catch (err: any) {
       updateSessionMessages([
-        ...nextMessages,
+        ...messages, userMsg,
         {
-          id: `ai-err-${Date.now()}`,
+          id: pendingMsgId,
           role: 'assistant',
-          content: 'Unable to connect to the Velcora AI intelligence engine right now. Please verify your connection or try again shortly.',
+          content: 'Unable to build business context for the AI engine right now.',
           timestamp: new Date().toISOString(),
         },
       ]);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -1269,9 +1245,17 @@ export const AskVelcoraChat: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="markdown-body prose dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto break-words min-w-0">
-                      <Markdown>{msg.content}</Markdown>
-                    </div>
+                    {msg.isProcessing ? (
+                      <div className="py-2 px-1">
+                        <VelcoraAiActivityIndicator modelName={activeModelId || 'Velcora AI'} activePalette={activePalette} />
+                      </div>
+                    ) : (
+                      <VelcoraMarkdownRenderer
+                        content={msg.content}
+                        isUserMessage={msg.role === 'user'}
+                        accentColor={activePalette.hex}
+                      />
+                    )}
 
                     {/* Action proposal execution widget */}
                     {msg.actionProposal && (
@@ -1361,24 +1345,15 @@ export const AskVelcoraChat: React.FC = () => {
             ))
           )}
 
-          {/* Loading Animation */}
+          {/* Professional Real-Time AI Activity Indicator */}
           {isLoading && (
-            <div className="flex gap-3 max-w-3xl mx-auto justify-start">
-              <div 
-                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-800"
-                style={{
-                  backgroundColor: activePalette.lightBg,
-                  color: activePalette.hex,
-                }}
-              >
-                <VelcoraMascot size={22} sparkles={true} />
-              </div>
-              <div className="flex gap-1.5 items-center bg-slate-100/70 dark:bg-[#151C30] px-4 py-3 rounded-2xl rounded-tl-xs border border-slate-200/50 dark:border-slate-800/50">
-                <div className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
+            <VelcoraAiActivityIndicator
+              promptText={pendingPrompt}
+              hasAttachment={pendingHasAttachment}
+              activePalette={activePalette}
+              modelName={selectedModel?.name}
+              startTime={processingStartTime}
+            />
           )}
 
           <div ref={messagesEndRef} />

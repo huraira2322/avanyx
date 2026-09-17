@@ -3,6 +3,21 @@ import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Central AI pricing / availability / limits — single source of truth.
+// This runs in BOTH the Vite client bundle context (types/helpers are pure) and
+// the Node credit-engine bundle (it imports DEFAULT_AI_CONFIG + merge helpers).
+import {
+  AIConfig,
+  AI_CONFIG_DOC,
+  DEFAULT_AI_CONFIG,
+  IbRate,
+  getEngineBilling,
+  mergeAIConfig,
+  normalizeModelId,
+} from '../lib/aiConfig';
+
+
+
 // Load Firebase Config to resolve projectId
 let projectId = 'velcora-default';
 try {
@@ -16,7 +31,7 @@ try {
 }
 
 // Initialize Firebase Admin
-let db: Firestore | null = null;
+export let db: Firestore | null = null;
 let firestoreCheckedAndDisabled = false;
 
 function disableFirestoreDueToError(err: any, context: string) {
@@ -190,7 +205,139 @@ export const ADMIN_CONFIG = {
   } as Record<string, { per1k?: number; base?: number; fixed?: number; inputPer1k?: number; outputPer1k?: number }>
 };
 
-// Rates limit tracker (In-memory token bucket)
+// ---------------------------------------------------------------------------
+// Central AI configuration loader (system/ai_config Firestore doc)
+// ---------------------------------------------------------------------------
+let centralAIConfigCache: AIConfig | null = null;
+let centralAIConfigFetchedAt = 0;
+const CENTRAL_AI_CONFIG_TTL_MS = 60_000;
+
+/**
+ * Loads (and caches for TTL) the authoritative AI config from Firestore,
+ * merging any overrides over DEFAULT_AI_CONFIG so billing/limits/availability
+ * are never lost even if the doc is partial or missing.
+ */
+export async function ensureCentralAIConfigLoaded(force = false): Promise<AIConfig> {
+  const now = Date.now();
+  if (!force && centralAIConfigCache && now - centralAIConfigFetchedAt < CENTRAL_AI_CONFIG_TTL_MS) {
+    return centralAIConfigCache;
+  }
+  // Best-effort load; silently fall back to defaults so the platform never hard-fails.
+  if (db) {
+    try {
+      const snap = await db.collection(AI_CONFIG_DOC.collection).doc(AI_CONFIG_DOC.id).get();
+      if (snap.exists) {
+        centralAIConfigCache = mergeAIConfig(DEFAULT_AI_CONFIG, (snap.data() || {}) as Partial<AIConfig>);
+      } else if (!centralAIConfigCache) {
+        centralAIConfigCache = DEFAULT_AI_CONFIG;
+      }
+    } catch (err: any) {
+      disableFirestoreDueToError(err, 'central AI config load');
+      if (!centralAIConfigCache) centralAIConfigCache = DEFAULT_AI_CONFIG;
+    }
+  } else if (!centralAIConfigCache) {
+    centralAIConfigCache = DEFAULT_AI_CONFIG;
+  }
+  centralAIConfigFetchedAt = now;
+  return centralAIConfigCache;
+}
+
+/** Synchronous snapshot of the cached config (defaults if never loaded). */
+export function getCentralAIConfig(): AIConfig {
+  return centralAIConfigCache ?? DEFAULT_AI_CONFIG;
+}
+
+/**
+ * Per-model, per-user request rate limiter (in-memory token bucket) driven by
+ * the central `rateLimitPerMinute`. Mirrors the tier-level rateLimiter above.
+ */
+export const modelRateLimiter = {
+  hits: {} as Record<string, { count: number; windowStart: number }>,
+  check(userId: string, modelId: string, maxPerMinute: number): { allowed: boolean; reason?: string } {
+    if (!maxPerMinute || maxPerMinute <= 0) return { allowed: true };
+    const now = Date.now();
+    const key = `${userId}:${normalizeModelId(modelId)}:${Math.floor(now / 60000)}`;
+    const entry = this.hits[key] || { count: 0, windowStart: now };
+    if (now - entry.windowStart > 60000) {
+      entry.count = 0;
+      entry.windowStart = now;
+    }
+    entry.count += 1;
+    this.hits[key] = entry;
+    if (entry.count > maxPerMinute) {
+      return { allowed: false, reason: `Per-minute request limit reached for this model (${maxPerMinute}/min).` };
+    }
+    return { allowed: true };
+  },
+};
+
+/** Per-user, per-model daily/monthly credit commitment tracker (in-memory). */
+interface UsageCounter {
+  dayKey: string;
+  dayCredits: number;
+  monthKey: string;
+  monthCredits: number;
+}
+const usageCounters: Record<string, UsageCounter> = {};
+
+function dayKeyFor(d: Date) {
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+}
+function monthKeyFor(d: Date) {
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+}
+function usageCounterKey(userId: string, modelId: string) {
+  return `${userId}:${normalizeModelId(modelId)}`;
+}
+function incUsageCounter(userId: string, modelId: string, credits: number) {
+  const key = usageCounterKey(userId, modelId);
+  const now = new Date();
+  const cur = usageCounters[key];
+  const dk = dayKeyFor(now);
+  const mk = monthKeyFor(now);
+  if (cur && cur.dayKey === dk && cur.monthKey === mk) {
+    cur.dayCredits += credits;
+    cur.monthCredits += credits;
+  } else {
+    usageCounters[key] = { dayKey: dk, dayCredits: credits, monthKey: mk, monthCredits: credits };
+  }
+}
+function decUsageCounter(userId: string, modelId: string, credits: number) {
+  const key = usageCounterKey(userId, modelId);
+  const cur = usageCounters[key];
+  if (!cur) return;
+  cur.dayCredits = Math.max(0, cur.dayCredits - credits);
+  cur.monthCredits = Math.max(0, cur.monthCredits - credits);
+}
+function checkModelBudgetLimits(
+  userId: string,
+  modelId: string,
+  billing: IbRate,
+  reserved: number
+): { allowed: boolean; reason?: string } {
+  const now = new Date();
+  const dk = dayKeyFor(now);
+  const mk = monthKeyFor(now);
+  const key = usageCounterKey(userId, modelId);
+  const cur = usageCounters[key];
+  const dayUsed = cur && cur.dayKey === dk ? cur.dayCredits : 0;
+  const monthUsed = cur && cur.monthKey === mk ? cur.monthCredits : 0;
+  if (billing.dailyLimitPerUser > 0 && dayUsed + reserved > billing.dailyLimitPerUser) {
+    return { allowed: false, reason: `Daily credit budget reached for this model (limit ${billing.dailyLimitPerUser} credits).` };
+  }
+  if (billing.monthlyLimitPerUser > 0 && monthUsed + reserved > billing.monthlyLimitPerUser) {
+    return { allowed: false, reason: `Monthly credit budget reached for this model (limit ${billing.monthlyLimitPerUser} credits).` };
+  }
+  return { allowed: true };
+}
+// For tests / forced refresh of the in-memory budget trackers.
+export function _resetModelLimitersForTests() {
+  Object.keys(usageCounters).forEach((k) => delete usageCounters[k]);
+  Object.keys(modelRateLimiter.hits).forEach((k) => delete modelRateLimiter.hits[k]);
+}
+
+
+  // Rates limit tracker (In-memory token bucket)
 export const rateLimiter = {
   requests: {} as Record<string, { count: number; windowStart: number }>,
   checkLimit(userId: string, tier: 'free' | 'pro' | 'pro_max' = 'free'): { allowed: boolean; reason?: string } {
@@ -401,17 +548,45 @@ export class VelcoraCreditSystem {
     maxCreditsReserved: number,
     requestId: string
   ): Promise<{ allowed: boolean; reservation?: CreditReservation; reason?: string }> {
-    if (ADMIN_CONFIG.killSwitch) {
+        if (ADMIN_CONFIG.killSwitch) {
       return { allowed: false, reason: 'AI operations are temporarily disabled due to system maintenance.' };
     }
 
-    // Pricing rules verification
+    // Prime the central config cache (TTL-gated) so pricing, availability and
+    // limits are authoritative and identical across billing / AI Router / Wallet.
+    const central = await ensureCentralAIConfigLoaded();
+    const billing = getEngineBilling(central, modelId);
+
+    // Central availability gating (editable per model by the Super Admin).
+    if (!billing.enabled) {
+      return { allowed: false, reason: 'This model is currently disabled.' };
+    }
+    if (billing.availability === 'maintenance') {
+      return { allowed: false, reason: 'This model is under maintenance. Please try another model.' };
+    }
+    if (central.global.maintenanceMode) {
+      return { allowed: false, reason: 'The AI platform is undergoing maintenance. Please try again in a few minutes.' };
+    }
+
+    // Pricing rules verification (legacy global image/video kills remain backstops)
     const pricing = ADMIN_CONFIG.pricing[modelId];
     if (modelId.includes('prism') && !ADMIN_CONFIG.imageGenerationEnabled) {
       return { allowed: false, reason: 'Image generation is temporarily suspended.' };
     }
     if (modelId.includes('veyra') && !ADMIN_CONFIG.videoGenerationEnabled) {
       return { allowed: false, reason: 'Video generation is temporarily suspended.' };
+    }
+
+    // Central per-model rate limit (requests / minute)
+    const modelRate = modelRateLimiter.check(userId, modelId, billing.rateLimitPerMinute);
+    if (!modelRate.allowed) {
+      return { allowed: false, reason: modelRate.reason };
+    }
+
+    // Central per-model daily / monthly credit budget caps
+    const budgetCheck = checkModelBudgetLimits(userId, modelId, billing, maxCreditsReserved);
+    if (!budgetCheck.allowed) {
+      return { allowed: false, reason: budgetCheck.reason };
     }
 
     if (db) {
@@ -459,6 +634,9 @@ export class VelcoraCreditSystem {
           return { allowed: true, reservation };
         });
 
+                if (result && result.allowed) {
+          incUsageCounter(userId, modelId, maxCreditsReserved);
+        }
         return result;
       } catch (err: any) {
         disableFirestoreDueToError(err, 'reserve transaction');
@@ -498,17 +676,19 @@ export class VelcoraCreditSystem {
       createdAt: new Date().toISOString()
     };
 
-    local.reservations[requestId] = reservation;
+        local.reservations[requestId] = reservation;
     writeLocalDb(local);
 
+    incUsageCounter(userId, modelId, maxCreditsReserved);
     return { allowed: true, reservation };
   }
 
   // 4. Settle Credits after successful provider execution (refunds unused)
-  static async settleCredits(
+    static async settleCredits(
     userId: string,
     requestId: string,
-    actualCreditsUsed: number
+    actualCreditsUsed: number,
+    opts?: { provider?: string; modelUsed?: string; inputTokens?: number; outputTokens?: number }
   ): Promise<{ wallet: CreditWallet; transactionId: string }> {
     const txnId = `txn-settle-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
@@ -571,9 +751,9 @@ export class VelcoraCreditSystem {
             requestId,
             timestamp: new Date().toISOString(),
             previousBalance: wallet.availableCredits + reservation.maxCreditsReserved,
-            resultingBalance: nextAvailable,
+                        resultingBalance: nextAvailable,
             status: 'completed',
-            metadata: { actualUsed: actualCreditsUsed, reservedRefund: unusedRefund }
+            metadata: { actualUsed: actualCreditsUsed, reservedRefund: unusedRefund, provider: opts?.provider, modelUsed: opts?.modelUsed, inputTokens: opts?.inputTokens, outputTokens: opts?.outputTokens }
           };
 
           transaction.set(ledgerRef, ledgerRecord);
@@ -621,9 +801,9 @@ export class VelcoraCreditSystem {
       requestId,
       timestamp: new Date().toISOString(),
       previousBalance: previous,
-      resultingBalance: wallet.availableCredits,
+                  resultingBalance: wallet.availableCredits,
       status: 'completed',
-      metadata: { actualUsed: actualCreditsUsed, reservedRefund: unusedRefund }
+      metadata: { actualUsed: actualCreditsUsed, reservedRefund: unusedRefund, provider: opts?.provider, modelUsed: opts?.modelUsed, inputTokens: opts?.inputTokens, outputTokens: opts?.outputTokens }
     };
 
     local.ledger.push(ledgerRecord);
@@ -983,19 +1163,20 @@ export class VelcoraCreditSystem {
     }
   }
 
-  // Calculation pricing layer for variable models
+    // Calculation pricing layer for variable models
   static calculateMaxCost(modelId: string, estimatedInputTokens: number, estimatedOutputTokens: number): number {
-    const rate = ADMIN_CONFIG.pricing[modelId] || { per1k: 15, base: 1 };
-    if (rate.fixed) {
-      return rate.fixed;
+    // Prefer the central AI config (single source of truth). getCentralAIConfig()
+    // returns the live cache populated by ensureCentralAIConfigLoaded(); if the
+    // cache has never been loaded it is backed by DEFAULT_AI_CONFIG. The legacy
+    // ADMIN_CONFIG.pricing table remains as an undocumented fallback only.
+    const billing = getEngineBilling(getCentralAIConfig(), modelId);
+    if (typeof billing.fixedCost === 'number' && billing.fixedCost > 0) {
+      return billing.fixedCost;
     }
-    
-    const inputPer1k = typeof rate.inputPer1k === 'number' ? rate.inputPer1k : (rate.per1k || 15);
-    const outputPer1k = typeof rate.outputPer1k === 'number' ? rate.outputPer1k : (rate.per1k || 15);
-    const base = rate.base || 1;
 
-    const inputCost = (estimatedInputTokens / 1000) * inputPer1k;
-    const outputCost = (estimatedOutputTokens / 1000) * outputPer1k;
+    const base = billing.baseFee ?? 0;
+    const inputCost = (estimatedInputTokens / 1000) * billing.inputPer1k;
+    const outputCost = (estimatedOutputTokens / 1000) * billing.outputPer1k;
     return Math.max(base, Math.ceil(inputCost + outputCost));
   }
 
