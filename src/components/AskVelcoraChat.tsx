@@ -356,7 +356,7 @@ export const AskVelcoraChat: React.FC = () => {
              if (validCurrent && lastId) {
                 // If it already exists, no need to call setActiveSessionId since it might already be correct
                 // But let's just make sure it's set:
-                setTimeout(() => setActiveSessionId(prevId => prevId || lastId), 0);
+                setTimeout(() => setActiveSessionId(prevId => prevId || lastId || ''), 0);
              } else if (cloudSessions.length > 0) {
                 setTimeout(() => setActiveSessionId(cloudSessions[0].id), 0);
              }
@@ -388,12 +388,13 @@ export const AskVelcoraChat: React.FC = () => {
   }, [tenantId, userId, authUser?.uid]);
 
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
-  const messages = activeSession ? activeSession.messages : [];
+  const messages = activeSession?.messages || [];
   const visibleMessages = streamingMessage ? [...messages, streamingMessage] : messages;
 
   const filteredSessions = sessions.filter(s => {
-    const matchesSearch = s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.messages.some(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()));
+    const safeTitle = s.title || '';
+    const matchesSearch = safeTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.messages || []).some(m => (m.content || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (!matchesSearch) return false;
 
@@ -414,7 +415,7 @@ export const AskVelcoraChat: React.FC = () => {
           let title = s.title;
           if (title === 'New Conversation' || title === 'Business Intelligence' || title === 'Business Analysis') {
             const firstUser = newMessages.find(m => m.role === 'user');
-            if (firstUser) {
+            if (firstUser && firstUser.content) {
               const cleaned = firstUser.content.replace(/\[Attached[^\]]+\]/g, '').trim();
               title = cleaned.slice(0, 24) + (cleaned.length > 24 ? '...' : '') || 'Business Inquiry';
             }
@@ -704,13 +705,33 @@ export const AskVelcoraChat: React.FC = () => {
           pendingMsgId: pendingMsgId
         }),
       }).then(res => res.json()).then(data => {
-        // Only handle explicit errors returned by the AI provider that wouldn't have been saved to Firestore by the backend
+        // Handle error responses
         if (data.success === false) {
           const errorContent = `⚠️ **${data.error || 'AI Provider Error'}**\n\n${data.message || 'Unable to complete request with selected model.'}`;
           const assistantMsg: ChatMessage = {
             id: pendingMsgId, // Replace the pending msg
             role: 'assistant',
             content: errorContent,
+            timestamp: new Date().toISOString(),
+            modelUsed: data.modelUsed || activeModelId,
+          };
+          updateSessionMessages([...messages, userMsg, assistantMsg]);
+        } else if (data.reply) {
+          // Success: Immediately update with the AI answer
+          const assistantMsg: ChatMessage = {
+            id: pendingMsgId, // Replace the pending msg
+            role: 'assistant',
+            content: data.reply,
+            timestamp: new Date().toISOString(),
+            modelUsed: data.modelUsed || activeModelId,
+            actionProposal: data.actionProposal || undefined,
+          };
+          updateSessionMessages([...messages, userMsg, assistantMsg]);
+        } else {
+          const assistantMsg: ChatMessage = {
+            id: pendingMsgId,
+            role: 'assistant',
+            content: 'No response was returned by the AI engine. Please verify the query and try again.',
             timestamp: new Date().toISOString(),
             modelUsed: data.modelUsed || activeModelId,
           };
@@ -1192,168 +1213,180 @@ export const AskVelcoraChat: React.FC = () => {
             </div>
           ) : (
             /* 2. Message History Stream */
-            visibleMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-3 sm:gap-4 max-w-3xl mx-auto w-full ${
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {msg.role === 'assistant' && (
-                  <div 
-                    className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 border border-slate-200 dark:border-slate-800"
-                    style={{
-                      backgroundColor: activePalette.lightBg,
-                      color: activePalette.hex,
-                    }}
-                  >
-                    <VelcoraMascot size={22} sparkles={false} />
+            visibleMessages.map((msg) => {
+              if (msg.isProcessing) {
+                return (
+                  <div key={msg.id} className="w-full max-w-3xl mx-auto py-1 animate-fade-in">
+                    <VelcoraAiActivityIndicator
+                      promptText={pendingPrompt}
+                      hasAttachment={pendingHasAttachment}
+                      activePalette={activePalette}
+                      modelName={selectedModel?.name || activeModelId}
+                      startTime={processingStartTime}
+                    />
                   </div>
-                )}
+                );
+              }
 
-                <div className={`flex flex-col gap-1 max-w-[92%] sm:max-w-[85%] min-w-0 ${
-                  msg.role === 'user' ? 'items-end' : 'items-start'
-                }`}>
-                  <div className="flex items-center gap-2 px-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      {msg.role === 'user' ? dynamicUserName : 'Velcora Assistant'}
-                    </span>
-                    <span className="text-[10px] text-slate-400">•</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex gap-3 sm:gap-4 max-w-3xl mx-auto w-full ${
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div 
+                      className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 border border-slate-200 dark:border-slate-800"
+                      style={{
+                        backgroundColor: activePalette.lightBg,
+                        color: activePalette.hex,
+                      }}
+                    >
+                      <VelcoraMascot size={22} sparkles={false} />
+                    </div>
+                  )}
 
-                  <div
-                    className={`px-4 py-3 rounded-2xl relative group/bubble transition-all border w-full min-w-0 overflow-hidden ${
-                      msg.role === 'user'
-                        ? 'text-white border-transparent rounded-tr-xs shadow-xs'
-                        : 'bg-slate-50/90 dark:bg-[#11172A]/90 border-slate-200/70 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 rounded-tl-xs shadow-xs'
-                    }`}
-                    style={msg.role === 'user' ? { backgroundColor: activePalette.hex } : {}}
-                  >
-                    {msg.attachmentPreview && (
-                      <div className="mb-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141A30] p-1 shadow-xs max-w-xs">
-                        {msg.attachmentPreview.startsWith('data:image') ? (
-                          <img src={msg.attachmentPreview} alt="Attachment" className="max-w-[200px] max-h-[160px] rounded-lg object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-[#0E1325] rounded-lg text-slate-700 dark:text-slate-300">
-                            <FileText className="w-5 h-5 text-slate-400" />
-                            <span className="text-[10px] font-bold truncate max-w-[120px]">{msg.attachmentPreview.substring(0, 20)}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                  <div className={`flex flex-col gap-1 max-w-[92%] sm:max-w-[85%] min-w-0 ${
+                    msg.role === 'user' ? 'items-end' : 'items-start'
+                  }`}>
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {msg.role === 'user' ? dynamicUserName : 'Velcora Assistant'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">•</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
 
-                    {msg.isProcessing ? (
-                      <div className="py-2 px-1">
-                        <VelcoraAiActivityIndicator modelName={activeModelId || 'Velcora AI'} activePalette={activePalette} />
-                      </div>
-                    ) : (
-                      <VelcoraMarkdownRenderer
-                        content={msg.content}
-                        isUserMessage={msg.role === 'user'}
-                        accentColor={activePalette.hex}
-                      />
-                    )}
-
-                    {/* Action proposal execution widget */}
-                    {msg.actionProposal && (
-                      <div className="mt-3 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-[#141A30] shadow-xs w-full max-w-md">
-                        <div className="px-3.5 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-100/60 dark:bg-[#19213B]">
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
-                            <Zap className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                            Action Proposal
-                          </div>
-                          <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full tracking-wider uppercase ${
-                            msg.actionProposal.status === 'executed'
-                              ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                          }`}>
-                            {msg.actionProposal.status}
-                          </span>
-                        </div>
-                        <div className="p-3.5 space-y-3">
-                          <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
-                            {msg.actionProposal.description}
-                          </p>
-                          {msg.actionProposal.status === 'pending' && (
-                            <div className="flex gap-2 pt-1">
-                              <button
-                                onClick={() => handleExecuteAction(msg.id, msg.actionProposal!)}
-                                className="flex-1 py-1.5 text-white text-[11px] font-bold rounded-lg hover:opacity-95 shadow-xs transition flex items-center justify-center gap-1.5"
-                                style={{ backgroundColor: activePalette.hex }}
-                              >
-                                <Play className="w-3 h-3 fill-white" />
-                                Execute Suggestion
-                              </button>
-                              <button
-                                onClick={() => handleDismissAction(msg.id)}
-                                className="py-1.5 px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-bold rounded-lg transition"
-                              >
-                                Dismiss
-                              </button>
+                    <div
+                      className={`px-4 py-3 rounded-2xl relative group/bubble transition-all border w-full min-w-0 overflow-hidden ${
+                        msg.role === 'user'
+                          ? 'text-white border-transparent rounded-tr-xs shadow-xs'
+                          : 'bg-slate-50/90 dark:bg-[#11172A]/90 border-slate-200/70 dark:border-slate-800/80 text-slate-900 dark:text-slate-100 rounded-tl-xs shadow-xs'
+                      }`}
+                      style={msg.role === 'user' ? { backgroundColor: activePalette.hex } : {}}
+                    >
+                      {msg.attachmentPreview && (
+                        <div className="mb-3 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#141A30] p-1 shadow-xs max-w-xs">
+                          {msg.attachmentPreview.startsWith('data:image') ? (
+                            <img src={msg.attachmentPreview} alt="Attachment" className="max-w-[200px] max-h-[160px] rounded-lg object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-[#0E1325] rounded-lg text-slate-700 dark:text-slate-300">
+                              <FileText className="w-5 h-5 text-slate-400" />
+                              <span className="text-[10px] font-bold truncate max-w-[120px]">{msg.attachmentPreview.substring(0, 20)}</span>
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Copy & TTS actions */}
-                    {msg.role === 'assistant' && (
-                      <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-slate-400">
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(msg.id, msg.content)}
-                          className="flex items-center gap-1 text-[10px] font-bold hover:text-slate-700 dark:hover:text-slate-200 transition"
-                        >
-                          {copiedId === msg.id ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-500" />
-                              <span className="text-emerald-500 font-bold">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                        <span className="text-slate-300 dark:text-slate-700 text-[10px]">•</span>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleSpeak(msg.id, msg.content)}
-                          className="flex items-center gap-1 text-[10px] font-bold hover:text-rose-500 transition"
-                        >
-                          {isSpeaking === msg.id ? (
-                            <>
-                              <VolumeX className="w-3 h-3 text-rose-500 animate-pulse" />
-                              <span className="text-rose-500 font-bold">Mute</span>
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="w-3 h-3" />
-                              <span>Read Aloud</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
+                      <VelcoraMarkdownRenderer
+                        content={msg.content || ''}
+                        isUserMessage={msg.role === 'user'}
+                        accentColor={activePalette.hex}
+                      />
+
+                      {/* Action proposal execution widget */}
+                      {msg.actionProposal && (
+                        <div className="mt-3 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-[#141A30] shadow-xs w-full max-w-md">
+                          <div className="px-3.5 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-100/60 dark:bg-[#19213B]">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
+                              <Zap className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                              Action Proposal
+                            </div>
+                            <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full tracking-wider uppercase ${
+                              msg.actionProposal.status === 'executed'
+                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                            }`}>
+                              {msg.actionProposal.status}
+                            </span>
+                          </div>
+                          <div className="p-3.5 space-y-3">
+                            <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+                              {msg.actionProposal.description}
+                            </p>
+                            {msg.actionProposal.status === 'pending' && (
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => handleExecuteAction(msg.id, msg.actionProposal!)}
+                                  className="flex-1 py-1.5 text-white text-[11px] font-bold rounded-lg hover:opacity-95 shadow-xs transition flex items-center justify-center gap-1.5"
+                                  style={{ backgroundColor: activePalette.hex }}
+                                >
+                                  <Play className="w-3 h-3 fill-white" />
+                                  Execute Suggestion
+                                </button>
+                                <button
+                                  onClick={() => handleDismissAction(msg.id)}
+                                  className="py-1.5 px-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-bold rounded-lg transition"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Copy & TTS actions */}
+                      {msg.role === 'assistant' && (
+                        <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-slate-400">
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(msg.id, msg.content)}
+                            className="flex items-center gap-1 text-[10px] font-bold hover:text-slate-700 dark:hover:text-slate-200 transition"
+                          >
+                            {copiedId === msg.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-500" />
+                                <span className="text-emerald-500 font-bold">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                          <span className="text-slate-300 dark:text-slate-700 text-[10px]">•</span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSpeak(msg.id, msg.content)}
+                            className="flex items-center gap-1 text-[10px] font-bold hover:text-rose-500 transition"
+                          >
+                            {isSpeaking === msg.id ? (
+                              <>
+                                <VolumeX className="w-3 h-3 text-rose-500 animate-pulse" />
+                                <span className="text-rose-500 font-bold">Mute</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="w-3 h-3" />
+                                <span>Read Aloud</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
 
-          {/* Professional Real-Time AI Activity Indicator */}
-          {isLoading && (
-            <VelcoraAiActivityIndicator
-              promptText={pendingPrompt}
-              hasAttachment={pendingHasAttachment}
-              activePalette={activePalette}
-              modelName={selectedModel?.name}
-              startTime={processingStartTime}
-            />
+          {/* Fallback Real-Time AI Activity Indicator if loading but not in visible messages */}
+          {isLoading && !visibleMessages.some(m => m.isProcessing) && (
+            <div className="w-full max-w-3xl mx-auto py-1 animate-fade-in">
+              <VelcoraAiActivityIndicator
+                promptText={pendingPrompt}
+                hasAttachment={pendingHasAttachment}
+                activePalette={activePalette}
+                modelName={selectedModel?.name || activeModelId}
+                startTime={processingStartTime}
+              />
+            </div>
           )}
 
           <div ref={messagesEndRef} />

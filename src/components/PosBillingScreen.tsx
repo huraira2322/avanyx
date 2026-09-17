@@ -289,6 +289,17 @@ export const PosBillingScreen: React.FC = () => {
             }
           }
           break;
+        case 'open_drawer':
+          soundEffects.playSuccess();
+          break;
+        case 'voice_pilot':
+          window.dispatchEvent(new CustomEvent('velcora:toggle-voice-pilot'));
+          break;
+        case 'apply_discount':
+          if (cart.length > 0) {
+            setShowPaymentModal(true);
+          }
+          break;
         default:
           break;
       }

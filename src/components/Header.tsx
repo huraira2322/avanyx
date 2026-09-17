@@ -58,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
     setPaymentsActiveTab,
     theme,
     toggleTheme,
+    shortcuts,
   } = useVelcora();
 
   const [showBizMenu, setShowBizMenu] = useState(false);
@@ -83,17 +84,37 @@ export const Header: React.FC<HeaderProps> = ({
 
   const unreadNotifsCount = liveNotifications.filter(n => !n.isRead).length;
 
-  // Global Alt+V Keyboard Shortcut for Voice Pilot HUD
+  // Dynamic Keyboard Shortcut for Voice Pilot HUD
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'v' || e.key === 'V')) {
+      const voiceShortcut = (shortcuts || []).find(s => (s.action || s.id) === 'voice_pilot');
+      if (voiceShortcut) {
+        const keyMatch = e.key.toLowerCase() === (voiceShortcut.key || '').toLowerCase();
+        const ctrlMatch = (voiceShortcut.ctrlKey ?? false) === e.ctrlKey;
+        const altMatch = (voiceShortcut.altKey ?? false) === e.altKey;
+        const shiftMatch = (voiceShortcut.shiftKey ?? false) === e.shiftKey;
+        if (keyMatch && ctrlMatch && altMatch && shiftMatch) {
+          e.preventDefault();
+          setShowVoiceModal(prev => !prev);
+          return;
+        }
+      } else if (e.altKey && (e.key === 'v' || e.key === 'V')) {
         e.preventDefault();
         setShowVoiceModal(prev => !prev);
       }
     };
+
+    const handleCustomToggle = () => {
+      setShowVoiceModal(prev => !prev);
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    window.addEventListener('velcora:toggle-voice-pilot', handleCustomToggle);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('velcora:toggle-voice-pilot', handleCustomToggle);
+    };
+  }, [shortcuts]);
 
   const unreadAlerts = smartAlerts.filter(a => !a.read);
   const currentModel = aiModels.find(m => m.id === activeModelId) || aiModels[0];
@@ -364,20 +385,6 @@ export const Header: React.FC<HeaderProps> = ({
           <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
           <span className="uppercase">{activeSubscription?.tier || 'Pro Tier'}</span>
           <span className="text-[10px] text-indigo-500/80 dark:text-indigo-300 font-normal">Plan</span>
-        </button>
-
-        {/* AI Tokens Button */}
-        <button
-          onClick={() => {
-            openCheckoutModal('tokens');
-            setPaymentsActiveTab('wallet');
-          }}
-          className="flex items-center gap-1 px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-bold transition shadow-2xs shrink-0 cursor-pointer"
-          title="Buy AI Intelligence Tokens"
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-          <span className="hidden md:inline">AI Tokens</span>
-          <span className="text-[9px] sm:text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-300 px-1 sm:px-1.5 py-0.2 rounded-full font-mono font-bold">+Buy</span>
         </button>
 
         {/* Theme Toggle (Dark / Light Mode) */}
