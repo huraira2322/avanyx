@@ -20,8 +20,9 @@ const CODE128_PATTERNS: string[] = [
   "2331112" // 106: Stop pattern (7 elements)
 ];
 
-export function generateBarcodeSvg(value: string, width: number = 220, height: number = 55): string {
-  const safeVal = value.replace(/[^\x20-\x7E]/g, '') || 'VELCORA';
+export function generateBarcodeSvg(value?: string | number | null, width: number = 220, height: number = 55): string {
+  const str = value !== null && value !== undefined ? String(value) : '';
+  const safeVal = str.replace(/[^\x20-\x7E]/g, '') || 'VELCORA';
   
   // Code 128 Set B encoding
   const codeSequence: number[] = [104]; // Start Code B
@@ -69,64 +70,8 @@ export function generateBarcodeSvg(value: string, width: number = 220, height: n
   </svg>`;
 }
 
+import { generateQrCodeSvg } from './qrCodeGenerator';
+
 export function generateQrMatrixSvg(value: string, size: number = 120): string {
-  const safeVal = value || 'https://velcora.app';
-  const gridSize = 21;
-  const cellSize = size / gridSize;
-  const matrix: boolean[][] = Array(gridSize).fill(false).map(() => Array(gridSize).fill(false));
-
-  const drawFinder = (startX: number, startY: number) => {
-    for (let r = 0; r < 7; r++) {
-      for (let c = 0; c < 7; c++) {
-        if (
-          r === 0 || r === 6 || c === 0 || c === 6 ||
-          (r >= 2 && r <= 4 && c >= 2 && c <= 4)
-        ) {
-          matrix[startY + r][startX + c] = true;
-        }
-      }
-    }
-  };
-
-  drawFinder(0, 0);
-  drawFinder(gridSize - 7, 0);
-  drawFinder(0, gridSize - 7);
-
-  let hash = 0;
-  for (let i = 0; i < safeVal.length; i++) {
-    hash = ((hash << 5) - hash) + safeVal.charCodeAt(i);
-    hash |= 0;
-  }
-
-  for (let r = 0; r < gridSize; r++) {
-    for (let c = 0; c < gridSize; c++) {
-      if (
-        (r < 8 && c < 8) ||
-        (r < 8 && c >= gridSize - 8) ||
-        (r >= gridSize - 8 && c < 8)
-      ) {
-        continue;
-      }
-      if (r === 6 || c === 6) {
-        matrix[r][c] = (r + c) % 2 === 0;
-        continue;
-      }
-      const bit = Math.abs(Math.sin((r * 31 + c * 17 + hash)) * 10000) % 2 > 0.5;
-      matrix[r][c] = bit;
-    }
-  }
-
-  let rects = '';
-  for (let r = 0; r < gridSize; r++) {
-    for (let c = 0; c < gridSize; c++) {
-      if (matrix[r][c]) {
-        rects += `<rect x="${(c * cellSize).toFixed(2)}" y="${(r * cellSize).toFixed(2)}" width="${cellSize.toFixed(2)}" height="${cellSize.toFixed(2)}" fill="#0f172a" rx="0.3" />`;
-      }
-    }
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-    <rect width="${size}" height="${size}" fill="#ffffff" />
-    ${rects}
-  </svg>`;
+  return generateQrCodeSvg(value, { size, margin: 2 });
 }

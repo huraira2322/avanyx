@@ -17,7 +17,7 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
 export class VelcoraPricingEngine {
   public static formatCurrency(amount: number, currency: CurrencyCode | string = 'USD'): string {
     const symbol = CURRENCY_SYMBOLS[currency] || '$';
-    const num = isNaN(amount) ? 0 : amount;
+    const num = typeof amount !== 'number' || isNaN(amount) || !isFinite(amount) ? 0 : amount;
     return `${symbol}${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
@@ -28,8 +28,13 @@ export class VelcoraPricingEngine {
     taxRate: number = 0,
     isTaxInclusive: boolean = false
   ): { lineNet: number; lineDiscount: number; lineTax: number; lineGross: number } {
-    const rawTotal = unitPrice * quantity;
-    const effectiveTotal = Math.max(0, rawTotal - discountAmount);
+    const safeUnitPrice = Math.max(0, typeof unitPrice === 'number' && !isNaN(unitPrice) ? unitPrice : 0);
+    const safeQty = Math.max(0, typeof quantity === 'number' && !isNaN(quantity) ? quantity : 0);
+    const safeTaxRate = Math.max(0, typeof taxRate === 'number' && !isNaN(taxRate) ? taxRate : 0);
+
+    const rawTotal = safeUnitPrice * safeQty;
+    const clampedDiscount = Math.min(Math.max(0, discountAmount || 0), rawTotal);
+    const effectiveTotal = Math.max(0, rawTotal - clampedDiscount);
 
     let lineTax = 0;
     let lineNet = 0;
@@ -37,17 +42,17 @@ export class VelcoraPricingEngine {
 
     if (isTaxInclusive) {
       lineGross = effectiveTotal;
-      lineNet = effectiveTotal / (1 + taxRate);
+      lineNet = safeTaxRate > 0 ? effectiveTotal / (1 + safeTaxRate) : effectiveTotal;
       lineTax = lineGross - lineNet;
     } else {
       lineNet = effectiveTotal;
-      lineTax = effectiveTotal * taxRate;
+      lineTax = effectiveTotal * safeTaxRate;
       lineGross = lineNet + lineTax;
     }
 
     return {
       lineNet: Number(lineNet.toFixed(2)),
-      lineDiscount: Number(discountAmount.toFixed(2)),
+      lineDiscount: Number(clampedDiscount.toFixed(2)),
       lineTax: Number(lineTax.toFixed(2)),
       lineGross: Number(lineGross.toFixed(2)),
     };
@@ -87,8 +92,13 @@ export class VelcoraPricingEngine {
 
     let loyaltyDiscount = 0;
     if (loyaltyConfig && loyaltyConfig.enabled && loyaltyRedemptionPoints > 0) {
-      if (loyaltyRedemptionPoints >= loyaltyConfig.minPointsForRedemption) {
-        loyaltyDiscount = loyaltyRedemptionPoints * loyaltyConfig.pointRedemptionValue;
+      const redemptionEval = VelcoraLoyaltyEngine.evaluatePointRedemption(
+        loyaltyRedemptionPoints,
+        subtotal,
+        loyaltyConfig
+      );
+      if (redemptionEval.valid) {
+        loyaltyDiscount = redemptionEval.discountAmount;
       }
     }
 

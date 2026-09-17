@@ -272,7 +272,28 @@ export const DEFAULT_PRO_MAX_RESOURCE_LIMITS: PlanResourceLimits = {
 /**
  * Normalizes and resolves a plan's featureAccess and resourceLimits, applying standard defaults for any missing properties.
  */
-export function sanitizePlanConfig(plan: SubscriptionPlanConfig): SubscriptionPlanConfig {
+export function sanitizePlanConfig(plan?: SubscriptionPlanConfig | null): SubscriptionPlanConfig {
+  if (!plan) {
+    return {
+      id: 'tier_free',
+      tier: 'free',
+      name: 'Velcora Free',
+      tagline: 'Essential store operations and standard analytics',
+      monthlyPriceUSD: 0,
+      annualPriceUSD: 0,
+      currencyPricing: {},
+      tokensIncludedMonthly: 500,
+      maxWorkstations: 1,
+      maxSubusers: 2,
+      maxProducts: 500,
+      features: ['Universal POS', 'Standard Analytics'],
+      isActive: true,
+      commissionEligible: false,
+      featureAccess: DEFAULT_FREE_FEATURE_ACCESS,
+      resourceLimits: DEFAULT_FREE_RESOURCE_LIMITS,
+    };
+  }
+
   const tierKey = (plan.tier || plan.id || 'free').toLowerCase();
   let defaultFeatures = DEFAULT_FREE_FEATURE_ACCESS;
   let defaultLimits = DEFAULT_FREE_RESOURCE_LIMITS;
@@ -315,9 +336,10 @@ export function sanitizePlanConfig(plan: SubscriptionPlanConfig): SubscriptionPl
  */
 export function resolveActivePlan(
   activeSubscription: SubscriptionRecord | null | undefined,
-  plansList: SubscriptionPlanConfig[],
+  plansList?: SubscriptionPlanConfig[] | null,
   activeBusiness?: { subscriptionTier?: string } | null
 ): SubscriptionPlanConfig {
+  const safeList = Array.isArray(plansList) ? plansList : [];
   const tier = (
     activeSubscription?.tier ||
     activeSubscription?.planId ||
@@ -325,9 +347,9 @@ export function resolveActivePlan(
     'free'
   ).toLowerCase();
 
-  const found = plansList.find(p => 
-    p.id.toLowerCase() === tier || 
-    p.tier.toLowerCase() === tier ||
+  const found = safeList.find(p => 
+    (p.id && p.id.toLowerCase() === tier) || 
+    (p.tier && p.tier.toLowerCase() === tier) ||
     (tier.includes('pro_max') && (p.tier === 'pro_max' || p.id === 'tier_pro_max')) ||
     (tier.includes('pro') && !tier.includes('pro_max') && (p.tier === 'pro' || p.id === 'tier_pro')) ||
     (tier.includes('free') && (p.tier === 'free' || p.id === 'tier_free'))
@@ -337,7 +359,7 @@ export function resolveActivePlan(
     return sanitizePlanConfig(found);
   }
 
-  const defaultFree = plansList.find(p => p.tier === 'free' || p.id === 'tier_free') || {
+  const defaultFree = safeList.find(p => p.tier === 'free' || p.id === 'tier_free') || {
     id: 'tier_free',
     tier: 'free',
     name: 'Velcora Free',
@@ -362,7 +384,8 @@ export function resolveActivePlan(
 /**
  * Checks whether a given feature is allowed for the active plan.
  */
-export function isFeatureAllowed(plan: SubscriptionPlanConfig, featureKey: keyof PlanFeatureAccess | string): boolean {
+export function isFeatureAllowed(plan?: SubscriptionPlanConfig | null, featureKey?: keyof PlanFeatureAccess | string): boolean {
+  if (!plan || !featureKey) return false;
   const sanitized = sanitizePlanConfig(plan);
   const val = sanitized.featureAccess?.[featureKey as keyof PlanFeatureAccess];
   return val === true;

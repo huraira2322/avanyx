@@ -2483,7 +2483,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   // Stock Adjustment
-  const adjustStock = (productId: string, delta: number) => {
+  const adjustStock = (productId: string, delta: number, variantId?: string) => {
     const target = products.find((p) => p.id === productId);
     // Services and bookable appointments do not decrement or track physical inventory
     if (target?.isService || target?.offeringType === 'service' || target?.offeringType === 'bookable') {
@@ -2493,14 +2493,24 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setProducts((prev) =>
       prev.map((p) => {
         if (p.id === productId) {
-          return { ...p, stock: newStock };
+          let updatedVariants = p.variants;
+          if (variantId && Array.isArray(p.variants)) {
+            updatedVariants = p.variants.map((v) =>
+              v.id === variantId ? { ...v, stock: Math.max(0, (v.stock || 0) + delta) } : v
+            );
+          }
+          return { ...p, stock: newStock, variants: updatedVariants };
         }
         return p;
       })
     );
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'products', productId), {
-      stock: increment(delta),
-    }).catch((err) =>
+    const patch: any = { stock: increment(delta) };
+    if (variantId && target && Array.isArray(target.variants)) {
+      patch.variants = target.variants.map((v) =>
+        v.id === variantId ? { ...v, stock: Math.max(0, (v.stock || 0) + delta) } : v
+      );
+    }
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'products', productId), patch).catch((err) =>
       handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/products/${productId}`)
     );
   };
@@ -2545,9 +2555,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isOffline: isOffline,
     };
 
-    // 1. Deduct Stock for each product (locally & cloud)
+    // 1. Deduct Stock for each product and variant (locally & cloud)
     cart.forEach((item) => {
-      adjustStock(item.productId, -item.quantity);
+      adjustStock(item.productId, -item.quantity, item.variantId);
     });
 
     // 2. Update Customer Loyalty & Purchase Count
