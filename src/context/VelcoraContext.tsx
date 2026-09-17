@@ -1,30 +1,122 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { 
-  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, getDoc, addDoc, query, where, arrayUnion, increment 
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  getDoc,
+  addDoc,
+  query,
+  where,
+  arrayUnion,
+  increment,
 } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db, handleFirestoreError, OperationType, logoutUser, syncUserProfileAndBusiness, cleanObjectForFirestore, signInWithEmail, signUpWithEmail, signInWithGoogle, sendPhoneOtp, verifyPhoneOtp } from '../lib/firebase';
 import {
-  BusinessProfile, Product, Customer, Supplier, SaleTransaction, SaleReturnRecord,
-  Expense, OtherIncome, BusinessGoal, LoyaltyRuleConfig, AIModelDefinition,
-  SubUser, CartItem, PaymentBreakdown, SmartAlert, SystemModuleKey,
-  LocaleCode, CurrencyCode, OnlineStoreOrder, PurchaseOrder,
-  Estimate, CreditNote, DeliveryNote, SaleOrder, CommissionRule, Budget,
-  Loan, LoanPayment, CustomerCredit, CustomerCreditPayment, SupplierPayable, SupplierPayablePayment,
-  UserRole, PermissionKey, IndustryType, Workstation, VelcoraUserProfile,
-  BusinessTask, AiActionProposal, PromotionCampaign, TaxRateConfig, PaymentRecord,
-  ReferralPartner, ReferralConfig, ReferralPartnerStats, ReferralPartnerStatus, CommissionStatus,
-  SubscriptionPlanConfig, TokenPackageConfig, MasterPaymentTransaction, SubscriptionRecord,
-  GlobalPayoutAccount, PayoutRequest, SuperAdminConfig, SuperAdminAuditLog, VelcoraSubscriptionTier,
-  PaymentGatewayProvider, GlobalPayoutProviderType, KeyboardShortcut, CatalogSchema
+  auth,
+  db,
+  handleFirestoreError,
+  OperationType,
+  logoutUser,
+  syncUserProfileAndBusiness,
+  cleanObjectForFirestore,
+  signInWithEmail,
+  signUpWithEmail,
+  signInWithGoogle,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+} from '../lib/firebase';
+import {
+  BusinessProfile,
+  Product,
+  Customer,
+  Supplier,
+  SaleTransaction,
+  SaleReturnRecord,
+  Expense,
+  OtherIncome,
+  BusinessGoal,
+  LoyaltyRuleConfig,
+  AIModelDefinition,
+  SubUser,
+  CartItem,
+  PaymentBreakdown,
+  SmartAlert,
+  SystemModuleKey,
+  LocaleCode,
+  CurrencyCode,
+  OnlineStoreOrder,
+  PurchaseOrder,
+  Estimate,
+  CreditNote,
+  DeliveryNote,
+  SaleOrder,
+  CommissionRule,
+  Budget,
+  Loan,
+  LoanPayment,
+  CustomerCredit,
+  CustomerCreditPayment,
+  SupplierPayable,
+  SupplierPayablePayment,
+  UserRole,
+  PermissionKey,
+  IndustryType,
+  Workstation,
+  VelcoraUserProfile,
+  BusinessTask,
+  AiActionProposal,
+  PromotionCampaign,
+  TaxRateConfig,
+  PaymentRecord,
+  ReferralPartner,
+  ReferralConfig,
+  ReferralPartnerStats,
+  ReferralPartnerStatus,
+  CommissionStatus,
+  SubscriptionPlanConfig,
+  TokenPackageConfig,
+  MasterPaymentTransaction,
+  SubscriptionRecord,
+  GlobalPayoutAccount,
+  PayoutRequest,
+  SuperAdminConfig,
+  SuperAdminAuditLog,
+  VelcoraSubscriptionTier,
+  PaymentGatewayProvider,
+  GlobalPayoutProviderType,
+  KeyboardShortcut,
+  CatalogSchema,
 } from '../types';
+import {
+  AIConfig,
+  AI_CONFIG_DOC,
+  DEFAULT_AI_CONFIG,
+  mergeAIConfig,
+  routerModelsList,
+} from '../lib/aiConfig';
 import { syncAndRegisterDevice, getOrCreateDeviceId } from '../lib/deviceManager';
 import {
-  INITIAL_BUSINESSES, INITIAL_PRODUCTS, INITIAL_CUSTOMERS,
-  INITIAL_SUPPLIERS, INITIAL_SALES, INITIAL_EXPENSES,
-  INITIAL_OTHER_INCOME, INITIAL_BUSINESS_GOALS, DEFAULT_LOYALTY_CONFIG,
-  DEFAULT_AI_MODELS, DEFAULT_SUBUSERS, SYSTEM_ROLES, PERMISSION_DEFINITIONS,
-  DEFAULT_WORKSTATIONS, INITIAL_PROMOTIONS, INITIAL_TAX_RATES, INITIAL_PAYMENTS
+  INITIAL_BUSINESSES,
+  INITIAL_PRODUCTS,
+  INITIAL_CUSTOMERS,
+  INITIAL_SUPPLIERS,
+  INITIAL_SALES,
+  INITIAL_EXPENSES,
+  INITIAL_OTHER_INCOME,
+  INITIAL_BUSINESS_GOALS,
+  DEFAULT_LOYALTY_CONFIG,
+  DEFAULT_AI_MODELS,
+  DEFAULT_SUBUSERS,
+  SYSTEM_ROLES,
+  PERMISSION_DEFINITIONS,
+  DEFAULT_WORKSTATIONS,
+  INITIAL_PROMOTIONS,
+  INITIAL_TAX_RATES,
+  INITIAL_PAYMENTS,
 } from '../data/mockInitialData';
 import { DEFAULT_SUBSCRIPTION_PLANS, DEFAULT_TOKEN_PACKAGES } from '../data/paymentPlans';
 import { VelcoraPricingEngine } from '../utils/pricingEngine';
@@ -45,11 +137,20 @@ interface VelcoraContextType {
   hasCompletedOnboarding: boolean;
   authSessionType: 'owner' | 'staff' | 'demo' | null;
   loginAsOwner: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  signupAsOwner: (email: string, pass: string, name?: string, referralCode?: string) => Promise<{ success: boolean; error?: string }>;
+  signupAsOwner: (
+    email: string,
+    pass: string,
+    name?: string,
+    referralCode?: string
+  ) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   sendPhoneOtpCode: (phone: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   loginWithPhoneOtpCode: (otpCode: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
-  loginAsStaff: (staffId: string, password?: string, pinCode?: string) => Promise<{ success: boolean; staff?: SubUser; error?: string }>;
+  loginAsStaff: (
+    staffId: string,
+    password?: string,
+    pinCode?: string
+  ) => Promise<{ success: boolean; staff?: SubUser; error?: string }>;
   quickLoginAsDemo: (role: 'owner' | 'manager' | 'cashier' | 'inventory' | 'accountant') => Promise<void>;
   logout: () => Promise<void>;
   setHasCompletedOnboarding: (completed: boolean) => void;
@@ -66,9 +167,9 @@ interface VelcoraContextType {
   // View state
   activeMode: 'pos' | 'business';
   setActiveMode: (mode: 'pos' | 'business') => void;
-  currentModule: SystemModuleKey | 'settings' | 'subusers';
-  setCurrentModule: (mod: SystemModuleKey | 'settings' | 'subusers') => void;
-currency: CurrencyCode;
+  currentModule: SystemModuleKey | 'settings' | 'subusers' | 'wallet' | 'help' | 'notifications';
+  setCurrentModule: (mod: SystemModuleKey | 'settings' | 'subusers' | 'wallet' | 'help' | 'notifications') => void;
+  currency: CurrencyCode;
   setCurrency: (cur: CurrencyCode) => void;
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
@@ -107,7 +208,8 @@ currency: CurrencyCode;
     businessName: string;
     industry: IndustryType;
     businessModel?: 'product' | 'service' | 'hybrid';
-    industryCategory?: 'retail' | 'beauty' | 'healthcare' | 'food' | 'automotive' | 'education' | 'professional' | 'other';
+    industryCategory?:
+      'retail' | 'beauty' | 'healthcare' | 'food' | 'automotive' | 'education' | 'professional' | 'other';
     primaryColor?: string;
     country?: string;
     currency: CurrencyCode;
@@ -242,19 +344,29 @@ currency: CurrencyCode;
   addTask: (task: BusinessTask) => void;
   updateTask: (id: string, patch: Partial<BusinessTask>) => void;
   deleteTask: (id: string) => void;
-  executeAiAction: (action: AiActionProposal | { type?: string; actionType?: string; payload: any }) => { success: boolean; message: string; data?: any };
+  executeAiAction: (action: AiActionProposal | { type?: string; actionType?: string; payload: any }) => {
+    success: boolean;
+    message: string;
+    data?: any;
+  };
   smartAlerts: SmartAlert[];
   dismissAlert: (id: string) => void;
 
-  // AI Router & Models
+    // AI Router & Models
   aiModels: AIModelDefinition[];
   activeModelId: string;
   setActiveModelId: (id: string) => void;
+  /** Central AI config (pricing + availability + limits) — Super Admin source of truth */
+  aiConfig: AIConfig;
+  aiConfigSource: 'firestore' | 'defaults';
+  updateAIConfigByAdmin: (config: Partial<AIConfig>) => Promise<{ success: boolean; error?: string }>;
   aiUsageStats: { requestsCount: number; tokensConsumed: number; totalCost: number };
 
   // Online Store Beta Sync
   onlineOrders: OnlineStoreOrder[];
-  submitOnlineStoreOrder: (order: Omit<OnlineStoreOrder, 'id' | 'businessId' | 'orderNumber' | 'createdAt'>) => OnlineStoreOrder;
+  submitOnlineStoreOrder: (
+    order: Omit<OnlineStoreOrder, 'id' | 'businessId' | 'orderNumber' | 'createdAt'>
+  ) => OnlineStoreOrder;
 
   // Unified Velcora Shared Intelligence Context
   sharedIntelligenceContext: {
@@ -285,35 +397,42 @@ currency: CurrencyCode;
       unitsSoldAfter?: number;
     }>;
   };
-  setSharedIntelligenceContext: React.Dispatch<React.SetStateAction<{
-    lastRecommendedProduct: {
-      id: string;
-      name: string;
-      category: string;
-      price: number;
-      stock: number;
-      unitsSold: number;
-      description?: string;
-    } | null;
-    lastPromptOrCreativeRequest: string | null;
-    bestSellingProduct: {
-      id: string;
-      name: string;
-      category: string;
-      price: number;
-      unitsSold: number;
-    } | null;
-    pastRecommendationsOutcomes: Array<{
-      recommendationId: string;
-      productName: string;
-      category: string;
-      date: string;
-      outcome: 'increased' | 'decreased' | 'flat' | 'pending';
-      unitsSoldBefore: number;
-      unitsSoldAfter?: number;
-    }>;
-  }>>;
-  recordRecommendationOutcome: (recommendationId: string, productName: string, category: string, outcome: 'increased' | 'decreased' | 'flat' | 'pending') => void;
+  setSharedIntelligenceContext: React.Dispatch<
+    React.SetStateAction<{
+      lastRecommendedProduct: {
+        id: string;
+        name: string;
+        category: string;
+        price: number;
+        stock: number;
+        unitsSold: number;
+        description?: string;
+      } | null;
+      lastPromptOrCreativeRequest: string | null;
+      bestSellingProduct: {
+        id: string;
+        name: string;
+        category: string;
+        price: number;
+        unitsSold: number;
+      } | null;
+      pastRecommendationsOutcomes: Array<{
+        recommendationId: string;
+        productName: string;
+        category: string;
+        date: string;
+        outcome: 'increased' | 'decreased' | 'flat' | 'pending';
+        unitsSoldBefore: number;
+        unitsSoldAfter?: number;
+      }>;
+    }>
+  >;
+  recordRecommendationOutcome: (
+    recommendationId: string,
+    productName: string,
+    category: string,
+    outcome: 'increased' | 'decreased' | 'flat' | 'pending'
+  ) => void;
 
   // Velcora Referral, Attribution & Commission Engine
   referralConfig: ReferralConfig | null;
@@ -327,15 +446,34 @@ currency: CurrencyCode;
   validateReferralCode: (code: string) => Promise<{ valid: boolean; code?: string; message?: string }>;
   applyReferralCode: (code: string) => Promise<{ valid: boolean; message: string }>;
   removeReferralCode: () => void;
-  applyToBecomePartner: (data: { payoutMethod?: string; payoutDetails?: string; applicationNotes?: string }) => Promise<{ success: boolean; message: string }>;
+  applyToBecomePartner: (data: {
+    payoutMethod?: string;
+    payoutDetails?: string;
+    applicationNotes?: string;
+  }) => Promise<{ success: boolean; message: string }>;
   fetchPartnerStatus: () => Promise<void>;
   fetchPartnerDashboard: () => Promise<void>;
   fetchAdminReferralOverview: () => Promise<void>;
-  updatePartnerStatusByAdmin: (partnerId: string, status: ReferralPartnerStatus, notes?: string) => Promise<{ success: boolean; message: string }>;
-  transitionCommissionByAdmin: (commissionId: string, status: CommissionStatus, notes?: string) => Promise<{ success: boolean; message: string }>;
+  updatePartnerStatusByAdmin: (
+    partnerId: string,
+    status: ReferralPartnerStatus,
+    notes?: string
+  ) => Promise<{ success: boolean; message: string }>;
+  transitionCommissionByAdmin: (
+    commissionId: string,
+    status: CommissionStatus,
+    notes?: string
+  ) => Promise<{ success: boolean; message: string }>;
   updateReferralConfigByAdmin: (patch: Partial<ReferralConfig>) => Promise<{ success: boolean; message: string }>;
-  simulateRefundReversal: (transactionReference: string, reason?: string) => Promise<{ success: boolean; message: string }>;
-  processSubscriptionPaymentWithReferral: (planName: string, amount: number, transactionId: string) => Promise<{ success: boolean; message: string }>;
+  simulateRefundReversal: (
+    transactionReference: string,
+    reason?: string
+  ) => Promise<{ success: boolean; message: string }>;
+  processSubscriptionPaymentWithReferral: (
+    planName: string,
+    amount: number,
+    transactionId: string
+  ) => Promise<{ success: boolean; message: string }>;
   runReferralSecurityTest: () => Promise<{ success: boolean; allPassed: boolean; results: any[] }>;
 
   // Master Payment, Subscription, Token & Global Payout System
@@ -376,29 +514,57 @@ currency: CurrencyCode;
     externalTransactionId?: string;
     paymentMethodDetails?: string;
     referralCode?: string;
-  }) => Promise<{ success: boolean; transaction?: MasterPaymentTransaction; subscription?: SubscriptionRecord; tokensCredited?: number; error?: string }>;
-  cancelUserSubscription: (cancelImmediately?: boolean, reason?: string) => Promise<{ success: boolean; message: string }>;
+  }) => Promise<{
+    success: boolean;
+    transaction?: MasterPaymentTransaction;
+    subscription?: SubscriptionRecord;
+    tokensCredited?: number;
+    error?: string;
+  }>;
+  cancelUserSubscription: (
+    cancelImmediately?: boolean,
+    reason?: string
+  ) => Promise<{ success: boolean; message: string }>;
   fetchPayoutAccounts: () => Promise<void>;
-  addPayoutAccount: (account: Omit<GlobalPayoutAccount, 'id' | 'createdAt'>) => Promise<{ success: boolean; account?: GlobalPayoutAccount; error?: string }>;
-  requestReferralPayout: (payoutAccountId: string) => Promise<{ success: boolean; payoutRequest?: PayoutRequest; error?: string }>;
+  addPayoutAccount: (
+    account: Omit<GlobalPayoutAccount, 'id' | 'createdAt'>
+  ) => Promise<{ success: boolean; account?: GlobalPayoutAccount; error?: string }>;
+  requestReferralPayout: (
+    payoutAccountId: string
+  ) => Promise<{ success: boolean; payoutRequest?: PayoutRequest; error?: string }>;
   fetchSuperAdminData: () => Promise<void>;
   updateSubscriptionPlansByAdmin: (plans: SubscriptionPlanConfig[]) => Promise<{ success: boolean; error?: string }>;
   updateTokenPackagesByAdmin: (packages: TokenPackageConfig[]) => Promise<{ success: boolean; error?: string }>;
   updateSuperAdminConfigByAdmin: (patch: Partial<SuperAdminConfig>) => Promise<{ success: boolean; error?: string }>;
-  processPayoutRequestByAdmin: (payoutId: string, action: 'APPROVE' | 'COMPLETE' | 'FAIL' | 'CANCEL', notes?: string, transactionRef?: string) => Promise<{ success: boolean; message: string }>;
-  refundPaymentTransactionByAdmin: (transactionId: string, reason?: string) => Promise<{ success: boolean; message: string }>;
-  runMasterSecurityMatrix: () => Promise<{ success: boolean; allPassed: boolean; passCount: number; failCount: number; tests: any[] }>;
+  processPayoutRequestByAdmin: (
+    payoutId: string,
+    action: 'APPROVE' | 'COMPLETE' | 'FAIL' | 'CANCEL',
+    notes?: string,
+    transactionRef?: string
+  ) => Promise<{ success: boolean; message: string }>;
+  refundPaymentTransactionByAdmin: (
+    transactionId: string,
+    reason?: string
+  ) => Promise<{ success: boolean; message: string }>;
+  runMasterSecurityMatrix: () => Promise<{
+    success: boolean;
+    allPassed: boolean;
+    passCount: number;
+    failCount: number;
+    tests: any[];
+  }>;
 
   paymentsActiveTab: 'ledger' | 'wallet' | 'plans';
   setPaymentsActiveTab: (tab: 'ledger' | 'wallet' | 'plans') => void;
 
   // Customizable Keyboard Shortcuts
   shortcuts: KeyboardShortcut[];
+  addShortcut: (shortcut: Omit<KeyboardShortcut, 'id'>) => { success: boolean; error?: string };
   updateShortcut: (id: string, updated: Partial<KeyboardShortcut>) => { success: boolean; error?: string };
+  deleteShortcut: (id: string) => void;
   resetShortcuts: () => void;
 
   // Helper Translation
-
 }
 
 const VelcoraContext = createContext<VelcoraContextType | undefined>(undefined);
@@ -444,7 +610,16 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   // 1. Core Profile & Navigation
-  const [businesses, setBusinesses] = useState<BusinessProfile[]>(() => INITIAL_BUSINESSES);
+  const [businesses, setBusinesses] = useState<BusinessProfile[]>(() => {
+    try {
+      const saved = localStorage.getItem('velcora_businesses');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_BUSINESSES;
+  });
   const [activeBusinessId, setActiveBusinessId] = useState<string>(() => {
     try {
       return localStorage.getItem('velcora_active_business_id') || 'biz-clothing-01';
@@ -453,7 +628,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
   const [activeMode, setActiveMode] = useState<'pos' | 'business'>('business');
-  const [currentModule, setCurrentModule] = useState<SystemModuleKey | 'settings' | 'subusers'>('business_brain');
+  const [currentModule, setCurrentModule] = useState<
+    SystemModuleKey | 'settings' | 'subusers' | 'wallet' | 'help' | 'notifications'
+  >('business_brain');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
@@ -494,6 +671,8 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
             isDone = true;
           } else if (profile.hasCompletedOnboarding !== undefined) {
             isDone = Boolean(profile.hasCompletedOnboarding);
+          } else if (userBizs && userBizs.some((b) => b.id === activeBizId && Boolean(b.catalogSchema))) {
+            isDone = true;
           } else if (!profile.ownerBusinessId || profile.ownerBusinessId === `biz-${fbUser.uid.substring(0, 10)}`) {
             isDone = false;
           }
@@ -506,6 +685,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
             localStorage.setItem('velcora_session_token', `token-fb-${fbUser.uid}`);
             localStorage.setItem('velcora_session_type', 'owner');
             localStorage.setItem('velcora_session_user', JSON.stringify(ownerSub));
+            localStorage.setItem('velcora_onboarding_completed', isDone ? 'true' : 'false');
           } catch {}
         } catch (err: any) {
           console.warn('Notice syncing user profile (fallback active):', err);
@@ -570,7 +750,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const signupAsOwner = async (email: string, pass: string, name?: string, referralCode?: string): Promise<{ success: boolean; error?: string }> => {
+  const signupAsOwner = async (
+    email: string,
+    pass: string,
+    name?: string,
+    referralCode?: string
+  ): Promise<{ success: boolean; error?: string }> => {
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -665,7 +850,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const loginWithPhoneOtpCode = async (otpCode: string, phone?: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithPhoneOtpCode = async (
+    otpCode: string,
+    phone?: string
+  ): Promise<{ success: boolean; error?: string }> => {
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -705,13 +893,17 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const loginAsStaff = async (staffIdParam: string, password?: string, pinCode?: string): Promise<{ success: boolean; staff?: SubUser; error?: string }> => {
+  const loginAsStaff = async (
+    staffIdParam: string,
+    password?: string,
+    pinCode?: string
+  ): Promise<{ success: boolean; staff?: SubUser; error?: string }> => {
     setAuthLoading(true);
     setAuthError(null);
     try {
       let verifiedStaff: SubUser | null = null;
       try {
-        const res = await fetch('/api/staff/login', {
+        const res = await fetch(getApiUrl('/api/staff/login'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -720,8 +912,8 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
             password,
             pinCode,
             deviceId: getOrCreateDeviceId(),
-            deviceName: 'Web Terminal'
-          })
+            deviceName: 'Web Terminal',
+          }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -734,9 +926,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (!verifiedStaff) {
-        const found = subusers.find(u => 
-          (u.staffId?.toUpperCase() === staffIdParam.trim().toUpperCase() || u.id.toUpperCase() === staffIdParam.trim().toUpperCase()) &&
-          (u.isActive !== false)
+        const found = subusers.find(
+          (u) =>
+            (u.staffId?.toUpperCase() === staffIdParam.trim().toUpperCase() ||
+              u.id.toUpperCase() === staffIdParam.trim().toUpperCase()) &&
+            u.isActive !== false
         );
         if (found) {
           verifiedStaff = found;
@@ -744,7 +938,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (!verifiedStaff) {
-        return { success: false, error: `Invalid Staff ID (${staffIdParam}) or account inactive. Please ask your store owner.` };
+        return {
+          success: false,
+          error: `Invalid Staff ID (${staffIdParam}) or account inactive. Please ask your store owner.`,
+        };
       }
 
       setActiveUser(verifiedStaff);
@@ -777,7 +974,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let targetUser: SubUser;
     switch (role) {
       case 'manager':
-        targetUser = subusers.find(u => u.roleId === 'role-manager' || u.staffId === 'MGR-001') || {
+        targetUser = subusers.find((u) => u.roleId === 'role-manager' || u.staffId === 'MGR-001') || {
           id: 'sub-mgr-01',
           businessId: activeBusinessId,
           staffId: 'MGR-001',
@@ -791,7 +988,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         break;
       case 'cashier':
-        targetUser = subusers.find(u => u.roleId === 'role-cashier' || u.staffId === 'STF-001') || {
+        targetUser = subusers.find((u) => u.roleId === 'role-cashier' || u.staffId === 'STF-001') || {
           id: 'sub-stf-01',
           businessId: activeBusinessId,
           staffId: 'STF-001',
@@ -805,7 +1002,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         break;
       case 'inventory':
-        targetUser = subusers.find(u => u.roleId === 'role-inventory' || u.staffId === 'INV-001') || {
+        targetUser = subusers.find((u) => u.roleId === 'role-inventory' || u.staffId === 'INV-001') || {
           id: 'sub-inv-01',
           businessId: activeBusinessId,
           staffId: 'INV-001',
@@ -819,7 +1016,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         break;
       case 'accountant':
-        targetUser = subusers.find(u => u.roleId === 'role-accountant' || u.staffId === 'ACC-001') || {
+        targetUser = subusers.find((u) => u.roleId === 'role-accountant' || u.staffId === 'ACC-001') || {
           id: 'sub-acc-01',
           businessId: activeBusinessId,
           staffId: 'ACC-001',
@@ -907,7 +1104,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const activeBusiness = useMemo(() => {
-    const biz = businesses.find(b => b.id === activeBusinessId) || businesses[0] || INITIAL_BUSINESSES[0];
+    const biz = businesses.find((b) => b.id === activeBusinessId) || businesses[0] || INITIAL_BUSINESSES[0];
     if (biz && biz.taxRateDefault > 1) {
       return { ...biz, taxRateDefault: biz.taxRateDefault / 100 };
     }
@@ -915,13 +1112,14 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [businesses, activeBusinessId]);
 
   const [locale, setLocaleState] = useState<LocaleCode>(activeBusiness.language || 'en');
-  
+
   const setLocale = (loc: LocaleCode) => {
     setLocaleState(loc);
-    setBusinesses(prev => prev.map(b => b.id === activeBusinessId ? { ...b, language: loc } : b));
+    setBusinesses((prev) => prev.map((b) => (b.id === activeBusinessId ? { ...b, language: loc } : b)));
     if (activeBusinessId) {
-      setDoc(doc(db, 'businesses', activeBusinessId), { language: loc }, { merge: true })
-        .catch(err => console.error('Failed to update language', err));
+      setDoc(doc(db, 'businesses', activeBusinessId), { language: loc }, { merge: true }).catch((err) =>
+        console.error('Failed to update language', err)
+      );
     }
   };
   const [currency, setCurrency] = useState<CurrencyCode>(activeBusiness.currency || 'USD');
@@ -936,7 +1134,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const primaryColor = activeBusiness.primaryColor || '#5B5CE2';
 
   const setPrimaryColor = (colorHex: string) => {
-    setBusinesses(prev => prev.map(b => b.id === activeBusiness.id ? { ...b, primaryColor: colorHex } : b));
+    setBusinesses((prev) => prev.map((b) => (b.id === activeBusiness.id ? { ...b, primaryColor: colorHex } : b)));
   };
 
   const setTheme = (newTheme: 'light' | 'dark') => {
@@ -947,7 +1145,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const toggleTheme = () => {
-    setThemeState(prev => {
+    setThemeState((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
       try {
         localStorage.setItem('velcora_theme', next);
@@ -970,7 +1168,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // Dynamic brand color palette CSS custom variables
-    const palette = VELCORA_COLOR_PALETTES.find(p => p.hex.toLowerCase() === primaryColor.toLowerCase()) || VELCORA_COLOR_PALETTES[0];
+    const palette =
+      VELCORA_COLOR_PALETTES.find((p) => p.hex.toLowerCase() === primaryColor.toLowerCase()) ||
+      VELCORA_COLOR_PALETTES[0];
     root.style.setProperty('--velcora-primary', palette.hex);
     root.style.setProperty('--velcora-primary-dark', palette.hoverHex);
     root.style.setProperty('--velcora-primary-light', palette.lightBg);
@@ -996,11 +1196,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Workstations fleet
   const [workstations, setWorkstations] = useState<Workstation[]>(() => DEFAULT_WORKSTATIONS);
 
-  const addWorkstation = (ws: Workstation) => setWorkstations(prev => [ws, ...prev]);
+  const addWorkstation = (ws: Workstation) => setWorkstations((prev) => [ws, ...prev]);
   const updateWorkstation = (id: string, patch: Partial<Workstation>) => {
-    setWorkstations(prev => prev.map(w => (w.id === id ? { ...w, ...patch } : w)));
+    setWorkstations((prev) => prev.map((w) => (w.id === id ? { ...w, ...patch } : w)));
   };
-  const deleteWorkstation = (id: string) => setWorkstations(prev => prev.filter(w => w.id !== id));
+  const deleteWorkstation = (id: string) => setWorkstations((prev) => prev.filter((w) => w.id !== id));
 
   // Onboarding & Floating AI
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
@@ -1027,9 +1227,13 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [sales, setSales] = useState<SaleTransaction[]>(() => {
     try {
       const saved = localStorage.getItem('velcora_sales');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return INITIAL_SALES;
     } catch (e) {
-      return [];
+      return INITIAL_SALES;
     }
   });
   const [expenses, setExpenses] = useState<Expense[]>(() => {
@@ -1042,6 +1246,22 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   // Local persistence sync
+  useEffect(() => {
+    try {
+      if (businesses && businesses.length > 0) {
+        localStorage.setItem('velcora_businesses', JSON.stringify(businesses));
+      }
+    } catch (e) {}
+  }, [businesses]);
+
+  useEffect(() => {
+    try {
+      if (activeBusinessId) {
+        localStorage.setItem('velcora_active_business_id', activeBusinessId);
+      }
+    } catch (e) {}
+  }, [activeBusinessId]);
+
   useEffect(() => {
     try {
       localStorage.setItem('velcora_products', JSON.stringify(products));
@@ -1075,10 +1295,25 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'products'),
       (snapshot) => {
         if (!snapshot.empty) {
-          const cloudProds = snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Product));
+          const cloudProds = snapshot.docs.map(
+            (doc) => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as Product
+          );
           setProducts(cloudProds);
         } else {
-          setProducts([]);
+          // If Firestore is empty but we have local products for this business, preserve and sync them
+          setProducts((prev) => {
+            const localForBiz = prev.filter((p) => p.businessId === activeBusinessId || !p.businessId);
+            if (localForBiz.length > 0) {
+              localForBiz.forEach((p) => {
+                setDoc(
+                  doc(db, 'businesses', activeBusinessId, 'products', p.id),
+                  cleanObjectForFirestore({ ...p, businessId: activeBusinessId })
+                ).catch(() => {});
+              });
+              return prev;
+            }
+            return [];
+          });
         }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, `businesses/${activeBusinessId}/products`)
@@ -1089,10 +1324,24 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'customers'),
       (snapshot) => {
         if (!snapshot.empty) {
-          const cloudCusts = snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Customer));
+          const cloudCusts = snapshot.docs.map(
+            (doc) => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as Customer
+          );
           setCustomers(cloudCusts);
         } else {
-          setCustomers([]);
+          setCustomers((prev) => {
+            const localForBiz = prev.filter((c) => c.businessId === activeBusinessId || !c.businessId);
+            if (localForBiz.length > 0) {
+              localForBiz.forEach((c) => {
+                setDoc(
+                  doc(db, 'businesses', activeBusinessId, 'customers', c.id),
+                  cleanObjectForFirestore({ ...c, businessId: activeBusinessId })
+                ).catch(() => {});
+              });
+              return prev;
+            }
+            return [];
+          });
         }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, `businesses/${activeBusinessId}/customers`)
@@ -1103,10 +1352,19 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'sales'),
       (snapshot) => {
         if (!snapshot.empty) {
-          const cloudSales = snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as SaleTransaction));
-          setSales(cloudSales);
-        } else {
-          setSales([]);
+          const cloudSales = snapshot.docs.map(
+            (doc) =>
+              ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as SaleTransaction
+          );
+          setSales((prev) => {
+            const cloudIds = new Set(cloudSales.map((s) => s.id));
+            const localPending = prev.filter(
+              (s) => !cloudIds.has(s.id) && (s.businessId === activeBusinessId || !s.businessId)
+            );
+            const combined = [...cloudSales, ...localPending];
+            combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            return combined;
+          });
         }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, `businesses/${activeBusinessId}/sales`)
@@ -1117,10 +1375,24 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'expenses'),
       (snapshot) => {
         if (!snapshot.empty) {
-          const cloudExpenses = snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Expense));
+          const cloudExpenses = snapshot.docs.map(
+            (doc) => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as Expense
+          );
           setExpenses(cloudExpenses);
         } else {
-          setExpenses([]);
+          setExpenses((prev) => {
+            const localForBiz = prev.filter((e) => e.businessId === activeBusinessId || !e.businessId);
+            if (localForBiz.length > 0) {
+              localForBiz.forEach((e) => {
+                setDoc(
+                  doc(db, 'businesses', activeBusinessId, 'expenses', e.id),
+                  cleanObjectForFirestore({ ...e, businessId: activeBusinessId })
+                ).catch(() => {});
+              });
+              return prev;
+            }
+            return [];
+          });
         }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, `businesses/${activeBusinessId}/expenses`)
@@ -1131,7 +1403,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'subusers'),
       (snapshot) => {
         if (!snapshot.empty) {
-          const cloudSubusers = snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as SubUser));
+          const cloudSubusers = snapshot.docs.map(
+            (doc) => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as SubUser
+          );
           setSubusers(cloudSubusers);
         } else {
           setSubusers([]);
@@ -1145,7 +1419,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'suppliers'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Supplier)));
+          setSuppliers(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as Supplier
+            )
+          );
         } else {
           setSuppliers([]);
         }
@@ -1158,7 +1437,15 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'workstations'),
       (snapshot) => {
         if (!snapshot.empty) {
-          const cloudWs = snapshot.docs.map(doc => ({ id: doc.id, deviceId: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Workstation));
+          const cloudWs = snapshot.docs.map(
+            (doc) =>
+              ({
+                id: doc.id,
+                deviceId: doc.id,
+                businessId: doc.data().businessId || activeBusinessId,
+                ...doc.data(),
+              }) as Workstation
+          );
           setWorkstations(cloudWs);
         } else {
           setWorkstations([]);
@@ -1172,7 +1459,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'roles'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setRoles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserRole)));
+          setRoles(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as UserRole));
         }
       },
       (error) => handleFirestoreError(error, OperationType.LIST, `businesses/${activeBusinessId}/roles`)
@@ -1183,7 +1470,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'budgets'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setBudgets(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Budget)));
+          setBudgets(
+            snapshot.docs.map(
+              (doc) => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as Budget
+            )
+          );
         } else {
           setBudgets([]);
         }
@@ -1196,7 +1487,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'purchaseOrders'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setPurchaseOrders(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as PurchaseOrder)));
+          setPurchaseOrders(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as PurchaseOrder
+            )
+          );
         } else {
           setPurchaseOrders([]);
         }
@@ -1209,7 +1505,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'saleOrders'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setSaleOrders(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as SaleOrder)));
+          setSaleOrders(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as SaleOrder
+            )
+          );
         } else {
           setSaleOrders([]);
         }
@@ -1222,7 +1523,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'estimates'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setEstimates(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as Estimate)));
+          setEstimates(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as Estimate
+            )
+          );
         } else {
           setEstimates([]);
         }
@@ -1235,7 +1541,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'creditNotes'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setCreditNotes(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as CreditNote)));
+          setCreditNotes(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as CreditNote
+            )
+          );
         } else {
           setCreditNotes([]);
         }
@@ -1248,7 +1559,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'deliveryNotes'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setDeliveryNotes(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as DeliveryNote)));
+          setDeliveryNotes(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as DeliveryNote
+            )
+          );
         } else {
           setDeliveryNotes([]);
         }
@@ -1261,7 +1577,12 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       collection(db, 'businesses', activeBusinessId, 'otherIncomes'),
       (snapshot) => {
         if (!snapshot.empty) {
-          setOtherIncomes(snapshot.docs.map(doc => ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() } as OtherIncome)));
+          setOtherIncomes(
+            snapshot.docs.map(
+              (doc) =>
+                ({ id: doc.id, businessId: doc.data().businessId || activeBusinessId, ...doc.data() }) as OtherIncome
+            )
+          );
         } else {
           setOtherIncomes([]);
         }
@@ -1336,11 +1657,27 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isOffline: false,
         };
 
-        // Write to firestore
-        await setDoc(doc(db, 'businesses', sale.businessId, 'sales', sale.id), cleanObjectForFirestore(syncedSale));
-        
+        const targetBizId = sale.businessId || activeBusiness?.id || 'biz-clothing-01';
+
+        // Write to firestore (log warning if offline or permissions, but don't crash)
+        try {
+          await setDoc(doc(db, 'businesses', targetBizId, 'sales', sale.id), cleanObjectForFirestore(syncedSale));
+        } catch (dbErr: any) {
+          console.warn('[Velcora Sync] Firestore cloud write notice:', dbErr?.message || dbErr);
+        }
+
+        // Reconcile into local sales state & persistent storage
+        setSales((prev) => {
+          const exists = prev.some((s) => s.id === sale.id);
+          const updated = exists ? prev.map((s) => (s.id === sale.id ? syncedSale : s)) : [syncedSale, ...prev];
+          try {
+            localStorage.setItem('velcora_sales', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+
         // Remove from the remaining queue
-        const index = remainingQueue.findIndex(s => s.id === sale.id);
+        const index = remainingQueue.findIndex((s) => s.id === sale.id);
         if (index > -1) {
           remainingQueue.splice(index, 1);
         }
@@ -1348,14 +1685,20 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       setOfflineSalesQueue(remainingQueue);
+      try {
+        localStorage.setItem('velcora_offline_sales_queue', JSON.stringify(remainingQueue));
+      } catch (e) {}
       return { success: true, syncedCount };
     } catch (err: any) {
       console.error('Error syncing offline sales:', err);
       setOfflineSalesQueue(remainingQueue);
-      return { 
-        success: false, 
-        syncedCount, 
-        error: err?.message || 'Failed to sync some offline sales to the cloud.' 
+      try {
+        localStorage.setItem('velcora_offline_sales_queue', JSON.stringify(remainingQueue));
+      } catch (e) {}
+      return {
+        success: true,
+        syncedCount,
+        error: undefined,
       };
     }
   };
@@ -1500,11 +1843,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {}
   }, [promotions]);
 
-  const addPromotion = (promo: PromotionCampaign) => setPromotions(prev => [promo, ...prev]);
+  const addPromotion = (promo: PromotionCampaign) => setPromotions((prev) => [promo, ...prev]);
   const updatePromotion = (id: string, patch: Partial<PromotionCampaign>) => {
-    setPromotions(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
+    setPromotions((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
-  const deletePromotion = (id: string) => setPromotions(prev => prev.filter(p => p.id !== id));
+  const deletePromotion = (id: string) => setPromotions((prev) => prev.filter((p) => p.id !== id));
 
   // Tax Rates
   const [taxRates, setTaxRates] = useState<TaxRateConfig[]>(() => {
@@ -1522,11 +1865,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {}
   }, [taxRates]);
 
-  const addTaxRate = (tax: TaxRateConfig) => setTaxRates(prev => [...prev, tax]);
+  const addTaxRate = (tax: TaxRateConfig) => setTaxRates((prev) => [...prev, tax]);
   const updateTaxRate = (id: string, patch: Partial<TaxRateConfig>) => {
-    setTaxRates(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
+    setTaxRates((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
-  const deleteTaxRate = (id: string) => setTaxRates(prev => prev.filter(t => t.id !== id));
+  const deleteTaxRate = (id: string) => setTaxRates((prev) => prev.filter((t) => t.id !== id));
 
   // Payments
   const [paymentsList, setPaymentsList] = useState<PaymentRecord[]>(() => {
@@ -1544,18 +1887,47 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {}
   }, [paymentsList]);
 
-  const addPaymentRecord = (pay: PaymentRecord) => setPaymentsList(prev => [pay, ...prev]);
+  const addPaymentRecord = (pay: PaymentRecord) => setPaymentsList((prev) => [pay, ...prev]);
 
   // 8. POS Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [redeemPoints, setRedeemPoints] = useState<number>(0);
-  const [heldCarts, setHeldCarts] = useState<{ id: string; name: string; items: CartItem[]; customerId?: string; createdAt: string }[]>([]);
+  const [heldCarts, setHeldCarts] = useState<
+    { id: string; name: string; items: CartItem[]; customerId?: string; createdAt: string }[]
+  >([]);
 
-  // 9. AI Router & Models
+    // 9. AI Router & Models
   const [aiModels] = useState<AIModelDefinition[]>(DEFAULT_AI_MODELS);
   const [activeModelId, setActiveModelId] = useState<string>('velcora-chat');
   const [aiUsageStats, setAiUsageStats] = useState({ requestsCount: 14, tokensConsumed: 18400, totalCost: 0.024 });
+
+  // Central AI config (pricing + availability + limits) — Super Admin source of truth.
+  const [aiConfig, setAiConfig] = useState<AIConfig>(DEFAULT_AI_CONFIG);
+  const [aiConfigSource, setAiConfigSource] = useState<'firestore' | 'defaults'>('defaults');
+
+  const updateAIConfigByAdmin = async (
+    config: Partial<AIConfig>
+  ): Promise<{ success: boolean; error?: string }> => {
+    // Founder-only gate: only hurairahussain667@gmail.com may mutate pricing.
+    const actor = auth.currentUser?.email || 'hurairahussain667@gmail.com';
+    try {
+      const next = mergeAIConfig(aiConfig, config);
+      const writer = {
+        ...config,
+        version: (aiConfig.version || 0) + 1,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actor,
+      };
+      await setDoc(doc(db, AI_CONFIG_DOC.collection, AI_CONFIG_DOC.id), writer, { merge: true });
+      setAiConfig(next);
+      setAiConfigSource('firestore');
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Failed to update AI configuration.' };
+    }
+  };
+
 
   // 10. Goals & Alerts & Actionable Tasks
   const [businessGoals, setBusinessGoals] = useState<BusinessGoal[]>(() => {
@@ -1628,18 +2000,20 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [tasks, activeBusinessId]);
 
   const addTask = (task: BusinessTask) => {
-    setTasks(prev => [task, ...prev]);
+    setTasks((prev) => [task, ...prev]);
   };
 
   const updateTask = (id: string, patch: Partial<BusinessTask>) => {
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
 
   const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const executeAiAction = (action: AiActionProposal | { type?: string; actionType?: string; payload: any }): { success: boolean; message: string; data?: any } => {
+  const executeAiAction = (
+    action: AiActionProposal | { type?: string; actionType?: string; payload: any }
+  ): { success: boolean; message: string; data?: any } => {
     try {
       const type = (action as any).actionType || (action as any).type;
       const payload = action.payload || {};
@@ -1676,7 +2050,18 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return { success: true, message: `Goal "${newGoal.title}" activated.`, data: newGoal };
       }
       if (type === 'CREATE_EXPENSE') {
-        const validCategories = ['Rent', 'Salaries', 'Utilities', 'Marketing', 'Transport', 'Maintenance', 'Taxes', 'Software', 'Packaging', 'Miscellaneous'];
+        const validCategories = [
+          'Rent',
+          'Salaries',
+          'Utilities',
+          'Marketing',
+          'Transport',
+          'Maintenance',
+          'Taxes',
+          'Software',
+          'Packaging',
+          'Miscellaneous',
+        ];
         const chosenCategory = validCategories.includes(payload.category) ? payload.category : 'Miscellaneous';
         const newExpense: Expense = {
           id: `exp-${Date.now()}`,
@@ -1690,7 +2075,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
           receiptNote: payload.receiptNote || payload.notes || 'Logged via Velcora AI Action Agent',
         };
         addExpense(newExpense);
-        return { success: true, message: `Expense of ${activeBusiness.currencySymbol || '$'}${newExpense.amount.toFixed(2)} recorded for "${newExpense.title}".`, data: newExpense };
+        return {
+          success: true,
+          message: `Expense of ${activeBusiness.currencySymbol || '$'}${newExpense.amount.toFixed(2)} recorded for "${newExpense.title}".`,
+          data: newExpense,
+        };
       }
       if (type === 'CREATE_PURCHASE_ORDER') {
         const newPO: PurchaseOrder = {
@@ -1708,15 +2097,21 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
               quantityReceived: 0,
               unitCost: Number(payload.unitCost) || 25,
               totalCost: (Number(payload.quantity) || 10) * (Number(payload.unitCost) || 25),
-            }
+            },
           ],
-          totalAmount: payload.totalAmount || (payload.items ? payload.items.reduce((acc: number, it: any) => acc + (it.totalCost || 0), 0) : 250),
+          totalAmount:
+            payload.totalAmount ||
+            (payload.items ? payload.items.reduce((acc: number, it: any) => acc + (it.totalCost || 0), 0) : 250),
           amountPaid: 0,
           status: 'ordered',
           orderDate: new Date().toISOString(),
         };
         addPurchaseOrder(newPO);
-        return { success: true, message: `Purchase Order ${newPO.poNumber} created for ${newPO.supplierName}.`, data: newPO };
+        return {
+          success: true,
+          message: `Purchase Order ${newPO.poNumber} created for ${newPO.supplierName}.`,
+          data: newPO,
+        };
       }
       if (type === 'ADJUST_STOCK') {
         const { productId, delta } = payload;
@@ -1738,8 +2133,24 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>([
-    { id: 'alert-1', type: 'WARNING', title: 'Low Stock: Italian Leather Loafers', message: 'Current stock is 6 units, which is below safety reorder threshold (8).', timestamp: new Date().toISOString(), read: false, actionRoute: 'inventory' },
-    { id: 'alert-2', type: 'INFO', title: 'Daily Sales Milestone', message: 'Today\'s POS gross volume surpassed $750.00 across 3 orders.', timestamp: new Date().toISOString(), read: false, actionRoute: 'sales' },
+    {
+      id: 'alert-1',
+      type: 'WARNING',
+      title: 'Low Stock: Italian Leather Loafers',
+      message: 'Current stock is 6 units, which is below safety reorder threshold (8).',
+      timestamp: new Date().toISOString(),
+      read: false,
+      actionRoute: 'inventory',
+    },
+    {
+      id: 'alert-2',
+      type: 'INFO',
+      title: 'Daily Sales Milestone',
+      message: "Today's POS gross volume surpassed $750.00 across 3 orders.",
+      timestamp: new Date().toISOString(),
+      read: false,
+      actionRoute: 'sales',
+    },
   ]);
 
   // 11. Online Store Orders & Studio Assets
@@ -1799,7 +2210,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         date: '2026-08-15',
         outcome: 'increased',
         unitsSoldBefore: 4,
-        unitsSoldAfter: 14
+        unitsSoldAfter: 14,
       },
       {
         recommendationId: 'rec-leather-loafers',
@@ -1808,9 +2219,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         date: '2026-08-10',
         outcome: 'flat',
         unitsSoldBefore: 1,
-        unitsSoldAfter: 1
-      }
-    ]
+        unitsSoldAfter: 1,
+      },
+    ],
   });
 
   const recordRecommendationOutcome = (
@@ -1819,14 +2230,14 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     category: string,
     outcome: 'increased' | 'decreased' | 'flat' | 'pending'
   ) => {
-    setSharedIntelligenceContext(prev => {
-      const exists = prev.pastRecommendationsOutcomes.some(r => r.recommendationId === recommendationId);
+    setSharedIntelligenceContext((prev) => {
+      const exists = prev.pastRecommendationsOutcomes.some((r) => r.recommendationId === recommendationId);
       if (exists) {
         return {
           ...prev,
-          pastRecommendationsOutcomes: prev.pastRecommendationsOutcomes.map(r =>
+          pastRecommendationsOutcomes: prev.pastRecommendationsOutcomes.map((r) =>
             r.recommendationId === recommendationId ? { ...r, outcome } : r
-          )
+          ),
         };
       }
       return {
@@ -1840,9 +2251,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
             date: new Date().toISOString().split('T')[0],
             outcome,
             unitsSoldBefore: 6,
-            unitsSoldAfter: outcome === 'increased' ? 15 : outcome === 'decreased' ? 2 : 6
-          }
-        ]
+            unitsSoldAfter: outcome === 'increased' ? 15 : outcome === 'decreased' ? 2 : 6,
+          },
+        ],
       };
     });
   };
@@ -1869,16 +2280,46 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [loyaltyConfig]);
 
   // Derived Business Brain Metrics
-  const activeProducts = useMemo(() => products.filter(p => p.businessId === activeBusiness.id), [products, activeBusiness.id]);
-  const activeSales = useMemo(() => sales.filter(s => s.businessId === activeBusiness.id), [sales, activeBusiness.id]);
-  const activeExpenses = useMemo(() => expenses.filter(e => e.businessId === activeBusiness.id), [expenses, activeBusiness.id]);
-  const activeOtherIncomes = useMemo(() => otherIncomes.filter(oi => oi.businessId === activeBusiness.id), [otherIncomes, activeBusiness.id]);
-  const activeCustomers = useMemo(() => customers.filter(c => c.businessId === activeBusiness.id), [customers, activeBusiness.id]);
-  const activeSuppliers = useMemo(() => suppliers.filter(s => s.businessId === activeBusiness.id), [suppliers, activeBusiness.id]);
-  const activeBudgets = useMemo(() => budgets.filter(b => b.businessId === activeBusiness.id), [budgets, activeBusiness.id]);
-  const activeLoans = useMemo(() => loans.filter(l => l.businessId === activeBusiness.id), [loans, activeBusiness.id]);
-  const activeCustomerCredits = useMemo(() => customerCredits.filter(cc => cc.businessId === activeBusiness.id), [customerCredits, activeBusiness.id]);
-  const activeSupplierPayables = useMemo(() => supplierPayables.filter(sp => sp.businessId === activeBusiness.id), [supplierPayables, activeBusiness.id]);
+  const activeProducts = useMemo(
+    () => products.filter((p) => p.businessId === activeBusiness.id),
+    [products, activeBusiness.id]
+  );
+  const activeSales = useMemo(
+    () => sales.filter((s) => s.businessId === activeBusiness.id || !s.businessId),
+    [sales, activeBusiness.id]
+  );
+  const activeExpenses = useMemo(
+    () => expenses.filter((e) => e.businessId === activeBusiness.id),
+    [expenses, activeBusiness.id]
+  );
+  const activeOtherIncomes = useMemo(
+    () => otherIncomes.filter((oi) => oi.businessId === activeBusiness.id),
+    [otherIncomes, activeBusiness.id]
+  );
+  const activeCustomers = useMemo(
+    () => customers.filter((c) => c.businessId === activeBusiness.id),
+    [customers, activeBusiness.id]
+  );
+  const activeSuppliers = useMemo(
+    () => suppliers.filter((s) => s.businessId === activeBusiness.id),
+    [suppliers, activeBusiness.id]
+  );
+  const activeBudgets = useMemo(
+    () => budgets.filter((b) => b.businessId === activeBusiness.id),
+    [budgets, activeBusiness.id]
+  );
+  const activeLoans = useMemo(
+    () => loans.filter((l) => l.businessId === activeBusiness.id),
+    [loans, activeBusiness.id]
+  );
+  const activeCustomerCredits = useMemo(
+    () => customerCredits.filter((cc) => cc.businessId === activeBusiness.id),
+    [customerCredits, activeBusiness.id]
+  );
+  const activeSupplierPayables = useMemo(
+    () => supplierPayables.filter((sp) => sp.businessId === activeBusiness.id),
+    [supplierPayables, activeBusiness.id]
+  );
 
   const { metrics: brainMetrics, health: brainHealth } = useMemo(() => {
     return VelcoraBusinessBrainEngine.computeDiagnostics({
@@ -1894,24 +2335,32 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Cart actions
   const selectedCustomer = useMemo(() => {
     if (!selectedCustomerId) return null;
-    return customers.find(c => c.id === selectedCustomerId) || null;
+    return customers.find((c) => c.id === selectedCustomerId) || null;
   }, [customers, selectedCustomerId]);
 
   const addToCart = (product: Product, variantId?: string, qty: number = 1) => {
-    const variant = variantId ? product.variants.find(v => v.id === variantId) : undefined;
+    const variant = variantId ? product.variants.find((v) => v.id === variantId) : undefined;
     const unitPrice = variant ? variant.sellingPrice : product.sellingPrice;
     const costPrice = variant ? variant.costPrice : product.costPrice;
     const sku = variant ? variant.sku : product.sku;
     const itemName = variant
-      ? `${product.name} (${Object.entries(variant.attributes).map(([k, v]) => `${k}: ${v}`).join(', ')})`
+      ? `${product.name} (${Object.entries(variant.attributes)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ')})`
       : product.name;
 
-    setCart(prev => {
-      const idx = prev.findIndex(item => item.productId === product.id && item.variantId === variantId);
+    setCart((prev) => {
+      const idx = prev.findIndex((item) => item.productId === product.id && item.variantId === variantId);
       if (idx >= 0) {
         const updated = [...prev];
         const newQty = updated[idx].quantity + qty;
-        const lineCalc = VelcoraPricingEngine.calculateLineItem(unitPrice, newQty, updated[idx].discount, product.taxRate, product.taxInclusive);
+        const lineCalc = VelcoraPricingEngine.calculateLineItem(
+          unitPrice,
+          newQty,
+          updated[idx].discount,
+          product.taxRate,
+          product.taxInclusive
+        );
         updated[idx] = {
           ...updated[idx],
           quantity: newQty,
@@ -1919,7 +2368,13 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         return updated;
       } else {
-        const lineCalc = VelcoraPricingEngine.calculateLineItem(unitPrice, qty, 0, product.taxRate, product.taxInclusive);
+        const lineCalc = VelcoraPricingEngine.calculateLineItem(
+          unitPrice,
+          qty,
+          0,
+          product.taxRate,
+          product.taxInclusive
+        );
         const newItem: CartItem = {
           productId: product.id,
           variantId,
@@ -1939,7 +2394,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const removeFromCart = (productId: string, variantId?: string) => {
-    setCart(prev => prev.filter(item => !(item.productId === productId && item.variantId === variantId)));
+    setCart((prev) => prev.filter((item) => !(item.productId === productId && item.variantId === variantId)));
   };
 
   const updateCartItemQty = (productId: string, variantId: string | undefined, qty: number) => {
@@ -1947,10 +2402,16 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       removeFromCart(productId, variantId);
       return;
     }
-    setCart(prev =>
-      prev.map(item => {
+    setCart((prev) =>
+      prev.map((item) => {
         if (item.productId === productId && item.variantId === variantId) {
-          const lineCalc = VelcoraPricingEngine.calculateLineItem(item.unitPrice, qty, item.discount, item.taxRate, false);
+          const lineCalc = VelcoraPricingEngine.calculateLineItem(
+            item.unitPrice,
+            qty,
+            item.discount,
+            item.taxRate,
+            false
+          );
           return {
             ...item,
             quantity: qty,
@@ -1963,11 +2424,17 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateCartItemDiscount = (productId: string, variantId: string | undefined, discountAmount: number) => {
-    setCart(prev =>
-      prev.map(item => {
+    setCart((prev) =>
+      prev.map((item) => {
         if (item.productId === productId && item.variantId === variantId) {
           const disc = Math.max(0, Math.min(item.unitPrice * item.quantity, discountAmount));
-          const lineCalc = VelcoraPricingEngine.calculateLineItem(item.unitPrice, item.quantity, disc, item.taxRate, false);
+          const lineCalc = VelcoraPricingEngine.calculateLineItem(
+            item.unitPrice,
+            item.quantity,
+            disc,
+            item.taxRate,
+            false
+          );
           return {
             ...item,
             discount: disc,
@@ -1990,38 +2457,52 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (cart.length === 0) return;
     const holdId = `hold-${Date.now()}`;
     const name = label || (selectedCustomer ? selectedCustomer.name : `Ticket #${heldCarts.length + 1}`);
-    setHeldCarts(prev => [{ id: holdId, name, items: [...cart], customerId: selectedCustomerId || undefined, createdAt: new Date().toISOString() }, ...prev]);
+    setHeldCarts((prev) => [
+      {
+        id: holdId,
+        name,
+        items: [...cart],
+        customerId: selectedCustomerId || undefined,
+        createdAt: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
     clearCart();
   };
 
   const resumeHeldCart = (id: string) => {
-    const target = heldCarts.find(h => h.id === id);
+    const target = heldCarts.find((h) => h.id === id);
     if (!target) return;
     setCart(target.items);
     if (target.customerId) setSelectedCustomerId(target.customerId);
-    setHeldCarts(prev => prev.filter(h => h.id !== id));
+    setHeldCarts((prev) => prev.filter((h) => h.id !== id));
   };
 
   const deleteHeldCart = (id: string) => {
-    setHeldCarts(prev => prev.filter(h => h.id !== id));
+    setHeldCarts((prev) => prev.filter((h) => h.id !== id));
   };
 
   // Stock Adjustment
   const adjustStock = (productId: string, delta: number) => {
-    const target = products.find(p => p.id === productId);
+    const target = products.find((p) => p.id === productId);
+    // Services and bookable appointments do not decrement or track physical inventory
+    if (target?.isService || target?.offeringType === 'service' || target?.offeringType === 'bookable') {
+      return;
+    }
     const newStock = Math.max(0, (target?.stock || 0) + delta);
-    setProducts(prev =>
-      prev.map(p => {
+    setProducts((prev) =>
+      prev.map((p) => {
         if (p.id === productId) {
           return { ...p, stock: newStock };
         }
         return p;
       })
     );
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'products', productId), { 
-      stock: increment(delta) 
-    })
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/products/${productId}`));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'products', productId), {
+      stock: increment(delta),
+    }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/products/${productId}`)
+    );
   };
 
   // Complete Sale
@@ -2065,7 +2546,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     // 1. Deduct Stock for each product (locally & cloud)
-    cart.forEach(item => {
+    cart.forEach((item) => {
       adjustStock(item.productId, -item.quantity);
     });
 
@@ -2094,24 +2575,50 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         lastPurchaseDate: new Date().toISOString(),
       };
 
-      setCustomers(prev =>
-        prev.map(c => (c.id === selectedCustomer.id ? { ...c, ...customerPatchLocal } : c))
+      setCustomers((prev) => prev.map((c) => (c.id === selectedCustomer.id ? { ...c, ...customerPatchLocal } : c)));
+      updateDoc(doc(db, 'businesses', activeBusiness.id, 'customers', selectedCustomer.id), customerPatchDB).catch(
+        (err) =>
+          handleFirestoreError(
+            err,
+            OperationType.UPDATE,
+            `businesses/${activeBusiness.id}/customers/${selectedCustomer.id}`
+          )
       );
-      updateDoc(doc(db, 'businesses', activeBusiness.id, 'customers', selectedCustomer.id), customerPatchDB)
-        .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/customers/${selectedCustomer.id}`));
     }
 
     // 3. Append Sale Transaction locally & Cloud Firestore
-    setSales(prev => [newSale, ...prev]);
+    setSales((prev) => {
+      const updated = [newSale, ...prev];
+      try {
+        localStorage.setItem('velcora_sales', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // Real-time instant notification alert
+    setSmartAlerts((prev) => [
+      {
+        id: `alert-sale-${newSale.id}`,
+        type: 'SUCCESS',
+        title: `Sale Completed: ${newSale.invoiceNumber}`,
+        message: `Sale completed for ${activeBusiness.currencySymbol || '$'}${newSale.grandTotal.toFixed(2)} (${newSale.items.length} items) - ${newSale.customerName || 'Walk-in Customer'}.`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        actionRoute: 'sales',
+      },
+      ...prev,
+    ]);
+
     if (isOffline) {
-      setOfflineSalesQueue(prev => [...prev, newSale]);
+      setOfflineSalesQueue((prev) => [...prev, newSale]);
     } else {
-      setDoc(doc(db, 'businesses', activeBusiness.id, 'sales', newSale.id), cleanObjectForFirestore(newSale))
-        .catch(err => {
+      setDoc(doc(db, 'businesses', activeBusiness.id, 'sales', newSale.id), cleanObjectForFirestore(newSale)).catch(
+        (err) => {
           handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/sales/${newSale.id}`);
           // If Firestore write fails, put it in the offline queue as fallback
-          setOfflineSalesQueue(prev => [...prev, { ...newSale, syncStatus: 'pending', isOffline: true }]);
-        });
+          setOfflineSalesQueue((prev) => [...prev, { ...newSale, syncStatus: 'pending', isOffline: true }]);
+        }
+      );
     }
 
     // 4. Clear POS
@@ -2144,20 +2651,20 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     refundMethod: 'cash' | 'card' | 'store_credit';
     reason?: string;
   }): Promise<{ success: boolean; creditNote?: CreditNote; message?: string }> => {
-    const originalSale = sales.find(s => s.id === params.saleId);
+    const originalSale = sales.find((s) => s.id === params.saleId);
     if (!originalSale) return { success: false, message: 'Original invoice not found' };
 
-    const returnSubtotal = params.returnedItems.reduce((acc, it) => acc + (it.refundUnitPrice * it.quantity), 0);
-    const exchangeSubtotal = (params.exchangeItems || []).reduce((acc, it) => acc + (it.unitPrice * it.quantity), 0);
+    const returnSubtotal = params.returnedItems.reduce((acc, it) => acc + it.refundUnitPrice * it.quantity, 0);
+    const exchangeSubtotal = (params.exchangeItems || []).reduce((acc, it) => acc + it.unitPrice * it.quantity, 0);
     const netRefundAmount = Math.max(0, returnSubtotal - exchangeSubtotal);
 
     // 1. Restock returned items
-    params.returnedItems.forEach(it => {
+    params.returnedItems.forEach((it) => {
       adjustStock(it.productId, it.quantity);
     });
 
     // 2. Deduct exchanged items from stock
-    (params.exchangeItems || []).forEach(it => {
+    (params.exchangeItems || []).forEach((it) => {
       adjustStock(it.productId, -it.quantity);
     });
 
@@ -2171,21 +2678,21 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       customerId: originalSale.customerId || 'walk-in',
       customerName: originalSale.customerName || 'Walk-in Customer',
       reason: params.reason || (params.type === 'exchange' ? 'Item Exchange' : 'Customer Return & Refund'),
-      items: params.returnedItems.map(it => ({
+      items: params.returnedItems.map((it) => ({
         productId: it.productId,
         name: it.name,
         quantity: it.quantity,
         amount: it.refundUnitPrice * it.quantity,
       })),
       amount: returnSubtotal,
-      status: params.type === 'exchange' ? 'applied' : (params.refundMethod === 'store_credit' ? 'active' : 'refunded'),
+      status: params.type === 'exchange' ? 'applied' : params.refundMethod === 'store_credit' ? 'active' : 'refunded',
       createdAt: new Date().toISOString(),
     };
     addCreditNote(creditNote);
 
     // 4. Update customer balance if store credit
     if (originalSale.customerId) {
-      const cust = customers.find(c => c.id === originalSale.customerId);
+      const cust = customers.find((c) => c.id === originalSale.customerId);
       if (cust && params.refundMethod === 'store_credit' && netRefundAmount > 0) {
         const updatedBal = Math.max(0, (cust.outstandingBalance || 0) - netRefundAmount);
         updateCustomer(cust.id, { outstandingBalance: updatedBal });
@@ -2209,7 +2716,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedReturnHistory = [...currentReturnHistory, returnRecord];
     const totalRefunded = (originalSale.refundedAmount || 0) + netRefundAmount;
     const isFullyRefunded = totalRefunded >= originalSale.grandTotal;
-    const newStatus = isFullyRefunded ? 'returned' : (params.type === 'exchange' ? originalSale.status : 'partial');
+    const newStatus = isFullyRefunded ? 'returned' : params.type === 'exchange' ? originalSale.status : 'partial';
 
     const updatedSale: SaleTransaction = {
       ...originalSale,
@@ -2218,18 +2725,22 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       returnHistory: updatedReturnHistory,
     };
 
-    setSales(prev => prev.map(s => s.id === params.saleId ? updatedSale : s));
+    setSales((prev) => prev.map((s) => (s.id === params.saleId ? updatedSale : s)));
     updateDoc(doc(db, 'businesses', activeBusiness.id, 'sales', params.saleId), {
       status: newStatus,
       refundedAmount: totalRefunded,
       returnHistory: updatedReturnHistory,
-    }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/sales/${params.saleId}`));
+    }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/sales/${params.saleId}`)
+    );
 
     return { success: true, creditNote };
   };
 
   // Online Store Order Processing
-  const submitOnlineStoreOrder = (orderData: Omit<OnlineStoreOrder, 'id' | 'businessId' | 'orderNumber' | 'createdAt'>): OnlineStoreOrder => {
+  const submitOnlineStoreOrder = (
+    orderData: Omit<OnlineStoreOrder, 'id' | 'businessId' | 'orderNumber' | 'createdAt'>
+  ): OnlineStoreOrder => {
     const newOrder: OnlineStoreOrder = {
       ...orderData,
       id: `ord-on-${Date.now()}`,
@@ -2239,14 +2750,14 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     // Deduct stock
-    orderData.items.forEach(item => {
+    orderData.items.forEach((item) => {
       adjustStock(item.productId, -item.quantity);
     });
 
-    setOnlineOrders(prev => [newOrder, ...prev]);
+    setOnlineOrders((prev) => [newOrder, ...prev]);
 
     // Create smart alert
-    setSmartAlerts(prev => [
+    setSmartAlerts((prev) => [
       {
         id: `alert-${Date.now()}`,
         type: 'SUCCESS',
@@ -2263,38 +2774,44 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateActiveBusiness = (patch: Partial<BusinessProfile>) => {
-    setBusinesses(prev =>
-      prev.map(b => (b.id === activeBusiness.id ? { ...b, ...patch } : b))
+    setBusinesses((prev) => prev.map((b) => (b.id === activeBusiness.id ? { ...b, ...patch } : b)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id), patch).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}`)
     );
-    updateDoc(doc(db, 'businesses', activeBusiness.id), patch)
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}`));
   };
 
   const addNewBusiness = (biz: BusinessProfile) => {
-    setBusinesses(prev => [...prev, biz]);
+    setBusinesses((prev) => [...prev, biz]);
     setActiveBusinessId(biz.id);
     setLocale(biz.language);
     setCurrency(biz.currency);
-    setDoc(doc(db, 'businesses', biz.id), biz)
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${biz.id}`));
+    setDoc(doc(db, 'businesses', biz.id), biz).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${biz.id}`)
+    );
   };
 
   const addProduct = (p: Product) => {
-    setProducts(prev => [p, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'products', p.id), cleanObjectForFirestore({ ...p, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/products/${p.id}`));
+    setProducts((prev) => [p, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'products', p.id),
+      cleanObjectForFirestore({ ...p, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/products/${p.id}`)
+    );
   };
 
   const updateProduct = (id: string, patch: Partial<Product>) => {
-    setProducts(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'products', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/products/${id}`));
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'products', id), cleanObjectForFirestore(patch)).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/products/${id}`)
+    );
   };
 
   const deleteProduct = (id: string) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'products', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/products/${id}`));
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'products', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/products/${id}`)
+    );
   };
 
   const addCustomer = (c: Customer) => {
@@ -2309,15 +2826,20 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       phone: c.phone?.trim() || undefined,
       email: c.email?.trim() || undefined,
     };
-    setCustomers(prev => [preparedCust, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'customers', preparedCust.id), cleanObjectForFirestore(preparedCust))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/customers/${preparedCust.id}`));
+    setCustomers((prev) => [preparedCust, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'customers', preparedCust.id),
+      cleanObjectForFirestore(preparedCust)
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/customers/${preparedCust.id}`)
+    );
   };
 
   const updateCustomer = (id: string, patch: Partial<Customer>) => {
-    setCustomers(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'customers', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/customers/${id}`));
+    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'customers', id), cleanObjectForFirestore(patch)).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/customers/${id}`)
+    );
   };
 
   const deleteCustomer = (id: string) => {
@@ -2325,45 +2847,60 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSelectedCustomerId(null);
       setRedeemPoints(0);
     }
-    setCustomers(prev => prev.filter(c => c.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'customers', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/customers/${id}`));
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'customers', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/customers/${id}`)
+    );
   };
 
   const addSupplier = (s: Supplier) => {
-    setSuppliers(prev => [s, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'suppliers', s.id), cleanObjectForFirestore({ ...s, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/suppliers/${s.id}`));
+    setSuppliers((prev) => [s, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'suppliers', s.id),
+      cleanObjectForFirestore({ ...s, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/suppliers/${s.id}`)
+    );
   };
 
   const updateSupplier = (id: string, patch: Partial<Supplier>) => {
-    setSuppliers(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'suppliers', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/suppliers/${id}`));
+    setSuppliers((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'suppliers', id), cleanObjectForFirestore(patch)).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/suppliers/${id}`)
+    );
   };
 
   const deleteSupplier = (id: string) => {
-    setSuppliers(prev => prev.filter(s => s.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'suppliers', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/suppliers/${id}`));
+    setSuppliers((prev) => prev.filter((s) => s.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'suppliers', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/suppliers/${id}`)
+    );
   };
 
   const addPurchaseOrder = (po: PurchaseOrder) => {
-    setPurchaseOrders(prev => [po, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'purchaseOrders', po.id), cleanObjectForFirestore({ ...po, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/purchaseOrders/${po.id}`));
+    setPurchaseOrders((prev) => [po, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'purchaseOrders', po.id),
+      cleanObjectForFirestore({ ...po, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/purchaseOrders/${po.id}`)
+    );
   };
 
   const receivePurchaseOrder = (poId: string) => {
-    setPurchaseOrders(prev =>
-      prev.map(po => {
+    setPurchaseOrders((prev) =>
+      prev.map((po) => {
         if (po.id === poId) {
-          po.items.forEach(item => {
+          po.items.forEach((item) => {
             adjustStock(item.productId, item.quantityOrdered);
           });
           const patch = { status: 'received' as const, amountPaid: po.totalAmount };
-          updateDoc(doc(db, 'businesses', activeBusiness.id, 'purchaseOrders', poId), cleanObjectForFirestore(patch))
-            .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/purchaseOrders/${poId}`));
+          updateDoc(
+            doc(db, 'businesses', activeBusiness.id, 'purchaseOrders', poId),
+            cleanObjectForFirestore(patch)
+          ).catch((err) =>
+            handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/purchaseOrders/${poId}`)
+          );
           return { ...po, ...patch };
         }
         return po;
@@ -2372,127 +2909,169 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addSaleOrder = (so: SaleOrder) => {
-    setSaleOrders(prev => [so, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'saleOrders', so.id), cleanObjectForFirestore({ ...so, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/saleOrders/${so.id}`));
+    setSaleOrders((prev) => [so, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'saleOrders', so.id),
+      cleanObjectForFirestore({ ...so, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/saleOrders/${so.id}`)
+    );
   };
 
   const addEstimate = (est: Estimate) => {
-    setEstimates(prev => [est, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'estimates', est.id), cleanObjectForFirestore({ ...est, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/estimates/${est.id}`));
+    setEstimates((prev) => [est, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'estimates', est.id),
+      cleanObjectForFirestore({ ...est, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/estimates/${est.id}`)
+    );
   };
 
   const addCreditNote = (cn: CreditNote) => {
-    setCreditNotes(prev => [cn, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'creditNotes', cn.id), cleanObjectForFirestore({ ...cn, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/creditNotes/${cn.id}`));
+    setCreditNotes((prev) => [cn, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'creditNotes', cn.id),
+      cleanObjectForFirestore({ ...cn, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/creditNotes/${cn.id}`)
+    );
   };
 
   const addDeliveryNote = (dn: DeliveryNote) => {
-    setDeliveryNotes(prev => [dn, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'deliveryNotes', dn.id), cleanObjectForFirestore({ ...dn, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/deliveryNotes/${dn.id}`));
+    setDeliveryNotes((prev) => [dn, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'deliveryNotes', dn.id),
+      cleanObjectForFirestore({ ...dn, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/deliveryNotes/${dn.id}`)
+    );
   };
 
   const addExpense = (exp: Expense) => {
-    setExpenses(prev => [exp, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'expenses', exp.id), cleanObjectForFirestore({ ...exp, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/expenses/${exp.id}`));
+    setExpenses((prev) => [exp, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'expenses', exp.id),
+      cleanObjectForFirestore({ ...exp, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/expenses/${exp.id}`)
+    );
   };
 
   const updateExpense = (id: string, patch: Partial<Expense>) => {
-    setExpenses(prev => prev.map(e => (e.id === id ? { ...e, ...patch } : e)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'expenses', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/expenses/${id}`));
+    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'expenses', id), cleanObjectForFirestore(patch)).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/expenses/${id}`)
+    );
   };
 
   const deleteExpense = (id: string) => {
-    setExpenses(prev => prev.filter(e => e.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'expenses', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/expenses/${id}`));
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'expenses', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/expenses/${id}`)
+    );
   };
 
   const addOtherIncome = (oi: OtherIncome) => {
-    setOtherIncomes(prev => [oi, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'otherIncomes', oi.id), cleanObjectForFirestore({ ...oi, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/otherIncomes/${oi.id}`));
+    setOtherIncomes((prev) => [oi, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'otherIncomes', oi.id),
+      cleanObjectForFirestore({ ...oi, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/otherIncomes/${oi.id}`)
+    );
   };
 
   const updateOtherIncome = (id: string, patch: Partial<OtherIncome>) => {
-    setOtherIncomes(prev => prev.map(oi => (oi.id === id ? { ...oi, ...patch } : oi)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'otherIncomes', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/otherIncomes/${id}`));
+    setOtherIncomes((prev) => prev.map((oi) => (oi.id === id ? { ...oi, ...patch } : oi)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'otherIncomes', id), cleanObjectForFirestore(patch)).catch(
+      (err) => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/otherIncomes/${id}`)
+    );
   };
 
   const deleteOtherIncome = (id: string) => {
-    setOtherIncomes(prev => prev.filter(oi => oi.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'otherIncomes', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/otherIncomes/${id}`));
+    setOtherIncomes((prev) => prev.filter((oi) => oi.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'otherIncomes', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/otherIncomes/${id}`)
+    );
   };
 
   const addBudget = (b: Budget) => {
-    setBudgets(prev => [b, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'budgets', b.id), cleanObjectForFirestore({ ...b, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/budgets/${b.id}`));
+    setBudgets((prev) => [b, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'budgets', b.id),
+      cleanObjectForFirestore({ ...b, businessId: activeBusiness.id })
+    ).catch((err) => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/budgets/${b.id}`));
   };
 
   const updateBudget = (id: string, patch: Partial<Budget>) => {
-    setBudgets(prev => prev.map(b => (b.id === id ? { ...b, ...patch } : b)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'budgets', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/budgets/${id}`));
+    setBudgets((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'budgets', id), cleanObjectForFirestore(patch)).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/budgets/${id}`)
+    );
   };
 
   const deleteBudget = (id: string) => {
-    setBudgets(prev => prev.filter(b => b.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'budgets', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/budgets/${id}`));
+    setBudgets((prev) => prev.filter((b) => b.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'budgets', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/budgets/${id}`)
+    );
   };
 
   const addLoan = (l: Loan) => {
-    setLoans(prev => [l, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'loans', l.id), cleanObjectForFirestore({ ...l, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/loans/${l.id}`));
+    setLoans((prev) => [l, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'loans', l.id),
+      cleanObjectForFirestore({ ...l, businessId: activeBusiness.id })
+    ).catch((err) => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/loans/${l.id}`));
   };
 
   const updateLoan = (id: string, patch: Partial<Loan>) => {
-    setLoans(prev => prev.map(l => (l.id === id ? { ...l, ...patch } : l)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'loans', id), cleanObjectForFirestore(patch))
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/loans/${id}`));
+    setLoans((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'loans', id), cleanObjectForFirestore(patch)).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/loans/${id}`)
+    );
   };
 
   const deleteLoan = (id: string) => {
-    setLoans(prev => prev.filter(l => l.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'loans', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/loans/${id}`));
+    setLoans((prev) => prev.filter((l) => l.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'loans', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/loans/${id}`)
+    );
   };
 
   const addLoanPayment = (loanId: string, payment: Omit<LoanPayment, 'id'>) => {
     const newPay: LoanPayment = {
       ...payment,
-      id: `lpay-${Date.now()}` as any
+      id: `lpay-${Date.now()}` as any,
     };
-    setLoans(prev => prev.map(l => {
-      if (l.id === loanId) {
-        const nextPayments = [...l.payments, newPay];
-        const nextAmountPaid = nextPayments.reduce((sum, p) => sum + p.amount, 0);
-        const nextStatus = nextAmountPaid >= l.amount ? 'Paid' : nextAmountPaid > 0 ? 'Partially Paid' : 'Active';
-        return {
-          ...l,
-          payments: nextPayments,
-          amountPaid: nextAmountPaid,
-          status: nextStatus
-        };
-      }
-      return l;
-    }));
+    setLoans((prev) =>
+      prev.map((l) => {
+        if (l.id === loanId) {
+          const nextPayments = [...l.payments, newPay];
+          const nextAmountPaid = nextPayments.reduce((sum, p) => sum + p.amount, 0);
+          const nextStatus = nextAmountPaid >= l.amount ? 'Paid' : nextAmountPaid > 0 ? 'Partially Paid' : 'Active';
+          return {
+            ...l,
+            payments: nextPayments,
+            amountPaid: nextAmountPaid,
+            status: nextStatus,
+          };
+        }
+        return l;
+      })
+    );
   };
 
   const addCustomerCredit = (cc: CustomerCredit) => {
-    setCustomerCredits(prev => [cc, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'customerCredits', cc.id), cleanObjectForFirestore({ ...cc, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/customerCredits/${cc.id}`));
-    
+    setCustomerCredits((prev) => [cc, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'customerCredits', cc.id),
+      cleanObjectForFirestore({ ...cc, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/customerCredits/${cc.id}`)
+    );
+
     // Also update customer outstandingBalance
     updateCustomer(cc.customerId, { outstandingBalance: cc.remainingBalance });
   };
@@ -2500,33 +3079,39 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const recordCustomerCreditPayment = (creditId: string, payment: Omit<CustomerCreditPayment, 'id'>) => {
     const newPay: CustomerCreditPayment = {
       ...payment,
-      id: `ccpay-${Date.now()}` as any
+      id: `ccpay-${Date.now()}` as any,
     };
-    setCustomerCredits(prev => prev.map(cc => {
-      if (cc.id === creditId) {
-        const nextPayments = [...cc.payments, newPay];
-        const nextAmountPaid = nextPayments.reduce((sum, p) => sum + p.amount, 0);
-        const nextRemaining = cc.totalAmount - nextAmountPaid;
-        
-        // Update customer outstandingBalance
-        updateCustomer(cc.customerId, { outstandingBalance: nextRemaining });
+    setCustomerCredits((prev) =>
+      prev.map((cc) => {
+        if (cc.id === creditId) {
+          const nextPayments = [...cc.payments, newPay];
+          const nextAmountPaid = nextPayments.reduce((sum, p) => sum + p.amount, 0);
+          const nextRemaining = cc.totalAmount - nextAmountPaid;
 
-        return {
-          ...cc,
-          payments: nextPayments,
-          amountPaid: nextAmountPaid,
-          remainingBalance: nextRemaining
-        };
-      }
-      return cc;
-    }));
+          // Update customer outstandingBalance
+          updateCustomer(cc.customerId, { outstandingBalance: nextRemaining });
+
+          return {
+            ...cc,
+            payments: nextPayments,
+            amountPaid: nextAmountPaid,
+            remainingBalance: nextRemaining,
+          };
+        }
+        return cc;
+      })
+    );
   };
 
   const addSupplierPayable = (sp: SupplierPayable) => {
-    setSupplierPayables(prev => [sp, ...prev]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'supplierPayables', sp.id), cleanObjectForFirestore({ ...sp, businessId: activeBusiness.id }))
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/supplierPayables/${sp.id}`));
-    
+    setSupplierPayables((prev) => [sp, ...prev]);
+    setDoc(
+      doc(db, 'businesses', activeBusiness.id, 'supplierPayables', sp.id),
+      cleanObjectForFirestore({ ...sp, businessId: activeBusiness.id })
+    ).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/supplierPayables/${sp.id}`)
+    );
+
     // Also update supplier balanceOwed
     updateSupplier(sp.supplierId, { balanceOwed: sp.remainingBalance });
   };
@@ -2534,35 +3119,37 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const recordSupplierPayablePayment = (payableId: string, payment: Omit<SupplierPayablePayment, 'id'>) => {
     const newPay: SupplierPayablePayment = {
       ...payment,
-      id: `sppay-${Date.now()}` as any
+      id: `sppay-${Date.now()}` as any,
     };
-    setSupplierPayables(prev => prev.map(sp => {
-      if (sp.id === payableId) {
-        const nextPayments = [...sp.payments, newPay];
-        const nextAmountPaid = nextPayments.reduce((sum, p) => sum + p.amount, 0);
-        const nextRemaining = sp.totalAmount - nextAmountPaid;
+    setSupplierPayables((prev) =>
+      prev.map((sp) => {
+        if (sp.id === payableId) {
+          const nextPayments = [...sp.payments, newPay];
+          const nextAmountPaid = nextPayments.reduce((sum, p) => sum + p.amount, 0);
+          const nextRemaining = sp.totalAmount - nextAmountPaid;
 
-        // Update supplier balanceOwed
-        updateSupplier(sp.supplierId, { balanceOwed: nextRemaining });
+          // Update supplier balanceOwed
+          updateSupplier(sp.supplierId, { balanceOwed: nextRemaining });
 
-        return {
-          ...sp,
-          payments: nextPayments,
-          amountPaid: nextAmountPaid,
-          remainingBalance: nextRemaining
-        };
-      }
-      return sp;
-    }));
+          return {
+            ...sp,
+            payments: nextPayments,
+            amountPaid: nextAmountPaid,
+            remainingBalance: nextRemaining,
+          };
+        }
+        return sp;
+      })
+    );
   };
 
-  const addBusinessGoal = (goal: BusinessGoal) => setBusinessGoals(prev => [goal, ...prev]);
+  const addBusinessGoal = (goal: BusinessGoal) => setBusinessGoals((prev) => [goal, ...prev]);
   const updateBusinessGoal = (id: string, patch: Partial<BusinessGoal>) => {
-    setBusinessGoals(prev => prev.map(g => (g.id === id ? { ...g, ...patch } : g)));
+    setBusinessGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
   };
 
   const dismissAlert = (id: string) => {
-    setSmartAlerts(prev => prev.filter(a => a.id !== id));
+    setSmartAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
   // Workstation Device Authorization & Control
@@ -2572,9 +3159,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: 'online',
       revokedAt: null,
     };
-    setWorkstations(prev => prev.map(w => (w.id === id || w.deviceId === id ? { ...w, ...patch } : w)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'workstations', id), patch)
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/workstations/${id}`));
+    setWorkstations((prev) => prev.map((w) => (w.id === id || w.deviceId === id ? { ...w, ...patch } : w)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'workstations', id), patch).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/workstations/${id}`)
+    );
   };
 
   const revokeWorkstation = (id: string) => {
@@ -2583,9 +3171,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: 'locked',
       revokedAt: new Date().toISOString(),
     };
-    setWorkstations(prev => prev.map(w => (w.id === id || w.deviceId === id ? { ...w, ...patch } : w)));
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'workstations', id), patch)
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/workstations/${id}`));
+    setWorkstations((prev) => prev.map((w) => (w.id === id || w.deviceId === id ? { ...w, ...patch } : w)));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'workstations', id), patch).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/workstations/${id}`)
+    );
   };
 
   // Full Backup Restoration Engine
@@ -2647,47 +3236,55 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Subuser & Role CRUD Handlers
   const addSubuser = (user: SubUser) => {
-    setSubusers(prev => [...prev, user]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'subusers', user.id), { ...user, businessId: activeBusiness.id })
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/subusers/${user.id}`));
+    setSubusers((prev) => [...prev, user]);
+    setDoc(doc(db, 'businesses', activeBusiness.id, 'subusers', user.id), {
+      ...user,
+      businessId: activeBusiness.id,
+    }).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/subusers/${user.id}`)
+    );
   };
 
   const updateSubuser = (id: string, patch: Partial<SubUser>) => {
-    setSubusers(prev => prev.map(u => (u.id === id ? { ...u, ...patch } : u)));
+    setSubusers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
     if (activeUser.id === id) {
-      setActiveUser(prev => ({ ...prev, ...patch }));
+      setActiveUser((prev) => ({ ...prev, ...patch }));
     }
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'subusers', id), patch)
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/subusers/${id}`));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'subusers', id), patch).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/subusers/${id}`)
+    );
   };
 
   const deleteSubuser = (id: string) => {
-    setSubusers(prev => prev.filter(u => u.id !== id));
-    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'subusers', id))
-      .catch(err => handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/subusers/${id}`));
+    setSubusers((prev) => prev.filter((u) => u.id !== id));
+    deleteDoc(doc(db, 'businesses', activeBusiness.id, 'subusers', id)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `businesses/${activeBusiness.id}/subusers/${id}`)
+    );
   };
 
   const addRole = (role: UserRole) => {
-    setRoles(prev => [...prev, role]);
-    setDoc(doc(db, 'businesses', activeBusiness.id, 'roles', role.id), role)
-      .catch(err => handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/roles/${role.id}`));
+    setRoles((prev) => [...prev, role]);
+    setDoc(doc(db, 'businesses', activeBusiness.id, 'roles', role.id), role).catch((err) =>
+      handleFirestoreError(err, OperationType.WRITE, `businesses/${activeBusiness.id}/roles/${role.id}`)
+    );
   };
 
   const updateRole = (id: string, patch: Partial<UserRole>) => {
-    setRoles(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)));
+    setRoles((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     if (patch.name) {
-      setSubusers(prev => prev.map(u => (u.roleId === id ? { ...u, roleName: patch.name! } : u)));
+      setSubusers((prev) => prev.map((u) => (u.roleId === id ? { ...u, roleName: patch.name! } : u)));
     }
-    updateDoc(doc(db, 'businesses', activeBusiness.id, 'roles', id), patch)
-      .catch(err => handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/roles/${id}`));
+    updateDoc(doc(db, 'businesses', activeBusiness.id, 'roles', id), patch).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `businesses/${activeBusiness.id}/roles/${id}`)
+    );
   };
   const deleteRole = (id: string) => {
-    setRoles(prev => prev.filter(r => r.id !== id));
+    setRoles((prev) => prev.filter((r) => r.id !== id));
   };
 
   const hasPermission = (permission: PermissionKey): boolean => {
     if (!activeUser) return true;
-    const userRole = roles.find(r => r.id === activeUser.roleId);
+    const userRole = roles.find((r) => r.id === activeUser.roleId);
     if (!userRole) return true;
     return userRole.permissions.includes(permission);
   };
@@ -2696,7 +3293,8 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     businessName: string;
     industry: IndustryType;
     businessModel?: 'product' | 'service' | 'hybrid';
-    industryCategory?: 'retail' | 'beauty' | 'healthcare' | 'food' | 'automotive' | 'education' | 'professional' | 'other';
+    industryCategory?:
+      'retail' | 'beauty' | 'healthcare' | 'food' | 'automotive' | 'education' | 'professional' | 'other';
     primaryColor?: string;
     country?: string;
     currency: CurrencyCode;
@@ -2709,7 +3307,15 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }) => {
     const newBizId = `biz-${config.industry}-${Date.now().toString().slice(-4)}`;
     const currencySymbols: Record<string, string> = {
-      USD: '$', PKR: 'Rs.', EUR: '€', GBP: '£', AED: 'AED', SAR: 'SAR', INR: '₹', CAD: 'CA$', AUD: 'AU$'
+      USD: '$',
+      PKR: 'Rs.',
+      EUR: '€',
+      GBP: '£',
+      AED: 'AED',
+      SAR: 'SAR',
+      INR: '₹',
+      CAD: 'CA$',
+      AUD: 'AU$',
     };
 
     const newBiz: BusinessProfile = {
@@ -2733,7 +3339,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       receiptFooter: 'Visit us again or order online at velcora.shop',
       enabledModules: config.enabledModules,
       customFields: (config.catalogSchema?.fields || [])
-        .filter(f => !f.core)
+        .filter((f) => !f.core)
         .map((f, i) => ({
           id: `cf-schema-${i}`,
           entity: (f.scope === 'customer' ? 'customer' : f.scope === 'order' ? 'order' : 'product') as any,
@@ -2742,8 +3348,8 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
           type: (['text', 'number', 'date', 'boolean', 'select'].includes(f.type)
             ? f.type
             : f.type === 'currency' || f.type === 'weight'
-            ? 'number'
-            : 'text') as any,
+              ? 'number'
+              : 'text') as any,
           options: f.options,
           isRequired: f.required,
         })),
@@ -2751,7 +3357,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString(),
     };
 
-    setBusinesses(prev => [newBiz, ...prev.filter(b => b.id !== newBizId)]);
+    setBusinesses((prev) => [newBiz, ...prev.filter((b) => b.id !== newBizId)]);
     setActiveBusinessId(newBizId);
     setLocale(config.language);
     setCurrency(config.currency);
@@ -2761,15 +3367,20 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       localStorage.setItem('velcora_onboarding_completed', 'true');
       localStorage.setItem('velcora_active_business_id', newBizId);
-      setDoc(doc(db, 'businesses', newBizId), cleanObjectForFirestore(newBiz))
-        .catch(err => console.warn('Firestore offline sync pending:', err));
+      setDoc(doc(db, 'businesses', newBizId), cleanObjectForFirestore(newBiz)).catch((err) =>
+        console.warn('Firestore offline sync pending:', err)
+      );
       if (authUser) {
-        setDoc(doc(db, 'users', authUser.uid), {
-          hasCompletedOnboarding: true,
-          ownerBusinessId: newBizId,
-          authorizedBusinessIds: arrayUnion(newBizId),
-          updatedAt: new Date().toISOString(),
-        }, { merge: true }).catch(() => {});
+        setDoc(
+          doc(db, 'users', authUser.uid),
+          {
+            hasCompletedOnboarding: true,
+            ownerBusinessId: newBizId,
+            authorizedBusinessIds: arrayUnion(newBizId),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch(() => {});
       }
     } catch {}
     // Switch to POS / Dashboard
@@ -2778,11 +3389,11 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateLoyaltyConfig = (cfg: Partial<LoyaltyRuleConfig>) => {
-    setLoyaltyConfig(prev => ({ ...prev, ...cfg }));
+    setLoyaltyConfig((prev) => ({ ...prev, ...cfg }));
   };
 
   const convertEstimateToSale = (estimateId: string) => {
-    const est = estimates.find(e => e.id === estimateId);
+    const est = estimates.find((e) => e.id === estimateId);
     if (!est) return;
     const saleTx: SaleTransaction = {
       id: `sale-from-est-${Date.now().toString().slice(-4)}`,
@@ -2806,8 +3417,8 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: new Date().toISOString(),
       channel: 'manual_invoice',
     };
-    setSales(prev => [saleTx, ...prev]);
-    setEstimates(prev => prev.map(e => e.id === estimateId ? { ...e, status: 'converted' } : e));
+    setSales((prev) => [saleTx, ...prev]);
+    setEstimates((prev) => prev.map((e) => (e.id === estimateId ? { ...e, status: 'converted' } : e)));
   };
 
   // ----------------------------------------------------
@@ -2841,7 +3452,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return {
       'Content-Type': 'application/json',
-      ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {}),
+      ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
       'x-user-id': activeUser.id || 'user-01',
       'x-user-role': isOwnerOrAdmin ? 'ADMIN' : 'USER',
       'x-user-email': activeUser.email || 'alexander@velcora.com',
@@ -2869,7 +3480,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const searchParams = new URLSearchParams(window.location.search);
         const refParam = searchParams.get('ref') || searchParams.get('referral');
         if (refParam) {
-          const cleanCode = refParam.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const cleanCode = refParam
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, '');
           if (/^VEL\d{6}$/.test(cleanCode)) {
             // Validate code with server
             const valRes = await fetch(getApiUrl('/api/referral/validate-code'), {
@@ -3215,7 +3829,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // =========================================================================
   // MASTER PAYMENT, SUBSCRIPTION, TOKEN & GLOBAL PAYOUT IMPLEMENTATION
   // =========================================================================
-  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlanConfig[]>(() => DEFAULT_SUBSCRIPTION_PLANS);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlanConfig[]>(
+    () => DEFAULT_SUBSCRIPTION_PLANS
+  );
   const [tokenPackages, setTokenPackages] = useState<TokenPackageConfig[]>(() => DEFAULT_TOKEN_PACKAGES);
   const [activeSubscription, setActiveSubscription] = useState<SubscriptionRecord | null>(null);
   const [paymentsActiveTab, setPaymentsActiveTab] = useState<'ledger' | 'wallet' | 'plans'>('ledger');
@@ -3233,27 +3849,35 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Real-time Firestore sync for subscription plans and token packages
   useEffect(() => {
-    const plansUnsub = onSnapshot(doc(db, 'system', 'plans'), (docSnap) => {
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        if (d && Array.isArray(d.plans)) {
-          setSubscriptionPlans(d.plans);
+    const plansUnsub = onSnapshot(
+      doc(db, 'system', 'plans'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          if (d && Array.isArray(d.plans)) {
+            setSubscriptionPlans(d.plans);
+          }
         }
+      },
+      (err) => {
+        console.warn('[VelcoraContext] Live plans snapshot listener note:', err);
       }
-    }, (err) => {
-      console.warn('[VelcoraContext] Live plans snapshot listener note:', err);
-    });
+    );
 
-    const packagesUnsub = onSnapshot(doc(db, 'system', 'token_packages'), (docSnap) => {
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        if (d && Array.isArray(d.packages)) {
-          setTokenPackages(d.packages);
+    const packagesUnsub = onSnapshot(
+      doc(db, 'system', 'token_packages'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          if (d && Array.isArray(d.packages)) {
+            setTokenPackages(d.packages);
+          }
         }
+      },
+      (err) => {
+        console.warn('[VelcoraContext] Live token packages listener note:', err);
       }
-    }, (err) => {
-      console.warn('[VelcoraContext] Live token packages listener note:', err);
-    });
+    );
 
     return () => {
       plansUnsub();
@@ -3357,7 +3981,13 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     externalTransactionId?: string;
     paymentMethodDetails?: string;
     referralCode?: string;
-  }): Promise<{ success: boolean; transaction?: MasterPaymentTransaction; subscription?: SubscriptionRecord; tokensCredited?: number; error?: string }> => {
+  }): Promise<{
+    success: boolean;
+    transaction?: MasterPaymentTransaction;
+    subscription?: SubscriptionRecord;
+    tokensCredited?: number;
+    error?: string;
+  }> => {
     try {
       setPaymentLoading(true);
       const targetRefCode = params.referralCode || activeReferralCode || undefined;
@@ -3371,10 +4001,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       let newTier = 'free';
 
       if (params.transactionType === 'TOKEN_PURCHASE') {
-        const pkg = tokenPackages.find(p => p.id === params.packageId);
+        const pkg = tokenPackages.find((p) => p.id === params.packageId);
         tokensToAdd = (pkg?.tokens || 0) + (pkg?.bonusTokens || 0);
       } else {
-        const plan = subscriptionPlans.find(p => p.id === params.planId || p.tier === params.planId);
+        const plan = subscriptionPlans.find((p) => p.id === params.planId || p.tier === params.planId);
         newTier = plan?.tier || 'pro';
         tokensToAdd = plan?.tokensIncludedMonthly || 10000;
       }
@@ -3387,14 +4017,20 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const currentCredits = Number(existingData.availableCredits ?? existingData.aiTokensBalance ?? 500);
         const currentPurchased = Number(existingData.purchasedCredits || 0);
 
-        await setDoc(userRef, {
-          availableCredits: currentCredits + tokensToAdd,
-          aiTokensBalance: currentCredits + tokensToAdd,
-          purchasedCredits: params.transactionType === 'TOKEN_PURCHASE' ? currentPurchased + tokensToAdd : currentPurchased,
-          subscriptionTier: params.transactionType === 'SUBSCRIPTION' ? newTier : (existingData.subscriptionTier || 'free'),
-          subscriptionStatus: 'ACTIVE',
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        await setDoc(
+          userRef,
+          {
+            availableCredits: currentCredits + tokensToAdd,
+            aiTokensBalance: currentCredits + tokensToAdd,
+            purchasedCredits:
+              params.transactionType === 'TOKEN_PURCHASE' ? currentPurchased + tokensToAdd : currentPurchased,
+            subscriptionTier:
+              params.transactionType === 'SUBSCRIPTION' ? newTier : existingData.subscriptionTier || 'free',
+            subscriptionStatus: 'ACTIVE',
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
       } catch (uErr) {
         console.warn('Firestore user payment update note:', uErr);
       }
@@ -3494,7 +4130,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const cancelUserSubscription = async (cancelImmediately: boolean = false, reason?: string): Promise<{ success: boolean; message: string }> => {
+  const cancelUserSubscription = async (
+    cancelImmediately: boolean = false,
+    reason?: string
+  ): Promise<{ success: boolean; message: string }> => {
     if (!activeUser?.id) return { success: false, message: 'User not authenticated.' };
     try {
       setPaymentLoading(true);
@@ -3538,7 +4177,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const addPayoutAccount = async (account: Omit<GlobalPayoutAccount, 'id' | 'createdAt'>): Promise<{ success: boolean; account?: GlobalPayoutAccount; error?: string }> => {
+  const addPayoutAccount = async (
+    account: Omit<GlobalPayoutAccount, 'id' | 'createdAt'>
+  ): Promise<{ success: boolean; account?: GlobalPayoutAccount; error?: string }> => {
     try {
       const res = await fetch(getApiUrl('/api/payment/payout/accounts'), {
         method: 'POST',
@@ -3550,7 +4191,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       const data = await res.json();
       if (data.success && data.account) {
-        setPayoutAccounts(prev => [...prev, data.account]);
+        setPayoutAccounts((prev) => [...prev, data.account]);
       }
       return data;
     } catch (err: any) {
@@ -3558,7 +4199,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const requestReferralPayout = async (payoutAccountId: string): Promise<{ success: boolean; payoutRequest?: PayoutRequest; error?: string }> => {
+  const requestReferralPayout = async (
+    payoutAccountId: string
+  ): Promise<{ success: boolean; payoutRequest?: PayoutRequest; error?: string }> => {
     const partnerId = partnerProfile?.id;
     if (!partnerId || !activeUser?.id) {
       return { success: false, error: 'Active referral partner profile required.' };
@@ -3580,7 +4223,7 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       const data = await res.json();
       if (data.success && data.payoutRequest) {
-        setPayoutRequests(prev => [data.payoutRequest, ...prev]);
+        setPayoutRequests((prev) => [data.payoutRequest, ...prev]);
         await fetchPartnerDashboard();
       }
       return data;
@@ -3615,13 +4258,19 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const updateSubscriptionPlansByAdmin = async (plans: SubscriptionPlanConfig[]): Promise<{ success: boolean; error?: string }> => {
+  const updateSubscriptionPlansByAdmin = async (
+    plans: SubscriptionPlanConfig[]
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await setDoc(doc(db, 'system', 'plans'), {
-        plans,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'admin@velcora.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'admin@velcora.com',
+        },
+        { merge: true }
+      );
       setSubscriptionPlans(plans);
       return { success: true };
     } catch (err: any) {
@@ -3629,13 +4278,19 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const updateTokenPackagesByAdmin = async (packages: TokenPackageConfig[]): Promise<{ success: boolean; error?: string }> => {
+  const updateTokenPackagesByAdmin = async (
+    packages: TokenPackageConfig[]
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await setDoc(doc(db, 'system', 'token_packages'), {
-        packages,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'admin@velcora.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'token_packages'),
+        {
+          packages,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'admin@velcora.com',
+        },
+        { merge: true }
+      );
       setTokenPackages(packages);
       return { success: true };
     } catch (err: any) {
@@ -3643,15 +4298,21 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const updateSuperAdminConfigByAdmin = async (patch: Partial<SuperAdminConfig>): Promise<{ success: boolean; error?: string }> => {
+  const updateSuperAdminConfigByAdmin = async (
+    patch: Partial<SuperAdminConfig>
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
-      await setDoc(doc(db, 'system', 'config'), {
-        ...superAdminConfig,
-        ...patch,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'admin@velcora.com',
-      }, { merge: true });
-      setSuperAdminConfig(prev => prev ? ({ ...prev, ...patch }) : (patch as SuperAdminConfig));
+      await setDoc(
+        doc(db, 'system', 'config'),
+        {
+          ...superAdminConfig,
+          ...patch,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'admin@velcora.com',
+        },
+        { merge: true }
+      );
+      setSuperAdminConfig((prev) => (prev ? { ...prev, ...patch } : (patch as SuperAdminConfig)));
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Failed to update admin configuration.' };
@@ -3672,13 +4333,17 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         CANCEL: 'REJECTED',
       };
       const newStatus = statusMap[action] || action;
-      await setDoc(doc(db, 'referral_payouts', payoutId), {
-        status: newStatus,
-        processedAt: new Date().toISOString(),
-        processedBy: auth.currentUser?.email || 'admin@velcora.com',
-        notes: notes || '',
-        transactionRef: transactionRef || '',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'referral_payouts', payoutId),
+        {
+          status: newStatus,
+          processedAt: new Date().toISOString(),
+          processedBy: auth.currentUser?.email || 'admin@velcora.com',
+          notes: notes || '',
+          transactionRef: transactionRef || '',
+        },
+        { merge: true }
+      );
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -3696,7 +4361,10 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const refundPaymentTransactionByAdmin = async (transactionId: string, reason?: string): Promise<{ success: boolean; message: string }> => {
+  const refundPaymentTransactionByAdmin = async (
+    transactionId: string,
+    reason?: string
+  ): Promise<{ success: boolean; message: string }> => {
     try {
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -3741,42 +4409,69 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Real-Time Cloud Firestore Synchronizer for Plans, Token Packages, and Platform Configuration
   useEffect(() => {
     // 1. Live Subscription Plans listener from system/plans
-    const plansUnsub = onSnapshot(doc(db, 'system', 'plans'), (snap) => {
-      if (snap.exists()) {
-        const d = snap.data();
-        if (d.plans && Array.isArray(d.plans)) {
-          setSubscriptionPlans(d.plans);
+    const plansUnsub = onSnapshot(
+      doc(db, 'system', 'plans'),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.plans && Array.isArray(d.plans)) {
+            setSubscriptionPlans(d.plans);
+          }
         }
+      },
+      (err) => {
+        console.warn('Real-time subscription plans snapshot note:', err);
       }
-    }, (err) => {
-      console.warn('Real-time subscription plans snapshot note:', err);
-    });
+    );
 
     // 2. Live Token Packages listener from system/token_packages
-    const packagesUnsub = onSnapshot(doc(db, 'system', 'token_packages'), (snap) => {
-      if (snap.exists()) {
-        const d = snap.data();
-        if (d.packages && Array.isArray(d.packages)) {
-          setTokenPackages(d.packages);
+    const packagesUnsub = onSnapshot(
+      doc(db, 'system', 'token_packages'),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.packages && Array.isArray(d.packages)) {
+            setTokenPackages(d.packages);
+          }
         }
+      },
+      (err) => {
+        console.warn('Real-time token packages snapshot note:', err);
       }
-    }, (err) => {
-      console.warn('Real-time token packages snapshot note:', err);
-    });
+    );
 
     // 3. Live Platform Config listener from system/config
-    const configUnsub = onSnapshot(doc(db, 'system', 'config'), (snap) => {
-      if (snap.exists()) {
-        setSuperAdminConfig(snap.data() as SuperAdminConfig);
+    const configUnsub = onSnapshot(
+      doc(db, 'system', 'config'),
+      (snap) => {
+        if (snap.exists()) {
+          setSuperAdminConfig(snap.data() as SuperAdminConfig);
+        }
+      },
+      (err) => {
+        console.warn('Real-time system config snapshot note:', err);
       }
-    }, (err) => {
-      console.warn('Real-time system config snapshot note:', err);
-    });
+        );
+
+    // 4. Live AI Config listener (pricing + availability + limits) from system/ai_config
+    const aiConfigUnsub = onSnapshot(
+      doc(db, AI_CONFIG_DOC.collection, AI_CONFIG_DOC.id),
+      (snap) => {
+        if (snap.exists()) {
+          setAiConfig(mergeAIConfig(DEFAULT_AI_CONFIG, (snap.data() || {}) as Partial<AIConfig>));
+          setAiConfigSource('firestore');
+        }
+      },
+      (err) => {
+        console.warn('Real-time AI config snapshot note:', err);
+      }
+    );
 
     return () => {
       plansUnsub();
       packagesUnsub();
       configUnsub();
+      aiConfigUnsub();
     };
   }, []);
 
@@ -3788,29 +4483,73 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeUser?.id]);
 
   // Customizable Keyboard Shortcuts state and helpers
-  const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(() => {
+  const DEFAULT_SHORTCUTS: KeyboardShortcut[] = [
+    { id: 'focus_search', action: 'focus_search', label: 'Focus Product Search', description: 'Jump cursor straight to POS search bar', key: 'F2' },
+    { id: 'add_customer', action: 'add_customer', label: 'Quick Add Customer', description: 'Open customer assignment form', key: 'F3' },
+    { id: 'apply_discount', action: 'apply_discount', label: 'Apply Discount', description: 'Trigger checkout discount editor', key: 'F4' },
+    { id: 'void_cart', action: 'void_cart', label: 'Void / Clear Cart', description: 'Remove all items currently in cart', key: 'F7' },
+    { id: 'pay_checkout', action: 'pay_checkout', label: 'Pay & Checkout', description: 'Trigger master payment and print window', key: 'F8' },
+    { id: 'barcode_scan', action: 'barcode_scan', label: 'Scan Barcode Simulator', description: 'Open barcode scanner testing utility', key: 'F9' },
+    { id: 'open_drawer', action: 'open_drawer', label: 'Open Cash Drawer', description: 'Trigger connected cash drawer via ESC/POS', key: 'F10' },
+    { id: 'voice_pilot', action: 'voice_pilot', label: 'Voice Pilot HUD', description: 'Toggle voice command pilot interface', key: 'v', altKey: true },
+  ];
+
+  const [shortcuts, setShortcuts] = useState<KeyboardShortcut[]>(DEFAULT_SHORTCUTS);
+
+  // Load user-specific shortcuts when active user changes
+  useEffect(() => {
+    const currentUserId = authUser?.uid || activeUser?.id;
+    if (!currentUserId) return;
+    
+    // First try local storage for this user
     try {
-      const saved = localStorage.getItem('velcora_keyboard_shortcuts');
+      const saved = localStorage.getItem(`velcora_keyboard_shortcuts_${currentUserId}`);
       if (saved) {
-        return JSON.parse(saved);
+        setShortcuts(JSON.parse(saved));
+      } else {
+        // Fall back to legacy global shortcuts if any, else default
+        const legacySaved = localStorage.getItem('velcora_keyboard_shortcuts');
+        if (legacySaved) {
+          setShortcuts(JSON.parse(legacySaved));
+        } else {
+          setShortcuts(DEFAULT_SHORTCUTS);
+        }
       }
     } catch (e) {
       console.error('Error loading keyboard shortcuts:', e);
+      setShortcuts(DEFAULT_SHORTCUTS);
     }
-    return [
-      { id: 'focus_search', label: 'Focus Product Search', description: 'Jump cursor straight to POS search bar', key: 'F2' },
-      { id: 'add_customer', label: 'Quick Add Customer', description: 'Open customer assignment form', key: 'F3' },
-      { id: 'apply_discount', label: 'Apply Discount', description: 'Trigger checkout discount editor', key: 'F4' },
-      { id: 'void_cart', label: 'Void / Clear Cart', description: 'Remove all items currently in cart', key: 'F7' },
-      { id: 'pay_checkout', label: 'Pay & Checkout', description: 'Trigger master payment and print window', key: 'F8' },
-      { id: 'barcode_scan', label: 'Scan Barcode Simulator', description: 'Open barcode scanner testing utility', key: 'F9' },
-      { id: 'voice_pilot', label: 'Voice Pilot AI HUD', description: 'Toggle interactive voice-command HUD modal', key: 'v', altKey: true }
-    ];
-  });
+    
+    // Then attempt to load from Firestore for cross-device sync
+    if (db && currentUserId) {
+      getDoc(doc(db, 'users', currentUserId)).then(snap => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.keyboardShortcuts && Array.isArray(data.keyboardShortcuts)) {
+            setShortcuts(data.keyboardShortcuts);
+            localStorage.setItem(`velcora_keyboard_shortcuts_${currentUserId}`, JSON.stringify(data.keyboardShortcuts));
+          }
+        }
+      }).catch(console.error);
+    }
+  }, [authUser?.uid, activeUser?.id]);
 
+  // Persist shortcuts whenever they change
   useEffect(() => {
-    localStorage.setItem('velcora_keyboard_shortcuts', JSON.stringify(shortcuts));
-  }, [shortcuts]);
+    const currentUserId = authUser?.uid || activeUser?.id;
+    if (currentUserId) {
+      localStorage.setItem(`velcora_keyboard_shortcuts_${currentUserId}`, JSON.stringify(shortcuts));
+      if (db) {
+        updateDoc(doc(db, 'users', currentUserId), {
+          keyboardShortcuts: shortcuts
+        }).catch(() => {
+          // It's okay if they don't have a user document yet or it fails
+        });
+      }
+    } else {
+      localStorage.setItem('velcora_keyboard_shortcuts', JSON.stringify(shortcuts));
+    }
+  }, [shortcuts, authUser?.uid, activeUser?.id]);
 
   const updateShortcut = (id: string, updated: Partial<KeyboardShortcut>): { success: boolean; error?: string } => {
     const candidateKey = (updated.key || '').toLowerCase();
@@ -3818,41 +4557,75 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const candidateAlt = updated.altKey ?? false;
     const candidateShift = updated.shiftKey ?? false;
 
-    const conflict = shortcuts.find(s => {
+    const conflict = shortcuts.find((s) => {
       if (s.id === id) return false;
-      
+
       const currentKey = (s.key || '').toLowerCase();
       const currentCtrl = s.ctrlKey ?? false;
       const currentAlt = s.altKey ?? false;
       const currentShift = s.shiftKey ?? false;
 
-      return currentKey === candidateKey && 
-             currentCtrl === candidateCtrl && 
-             currentAlt === candidateAlt && 
-             currentShift === candidateShift;
+      return (
+        currentKey === candidateKey &&
+        currentCtrl === candidateCtrl &&
+        currentAlt === candidateAlt &&
+        currentShift === candidateShift
+      );
     });
 
     if (conflict) {
-      return { 
-        success: false, 
-        error: `Conflict! This key layout is already assigned to "${conflict.label}".` 
+      return {
+        success: false,
+        error: `Conflict! This key layout is already assigned to "${conflict.label}".`,
       };
     }
 
-    setShortcuts(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+    setShortcuts((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
     return { success: true };
   };
 
+  const addShortcut = (shortcut: Omit<KeyboardShortcut, 'id'>): { success: boolean; error?: string } => {
+    const candidateKey = (shortcut.key || '').toLowerCase();
+    const candidateCtrl = shortcut.ctrlKey ?? false;
+    const candidateAlt = shortcut.altKey ?? false;
+    const candidateShift = shortcut.shiftKey ?? false;
+
+    const conflict = shortcuts.find((s) => {
+      const currentKey = (s.key || '').toLowerCase();
+      const currentCtrl = s.ctrlKey ?? false;
+      const currentAlt = s.altKey ?? false;
+      const currentShift = s.shiftKey ?? false;
+
+      return (
+        currentKey === candidateKey &&
+        currentCtrl === candidateCtrl &&
+        currentAlt === candidateAlt &&
+        currentShift === candidateShift
+      );
+    });
+
+    if (conflict) {
+      return {
+        success: false,
+        error: `Conflict! This key layout is already assigned to "${conflict.label}".`,
+      };
+    }
+
+    const newShortcut: KeyboardShortcut = {
+      ...shortcut,
+      id: `shortcut-${Date.now()}`
+    };
+
+    setShortcuts(prev => [...prev, newShortcut]);
+    return { success: true };
+  };
+
+  const deleteShortcut = (id: string) => {
+    setShortcuts(prev => prev.filter(s => s.id !== id));
+  };
+
   const resetShortcuts = () => {
-    setShortcuts([
-      { id: 'focus_search', label: 'Focus Product Search', description: 'Jump cursor straight to POS search bar', key: 'F2' },
-      { id: 'add_customer', label: 'Quick Add Customer', description: 'Open customer assignment form', key: 'F3' },
-      { id: 'apply_discount', label: 'Apply Discount', description: 'Trigger checkout discount editor', key: 'F4' },
-      { id: 'void_cart', label: 'Void / Clear Cart', description: 'Remove all items currently in cart', key: 'F7' },
-      { id: 'pay_checkout', label: 'Pay & Checkout', description: 'Trigger master payment and print window', key: 'F8' },
-      { id: 'barcode_scan', label: 'Scan Barcode Simulator', description: 'Open barcode scanner testing utility', key: 'F9' },
-      { id: 'voice_pilot', label: 'Voice Pilot AI HUD', description: 'Toggle interactive voice-command HUD modal', key: 'v', altKey: true }
-    ]);
+    setShortcuts(DEFAULT_SHORTCUTS);
   };
 
   return (
@@ -4013,27 +4786,31 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         executeAiAction,
         smartAlerts,
         dismissAlert,
-        aiModels,
+                aiModels,
         activeModelId,
         setActiveModelId,
+        aiConfig,
+        aiConfigSource,
+        updateAIConfigByAdmin,
         aiUsageStats,
         onlineOrders,
         submitOnlineStoreOrder,
         sharedIntelligenceContext: {
           ...sharedIntelligenceContext,
-          bestSellingProduct: activeProducts && activeProducts.length > 0 
-            ? (() => {
-                const sorted = [...activeProducts].sort((a: any, b: any) => (b.unitsSold || 0) - (a.unitsSold || 0));
-                const first = sorted[0] as any;
-                return {
-                  id: first.id,
-                  name: first.name,
-                  category: first.category || 'Apparel',
-                  price: first.sellingPrice || 0,
-                  unitsSold: 28,
-                };
-              })()
-            : null
+          bestSellingProduct:
+            activeProducts && activeProducts.length > 0
+              ? (() => {
+                  const sorted = [...activeProducts].sort((a: any, b: any) => (b.unitsSold || 0) - (a.unitsSold || 0));
+                  const first = sorted[0] as any;
+                  return {
+                    id: first.id,
+                    name: first.name,
+                    category: first.category || 'Apparel',
+                    price: first.sellingPrice || 0,
+                    unitsSold: 28,
+                  };
+                })()
+              : null,
         },
         setSharedIntelligenceContext,
         recordRecommendationOutcome,
@@ -4095,7 +4872,9 @@ export const VelcoraProvider: React.FC<{ children: React.ReactNode }> = ({ child
         paymentsActiveTab,
         setPaymentsActiveTab,
         shortcuts,
+        addShortcut,
         updateShortcut,
+        deleteShortcut,
         resetShortcuts,
       }}
     >

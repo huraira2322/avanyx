@@ -31,7 +31,7 @@ export type SystemModuleKey =
   | 'settings'
   | 'help'
   | 'online_store' | 'appointments' | 'manufacturing'
-  | 'ask_velcora' | 'ai_router'
+  | 'ask_velcora'
   | 'referral_hub'
   | 'super_admin';
 
@@ -146,6 +146,7 @@ export interface CatalogSchema {
   fields: CatalogField[];
   capabilities: CatalogCapabilities;
   workflows: string[];
+  recommendedModules?: string[];
   researchNotes?: string;
   safetyNotes?: string;
   confidence: number;
@@ -221,6 +222,44 @@ export interface Product {
   availability?: string;
   commissionRate?: number;
   requirements?: string;
+  offeringType?: 'service' | 'physical' | 'bookable' | 'manufacturing' | 'custom';
+}
+
+export interface OfferingSchemaRequest {
+  itemRequest: string;
+  businessProfile?: {
+    businessName?: string;
+    industry?: string;
+    businessModel?: string;
+    currency?: string;
+  };
+}
+
+export interface OfferingSchemaResult {
+  offeringType: 'service' | 'physical' | 'bookable' | 'manufacturing' | 'custom';
+  suggestedValues: {
+    name: string;
+    sellingPrice?: number;
+    costPrice?: number;
+    stock?: number;
+    minStock?: number;
+    unit?: string;
+    category?: string;
+    description?: string;
+    duration?: number;
+    isService: boolean;
+    appointmentRequired?: boolean;
+    commissionRate?: number;
+    requirements?: string;
+    customFieldValues?: Record<string, any>;
+  };
+  fields: CatalogField[];
+  capabilities: CatalogCapabilities;
+  summary: string;
+  confidence?: number;
+  source?: 'ai' | 'heuristic' | 'fallback';
+  provider?: string;
+  model?: string;
 }
 
 export interface CartItem {
@@ -1236,6 +1275,7 @@ export interface KeyboardShortcut {
   ctrlKey?: boolean;   // modifier
   altKey?: boolean;    // modifier
   shiftKey?: boolean;  // modifier
+  action?: string;     // The mapped action, e.g. 'focus_search', 'checkout', etc.
 }
 
 

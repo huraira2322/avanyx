@@ -4,7 +4,8 @@ import {
   Search, Barcode, ShoppingCart, Trash2, Plus, Minus, CreditCard,
   Banknote, Wallet, Building2, User, PauseCircle, PlayCircle, Check,
   Printer, X, Tag, Sparkles, AlertCircle, ArrowRight, ShieldCheck,
-  Layers, Package, Phone, Mail, Award, RotateCcw, QrCode, Smartphone
+  Layers, Package, Phone, Mail, Award, RotateCcw, QrCode, Smartphone,
+  Camera, CameraOff
 } from 'lucide-react';
 import { Product, ProductVariant, PaymentBreakdown, CartItem } from '../types';
 import { VelcoraPricingEngine } from '../utils/pricingEngine';
@@ -15,6 +16,7 @@ import { soundEffects } from '../utils/audioEffects';
 import { printThermalReceipt, printStandardInvoice, downloadReceiptAsText } from '../utils/receiptPrinter';
 import { FileText, Download } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import { useBusinessModel } from '../hooks/useBusinessModel';
 
 export const PosBillingScreen: React.FC = () => {
   const {
@@ -43,6 +45,7 @@ export const PosBillingScreen: React.FC = () => {
     shortcuts,
   } = useVelcora();
   const { t, locale, setLocale } = useTranslation();
+  const model = useBusinessModel();
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,9 +79,169 @@ export const PosBillingScreen: React.FC = () => {
   const [completedReceiptSale, setCompletedReceiptSale] = useState<ReturnType<typeof completeSale> | null>(null);
   const [showDigitalPassModal, setShowDigitalPassModal] = useState(false);
 
-  // Barcode Scanner Simulator Modal
+  // Real Barcode Scanner, Camera & Hardware HID Engine
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [mockScanInput, setMockScanInput] = useState('');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
+  const [scanSuccessMessage, setScanSuccessMessage] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Central Barcode Resolution & Cart Insertion Handler
+  const handleScannedBarcode = (code: string) => {
+    if (!code || !code.trim()) return;
+    const cleanCode = code.trim();
+    const lower = cleanCode.toLowerCase();
+
+    // Match product or variant by barcode or SKU
+    const match = products.find(p =>
+      (p.barcode && p.barcode.toLowerCase() === lower) ||
+      (p.sku && p.sku.toLowerCase() === lower) ||
+      (Array.isArray(p.variants) && p.variants.some(v =>
+        (v.barcode && v.barcode.toLowerCase() === lower) ||
+        (v.sku && v.sku.toLowerCase() === lower)
+      ))
+    );
+
+    if (match) {
+      soundEffects.playScanBeep();
+      const matchedVariant = match.variants?.find(v =>
+        (v.barcode && v.barcode.toLowerCase() === lower) ||
+        (v.sku && v.sku.toLowerCase() === lower)
+      );
+
+      addToCart(match, matchedVariant?.id, 1);
+      setLastScannedCode(cleanCode);
+      setScanSuccessMessage(`Added: ${matchedVariant ? `${match.name} (${matchedVariant.sku || 'Variant'})` : match.name}`);
+      setTimeout(() => setScanSuccessMessage(null), 2500);
+      setMockScanInput('');
+    } else {
+      setLastScannedCode(cleanCode);
+      setScanSuccessMessage(`Barcode "${cleanCode}" not found in active catalog.`);
+      setTimeout(() => setScanSuccessMessage(null), 3000);
+    }
+  };
+
+  // Auto focus input when scanner modal is opened
+  useEffect(() => {
+    if (showScannerModal) {
+      const timer = setTimeout(() => {
+        scanInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showScannerModal]);
+
+  // Real Camera Live Video Stream & Native BarcodeDetector Loop
+  useEffect(() => {
+    if (!showScannerModal || !cameraActive) return;
+
+    let stream: MediaStream | null = null;
+    let animationFrameId: number;
+    let isScanning = true;
+
+    async function startCamera() {
+      try {
+        setCameraError(null);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+
+        if (videoRef.current && isScanning) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+
+          if ('BarcodeDetector' in window) {
+            const barcodeDetector = new (window as any).BarcodeDetector({
+              formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
+            });
+
+            const detectLoop = async () => {
+              if (!isScanning || !videoRef.current) return;
+              try {
+                if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+                  const barcodes = await barcodeDetector.detect(videoRef.current);
+                  if (barcodes.length > 0 && barcodes[0].rawValue) {
+                    const rawValue = barcodes[0].rawValue.trim();
+                    handleScannedBarcode(rawValue);
+                    await new Promise(r => setTimeout(r, 1400));
+                  }
+                }
+              } catch (e) {
+                // Ignore transient frame detection hiccups
+              }
+              if (isScanning) {
+                animationFrameId = requestAnimationFrame(detectLoop);
+              }
+            };
+            detectLoop();
+          }
+        }
+      } catch (err: any) {
+        console.warn('Camera access unavailable or declined:', err);
+        setCameraError(err?.message || 'Camera permission denied or camera device unavailable.');
+        setCameraActive(false);
+      }
+    }
+
+    startCamera();
+
+    return () => {
+      isScanning = false;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, [showScannerModal, cameraActive]);
+
+  // Global Hardware Barcode Scanner Listener (Works for all USB & Bluetooth Handheld Scanners)
+  useEffect(() => {
+    let barcodeBuffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement;
+      const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      // Handle Enter key terminator emitted by physical scanners
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.length >= 3) {
+          const scannedCode = barcodeBuffer.trim();
+          barcodeBuffer = '';
+          handleScannedBarcode(scannedCode);
+        }
+        barcodeBuffer = '';
+        return;
+      }
+
+      // Ignore standard multi-char control keys
+      if (e.key.length > 1) return;
+
+      // Hardware scanners typically transmit consecutive keystrokes < 60ms apart
+      if (timeDiff < 70 || barcodeBuffer.length > 0) {
+        if (timeDiff > 250) {
+          // Reset buffer if delay indicates manual human typing
+          barcodeBuffer = '';
+        }
+        barcodeBuffer += e.key;
+      } else if (!isInput) {
+        barcodeBuffer = e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, [products, addToCart]);
 
   // Dynamic customizable keyboard shortcut listener
   useEffect(() => {
@@ -103,7 +266,7 @@ export const PosBillingScreen: React.FC = () => {
 
       e.preventDefault();
 
-      switch (matched.id) {
+      switch (matched.action || matched.id) {
         case 'focus_search':
           searchInputRef.current?.focus();
           break;
@@ -117,6 +280,7 @@ export const PosBillingScreen: React.FC = () => {
           break;
         case 'barcode_scan':
           setShowScannerModal(true);
+          setCameraActive(true);
           break;
         case 'void_cart':
           if (cart.length > 0) {
@@ -286,7 +450,7 @@ export const PosBillingScreen: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search products or scan barcode (F2)..."
+              placeholder={model.hasBarcodes ? `Search ${model.itemLabelPluralLower} or scan barcode (F2)...` : `Search ${model.itemLabelPluralLower}...`}
               className="w-full pl-10 pr-14 py-2 rounded-xl bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] text-xs sm:text-sm text-slate-900 dark:text-[#F8FAFC] placeholder-slate-400 dark:placeholder-[#94A3B8]/60 focus:border-primary focus:ring-0 focus:outline-hidden transition"
             />
             {searchQuery && (
@@ -303,8 +467,11 @@ export const PosBillingScreen: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setShowScannerModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#152644] hover:bg-slate-200 dark:hover:bg-[#1E2E4A] text-slate-800 dark:text-[#F8FAFC] border border-slate-200 dark:border-[#1F2E4D] text-xs font-bold transition shadow-2xs"
+            onClick={() => {
+              setShowScannerModal(true);
+              setCameraActive(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#152644] hover:bg-slate-200 dark:hover:bg-[#1E2E4A] text-slate-800 dark:text-[#F8FAFC] border border-slate-200 dark:border-[#1F2E4D] text-xs font-bold transition shadow-2xs cursor-pointer"
           >
             <Barcode className="w-3.5 h-3.5 text-blue-600 dark:text-[#06B6D4]" />
             <span>Scanner</span>
@@ -333,11 +500,12 @@ export const PosBillingScreen: React.FC = () => {
           {filteredProducts.length === 0 ? (
             <div className="col-span-full py-16 text-center text-slate-400 dark:text-[#94A3B8]">
               <Package className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-[#94A3B8] stroke-1" />
-              <p className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8]">No products found</p>
+              <p className="text-xs font-semibold text-slate-500 dark:text-[#94A3B8]">No {model.itemLabelPluralLower} found</p>
             </div>
           ) : (
             filteredProducts.map(prod => {
-              const isOutOfStock = !prod.isService && prod.stock <= 0;
+              const isService = prod.isService || prod.offeringType === 'service' || prod.offeringType === 'bookable';
+              const isOutOfStock = model.hasStock && !isService && prod.stock <= 0;
               const hasVariants = prod.variants && prod.variants.length > 0;
 
               return (
@@ -376,7 +544,11 @@ export const PosBillingScreen: React.FC = () => {
                               {prod.variants.length} Options
                             </span>
                           )}
-                          {!prod.isService ? (
+                          {isService ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+                              {prod.duration ? `${prod.duration} min` : 'Service'}
+                            </span>
+                          ) : model.hasStock ? (
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
                               isOutOfStock
                                 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
@@ -386,18 +558,16 @@ export const PosBillingScreen: React.FC = () => {
                             }`}>
                               {isOutOfStock ? 'Out of stock' : `${prod.stock} in stock`}
                             </span>
-                          ) : (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
-                              Service
-                            </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
 
                       <h4 className="font-bold text-xs text-slate-900 dark:text-[#F8FAFC] line-clamp-2 leading-snug">
                         {prod.name}
                       </h4>
-                      <p className="text-[9px] font-mono text-slate-400 dark:text-[#94A3B8]/60 mt-0.5">{prod.sku}</p>
+                      <p className="text-[9px] font-mono text-slate-400 dark:text-[#94A3B8]/60 mt-0.5">
+                        {isService && prod.duration ? `${prod.duration} min` : model.hasSku ? prod.sku : ''}
+                      </p>
                     </div>
 
                     <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-[#1F2E4D] flex items-center justify-between">
@@ -1053,72 +1223,155 @@ export const PosBillingScreen: React.FC = () => {
         sale={completedReceiptSale}
         businessName={activeBusiness.name}
         currency={currency}
+        business={activeBusiness}
       />
 
-      {/* MODAL: BARCODE SCANNER SIMULATOR */}
+      {/* REAL HARDWARE & CAMERA BARCODE SCANNER MODAL */}
       {showScannerModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#111C30] rounded-3xl max-w-sm w-full p-5 border border-slate-200 dark:border-[#1F2E4D] shadow-2xl space-y-4 text-slate-800 dark:text-[#F8FAFC]">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#111C30] rounded-3xl max-w-md w-full p-5 border border-slate-200 dark:border-[#1F2E4D] shadow-2xl space-y-4 text-slate-800 dark:text-[#F8FAFC]">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#1F2E4D]">
               <div className="flex items-center gap-2">
-                <Barcode className="w-4 h-4 text-slate-800 dark:text-[#F8FAFC]" />
+                <Barcode className="w-4 h-4 text-primary" />
                 <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">Barcode Scanner</h3>
               </div>
-              <button
-                onClick={() => setShowScannerModal(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-center">
-              <div className="w-full h-28 bg-slate-50 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-[#1F2E4D] flex flex-col items-center justify-center relative overflow-hidden">
-                <div className="w-44 h-0.5 bg-slate-500 dark:bg-[#94A3B8]/60 animate-pulse" />
-                <span className="text-[10px] font-mono text-slate-600 dark:text-[#94A3B8]/60 mt-2 font-semibold">Optical Sensor Active</span>
-              </div>
-
-              <div>
-                <input
-                  type="text"
-                  value={mockScanInput}
-                  onChange={e => setMockScanInput(e.target.value)}
-                  placeholder="Scan or enter barcode / SKU..."
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] text-xs font-mono text-slate-800 dark:text-[#F8FAFC] focus:border-slate-500 focus:outline-hidden"
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-1.5 justify-center">
-                {products.slice(0, 3).map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      soundEffects.playScanBeep();
-                      addToCart(p);
-                      setShowScannerModal(false);
-                    }}
-                    className="px-2.5 py-1 bg-white dark:bg-[#111C30] border border-slate-200 dark:border-[#1F2E4D] rounded-lg text-[10px] font-mono text-slate-800 dark:text-[#94A3B8] hover:bg-slate-50 dark:hover:bg-[#152644] shadow-2xs"
-                  >
-                    Scan: {p.barcode}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 dark:border-[#1F2E4D] flex justify-end">
-              <button
-                onClick={() => {
-                  const match = products.find(p => p.barcode === mockScanInput || p.sku === mockScanInput);
-                  if (match) {
-                    soundEffects.playScanBeep();
-                    addToCart(match);
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCameraActive(!cameraActive)}
+                  className={`p-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                    cameraActive
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-slate-100 dark:bg-[#152644] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#1F2E4D]'
+                  }`}
+                  title={cameraActive ? 'Turn Off Camera' : 'Turn On Camera'}
+                >
+                  {cameraActive ? <Camera className="w-3.5 h-3.5" /> : <CameraOff className="w-3.5 h-3.5" />}
+                  <span className="text-[11px]">{cameraActive ? 'Camera On' : 'Camera Off'}</span>
+                </button>
+                <button
+                  onClick={() => {
                     setShowScannerModal(false);
-                    setMockScanInput('');
+                    setCameraActive(false);
+                  }}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Live Camera Feed / Optical Sensor Area */}
+            <div className="space-y-3">
+              <div className="w-full h-44 sm:h-48 bg-slate-950 rounded-2xl border border-slate-200 dark:border-[#1F2E4D] relative overflow-hidden flex items-center justify-center">
+                {cameraActive ? (
+                  <>
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      muted
+                      autoPlay
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Visual Target Reticle & Laser Scan Line */}
+                    <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-20 border-2 border-dashed border-emerald-400/70 rounded-xl pointer-events-none flex items-center justify-center">
+                      <div className="w-full h-0.5 bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse" />
+                    </div>
+                    <span className="absolute bottom-2 left-3 text-[10px] font-mono font-bold bg-black/60 text-emerald-400 px-2 py-0.5 rounded-md backdrop-blur-xs">
+                      Live Optical Stream Active
+                    </span>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-4 space-y-2">
+                    <div className="w-36 h-0.5 bg-primary/70 animate-pulse" />
+                    <span className="text-[11px] font-mono text-slate-400 font-medium">
+                      USB / Bluetooth Hardware Scanner Ready
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCameraActive(true)}
+                      className="mt-1 px-3 py-1 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary font-bold text-xs flex items-center gap-1.5 transition"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Start Camera Scanner</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {cameraError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-[11px] font-medium text-center">
+                  {cameraError}
+                </div>
+              )}
+
+              {scanSuccessMessage && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold text-center animate-fade-in flex items-center justify-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{scanSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Auto-focused Hardware Barcode Gun Input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (mockScanInput.trim()) {
+                    handleScannedBarcode(mockScanInput.trim());
                   }
                 }}
-                className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-xs font-bold hover:opacity-95 shadow-sm"
+                className="space-y-2"
               >
-                Scan & Add
+                <div className="relative">
+                  <input
+                    ref={scanInputRef}
+                    type="text"
+                    value={mockScanInput}
+                    onChange={e => setMockScanInput(e.target.value)}
+                    placeholder="Scan with handheld scanner or enter barcode..."
+                    className="w-full pl-3 pr-20 py-2.5 rounded-xl bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] text-xs font-mono text-slate-900 dark:text-[#F8FAFC] focus:border-primary focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-[11px] font-bold transition cursor-pointer"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
+
+              {/* Quick Barcode Test Buttons */}
+              <div className="pt-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 text-center">
+                  Quick Catalog Barcodes
+                </div>
+                <div className="flex flex-wrap gap-1.5 justify-center max-h-20 overflow-y-auto">
+                  {products.filter(p => p.barcode).slice(0, 6).map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleScannedBarcode(p.barcode!)}
+                      className="px-2.5 py-1 bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] rounded-lg text-[10px] font-mono text-slate-700 dark:text-[#94A3B8] hover:border-primary hover:text-primary transition shadow-2xs cursor-pointer"
+                    >
+                      {p.name.slice(0, 16)}: {p.barcode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-[#1F2E4D] flex justify-between items-center text-[11px] text-slate-400">
+              <span>Handheld USB / Bluetooth HID auto-detected</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScannerModal(false);
+                  setCameraActive(false);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#152644] text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 dark:hover:bg-[#1E2E4A] transition cursor-pointer"
+              >
+                Done
               </button>
             </div>
           </div>

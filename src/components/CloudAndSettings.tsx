@@ -7,7 +7,7 @@ import {
   Printer, QrCode, Scan, Bell, RefreshCw, Upload, Download,
   Check, CheckCircle2, AlertTriangle, UserCheck, LogIn, Lock,
   Unlock, Smartphone, Tablet, Laptop, Tag, ArrowRight, X,
-  Sliders, FileJson, Wifi, WifiOff, Users,
+  Sliders, FileJson, Wifi, WifiOff, Users, Plus,
   Save, Eye, Settings2, HelpCircle, Sun, Moon
 } from 'lucide-react';
 import { BusinessProfile, CurrencyCode, LocaleCode, IndustryType } from '../types';
@@ -103,7 +103,9 @@ export const CloudAndSettings: React.FC = () => {
     activeSubscription,
     activeUser,
     shortcuts,
+    addShortcut,
     updateShortcut,
+    deleteShortcut,
     resetShortcuts,
   } = useVelcora();
 
@@ -113,6 +115,9 @@ export const CloudAndSettings: React.FC = () => {
   // Customizable Keyboard Shortcuts state variables
   const [listeningShortcutId, setListeningShortcutId] = useState<string | null>(null);
   const [shortcutFeedback, setShortcutFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isAddingShortcut, setIsAddingShortcut] = useState(false);
+  const [newShortcutAction, setNewShortcutAction] = useState('focus_search');
+  const [newShortcutLabel, setNewShortcutLabel] = useState('My Custom Shortcut');
 
   // Keyboard capture effect
   useEffect(() => {
@@ -130,24 +135,46 @@ export const CloudAndSettings: React.FC = () => {
       if (!e.key) return;
 
       const formattedKey = e.key.toUpperCase();
-      const res = updateShortcut(listeningShortcutId, {
-        key: formattedKey,
-        ctrlKey: e.ctrlKey,
-        altKey: e.altKey,
-        shiftKey: e.shiftKey
-      });
 
-      if (res.success) {
-        setShortcutFeedback({ text: 'Shortcut updated successfully!', type: 'success' });
-        setListeningShortcutId(null);
+      if (listeningShortcutId === 'NEW') {
+        const res = addShortcut({
+          action: newShortcutAction,
+          label: newShortcutLabel,
+          description: 'Custom added shortcut',
+          key: formattedKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey
+        });
+
+        if (res.success) {
+          setShortcutFeedback({ text: 'Custom shortcut created successfully!', type: 'success' });
+          setListeningShortcutId(null);
+          setIsAddingShortcut(false);
+          setNewShortcutLabel('My Custom Shortcut');
+        } else {
+          setShortcutFeedback({ text: res.error || 'Failed to create shortcut.', type: 'error' });
+        }
       } else {
-        setShortcutFeedback({ text: res.error || 'Failed to update shortcut.', type: 'error' });
+        const res = updateShortcut(listeningShortcutId, {
+          key: formattedKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey
+        });
+
+        if (res.success) {
+          setShortcutFeedback({ text: 'Shortcut updated successfully!', type: 'success' });
+          setListeningShortcutId(null);
+        } else {
+          setShortcutFeedback({ text: res.error || 'Failed to update shortcut.', type: 'error' });
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyCapture, true);
     return () => window.removeEventListener('keydown', handleKeyCapture, true);
-  }, [listeningShortcutId, updateShortcut]);
+  }, [listeningShortcutId, updateShortcut, addShortcut, newShortcutAction, newShortcutLabel]);
 
   // Business Profile form states
   const [name, setName] = useState(activeBusiness?.name || 'Velcora Business');
@@ -156,9 +183,15 @@ export const CloudAndSettings: React.FC = () => {
   const [businessModel, setBusinessModel] = useState<'product' | 'service' | 'hybrid'>(activeBusiness?.businessModel || 'hybrid');
   const [phone, setPhone] = useState(activeBusiness?.phone || '+1 (555) 234-5678');
   const [email, setEmail] = useState(activeBusiness?.email || 'store@velcora.com');
-  const [address, setAddress] = useState(activeBusiness?.address || '100 Innovation Parkway, Suite 400');
-  const [taxNumber, setTaxNumber] = useState(activeBusiness?.taxNumber || 'VAT-US-98234110');
-  const [taxRate, setTaxRate] = useState(Math.round((activeBusiness?.taxRateDefault || 0.08) * 100));
+  const [address, setAddress] = useState(activeBusiness?.address || '');
+  const [taxNumber, setTaxNumber] = useState(
+    activeBusiness?.taxNumber && activeBusiness.taxNumber !== 'VAT-US-98234110' && activeBusiness.taxNumber !== 'US-TAX-892182'
+      ? activeBusiness.taxNumber
+      : ''
+  );
+  const [taxRate, setTaxRate] = useState<number>(
+    Math.round(((activeBusiness?.taxRateDefault !== undefined ? activeBusiness.taxRateDefault : 0)) * 100)
+  );
   const [taxInclusive, setTaxInclusive] = useState(activeBusiness?.taxInclusive || false);
   const [receiptHeader, setReceiptHeader] = useState(activeBusiness?.receiptHeader || '*** VELCORA ENTERPRISE POS ***\nThank you for shopping with us!');
   const [receiptFooter, setReceiptFooter] = useState(activeBusiness?.receiptFooter || 'Exchange within 7 days with original invoice.\nCustomer Support: support@velcora.com');
@@ -209,8 +242,12 @@ export const CloudAndSettings: React.FC = () => {
       setPhone(activeBusiness.phone || '');
       setEmail(activeBusiness.email || '');
       setAddress(activeBusiness.address || '');
-      setTaxNumber(activeBusiness.taxNumber || '');
-      setTaxRate(Math.round((activeBusiness.taxRateDefault || 0.08) * 100));
+      setTaxNumber(
+        activeBusiness.taxNumber && activeBusiness.taxNumber !== 'VAT-US-98234110' && activeBusiness.taxNumber !== 'US-TAX-892182'
+          ? activeBusiness.taxNumber
+          : ''
+      );
+      setTaxRate(Math.round(((activeBusiness.taxRateDefault !== undefined ? activeBusiness.taxRateDefault : 0)) * 100));
       setTaxInclusive(activeBusiness.taxInclusive || false);
       setReceiptHeader(activeBusiness.receiptHeader || '');
       setReceiptFooter(activeBusiness.receiptFooter || '');
@@ -1588,20 +1625,95 @@ export const CloudAndSettings: React.FC = () => {
                         {comboStr}
                       </span>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setListeningShortcutId(isListening ? null : sh.id);
-                          setShortcutFeedback(null);
-                        }}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-[10px] transition cursor-pointer ${isListening ? 'bg-primary text-white hover:bg-primary-hover shadow-xs' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'}`}
-                      >
-                        {isListening ? 'Listening...' : 'Customise'}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setListeningShortcutId(isListening ? null : sh.id);
+                            setShortcutFeedback(null);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-[10px] transition cursor-pointer ${isListening ? 'bg-primary text-white hover:bg-primary-hover shadow-xs' : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'}`}
+                        >
+                          {isListening ? 'Listening...' : 'Customise'}
+                        </button>
+                        {sh.id.startsWith('shortcut-') && (
+                          <button
+                            type="button"
+                            onClick={() => deleteShortcut(sh.id)}
+                            className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 font-bold text-[10px] transition cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
+
+              {/* Add Custom Shortcut Form */}
+              <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80">
+                {!isAddingShortcut ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingShortcut(true)}
+                    className="w-full py-3 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-primary/50 dark:hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-900/50 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Custom Shortcut
+                  </button>
+                ) : (
+                  <div className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#121B2E]/50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Create Custom Shortcut</h4>
+                      <button onClick={() => { setIsAddingShortcut(false); setListeningShortcutId(null); }} className="text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white uppercase tracking-wider">Cancel</button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Shortcut Label</label>
+                        <input
+                          type="text"
+                          value={newShortcutLabel}
+                          onChange={e => setNewShortcutLabel(e.target.value)}
+                          placeholder="e.g. My Quick Sale"
+                          className="w-full bg-white dark:bg-[#0F1424] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action / Trigger</label>
+                        <select
+                          value={newShortcutAction}
+                          onChange={e => setNewShortcutAction(e.target.value)}
+                          className="w-full bg-white dark:bg-[#0F1424] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition appearance-none"
+                        >
+                          <option value="focus_search">Focus Product Search</option>
+                          <option value="add_customer">Quick Add Customer</option>
+                          <option value="apply_discount">Apply Discount</option>
+                          <option value="void_cart">Void / Clear Cart</option>
+                          <option value="pay_checkout">Pay & Checkout</option>
+                          <option value="barcode_scan">Scan Barcode Simulator</option>
+                          <option value="open_drawer">Open Cash Drawer</option>
+                          <option value="voice_pilot">Voice Pilot AI HUD</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setListeningShortcutId('NEW');
+                          setShortcutFeedback(null);
+                        }}
+                        className={`px-4 py-2 rounded-xl font-bold text-xs transition cursor-pointer shadow-sm ${listeningShortcutId === 'NEW' ? 'bg-primary text-white animate-pulse' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90'}`}
+                      >
+                        {listeningShortcutId === 'NEW' ? 'Press keys now to save...' : 'Record Key Combo'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
