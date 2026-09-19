@@ -8,6 +8,7 @@ import {
 import { IndustryType, SystemModuleKey, CurrencyCode, LocaleCode, CatalogSchema } from '../types';
 import { VELCORA_COLOR_PALETTES } from '../constants/themeColors';
 import { getApiUrl } from '../lib/apiConfig';
+import { deriveOnboardingFromSchema, applyModulesToSchema, buildPresetCatalogSchema, presetModulesForIndustry } from '../lib/catalogSchema';
 
 interface OnboardingWizardModalProps {
   isOpen: boolean;
@@ -20,7 +21,6 @@ const INDUSTRY_PRESETS: {
   title: string;
   icon: any;
   tagline: string;
-  defaultModules: SystemModuleKey[];
   defaultTax: number;
 }[] = [
   {
@@ -28,23 +28,20 @@ const INDUSTRY_PRESETS: {
     title: 'Fashion & Apparel',
     icon: ShoppingBag,
     tagline: 'Size & color matrix, seasonal collections, loyalty points, online store',
-    defaultModules: ['pos', 'products', 'variants', 'inventory', 'customers', 'loyalty', 'online_store', 'business_brain'],
-    defaultTax: 8.0,
+    defaultTax: 0.0,
   },
   {
     id: 'restaurant',
     title: 'Restaurant & Cafe',
     icon: Utensils,
     tagline: 'Table orders, recipe batch costs, quick modifier billing, kitchen delivery notes',
-    defaultModules: ['pos', 'products', 'inventory', 'delivery_notes', 'expenses', 'financial_reports', 'business_brain'],
-    defaultTax: 10.0,
+    defaultTax: 0.0,
   },
   {
     id: 'pharmacy',
     title: 'Pharmacy & Healthcare',
     icon: Pill,
     tagline: 'Batch & expiry tracking, doctor prescriptions, dosage notes, low stock alerts',
-    defaultModules: ['pos', 'products', 'batch_tracking', 'inventory', 'suppliers', 'purchases', 'customers', 'financial_reports'],
     defaultTax: 0.0,
   },
   {
@@ -52,40 +49,35 @@ const INDUSTRY_PRESETS: {
     title: 'Electronics & Repair',
     icon: Wrench,
     tagline: 'IMEI/serial tracking, repair estimates, technician assignments, warranty tickets',
-    defaultModules: ['pos', 'products', 'serial_tracking', 'estimates', 'sales_orders', 'inventory', 'customers'],
-    defaultTax: 7.5,
+    defaultTax: 0.0,
   },
   {
     id: 'wholesale',
     title: 'Wholesale & Distribution',
     icon: Package,
     tagline: 'B2B tier pricing, bulk purchasing, credit notes, sales order dispatching',
-    defaultModules: ['pos', 'products', 'sales_orders', 'estimates', 'creditNotes' as any, 'suppliers', 'purchases', 'budgets', 'financial_reports'],
-    defaultTax: 5.0,
+    defaultTax: 0.0,
   },
   {
     id: 'grocery',
     title: 'Supermarket & Grocery',
     icon: Store,
     tagline: 'High-speed barcode checkout, perishable expiry audits, customer loyalty',
-    defaultModules: ['pos', 'products', 'barcodes', 'batch_tracking', 'inventory', 'customers', 'loyalty', 'financial_reports'],
-    defaultTax: 4.0,
+    defaultTax: 0.0,
   },
   {
     id: 'salon',
     title: 'Salon & Spa Services',
     icon: Scissors,
     tagline: 'Stylist commissions, client appointment history, service packages',
-    defaultModules: ['pos', 'products', 'commissions', 'customers', 'loyalty', 'expenses'],
-    defaultTax: 8.5,
+    defaultTax: 0.0,
   },
   {
     id: 'custom',
     title: 'Custom Enterprise',
     icon: Box,
     tagline: 'Bespoke workflow with fully configurable modules and custom fields',
-    defaultModules: ['pos', 'products', 'inventory', 'customers', 'financial_reports', 'business_brain'],
-    defaultTax: 8.0,
+    defaultTax: 0.0,
   },
 ];
 
@@ -97,7 +89,6 @@ const MODULE_DEFINITIONS: {
 }[] = [
   { key: 'pos', label: 'POS Billing Register', category: 'Core Register', description: 'Fast cashier scanning, multi-tender payments, held carts, discounts & tax calculation.' },
   { key: 'products', label: 'Product Catalog', category: 'Catalog & Stock', description: 'Universal item management, categorizations, pricing, cost tracking & images.' },
-  { key: 'variants', label: 'Matrix Variants (Size/Color)', category: 'Catalog & Stock', description: 'Multi-attribute variant management with individual SKU barcodes.' },
   { key: 'inventory', label: 'Stocktake & Stock Audits', category: 'Catalog & Stock', description: 'Real-time quantity on hand, reorder alerts, warehouse stock adjustments.' },
   { key: 'batch_tracking', label: 'Batch & Expiry Date Tracking', category: 'Catalog & Stock', description: 'FEFO/FIFO inventory tracking with expiration date alerts.' },
   { key: 'serial_tracking', label: 'Serial & IMEI Device Tracking', category: 'Catalog & Stock', description: 'Track unique device identifiers for warranties and technician logs.' },
@@ -111,7 +102,32 @@ const MODULE_DEFINITIONS: {
   { key: 'financial_reports', label: 'Financial Reports & P&L', category: 'Sales & Fulfillment', description: 'Net profit margins, tax summaries, revenue trends, and CSV/PDF export.' },
   { key: 'business_brain', label: 'Velcora Business Brain AI', category: 'Intelligence & Marketing', description: 'Deterministic health diagnostics, root-cause leak detection, and executive plans.' },
   { key: 'online_store', label: 'Online Store Beta E-Commerce', category: 'Intelligence & Marketing', description: 'Instant consumer-facing digital catalog with live stock sync and web orders.' },
+  { key: 'credit_notes', label: 'Credit Notes & Refunds', category: 'Sales & Fulfillment', description: 'Issue credit notes for returns and exchanges, linked to the original invoice.' },
+  { key: 'delivery_notes', label: 'Delivery Notes & Dispatch', category: 'Sales & Fulfillment', description: 'Generate dispatch notes for orders leaving the store or warehouse.' },
+  { key: 'expenses', label: 'Expense Tracking & Finance', category: 'Sales & Fulfillment', description: 'Operating expenses, other income, commissions and budgets with profit impact.' },
+  { key: 'other_income', label: 'Other Income Ledger', category: 'Sales & Fulfillment', description: 'Log non-sales income such as rent, scrap sales or services outside the catalog.' },
+  { key: 'commissions', label: 'Staff Commission Rules', category: 'Sales & Fulfillment', description: 'Commission rates per staff member or service, settled in the finance ledger.' },
+  { key: 'budgets', label: 'Budgets & Spending Limits', category: 'Sales & Fulfillment', description: 'Monthly budgets per category with variance against actual spend.' },
+  { key: 'employees', label: 'Staff & Employee Accounts', category: 'Sales & Fulfillment', description: 'Staff records and workspace login accounts for the owner and admins.' },
+  { key: 'custom_reports', label: 'Custom Report Builder', category: 'Sales & Fulfillment', description: 'Build your own report from live sales, stock and finance data.' },
+  { key: 'payments', label: 'Payments & Ledger', category: 'Core Register', description: 'Payment records across cash, card, wallet and bank with reconciliation.' },
+  { key: 'taxes', label: 'Tax Management', category: 'Core Register', description: 'Tax rates, tax groups and period tax summaries for the register.' },
+  { key: 'notifications', label: 'Notifications Center', category: 'Core Register', description: 'Low-stock, expiry and system alerts collected in one inbox.' },
+  { key: 'appointments', label: 'Service Appointments & Duration', category: 'Intelligence & Marketing', description: 'Duration, assigned staff and booking fields for service items.' },
+  { key: 'promotions', label: 'Promotions & Discount Rules', category: 'Intelligence & Marketing', description: 'Campaigns, coupon codes and automatic discount rules for the register.' },
+  { key: 'ask_velcora', label: 'Chat with Velcora AI', category: 'Intelligence & Marketing', description: 'Ask business questions and get answers grounded in your own live store data.' },
+  { key: 'settings', label: 'Store Settings & Cloud Sync', category: 'Intelligence & Marketing', description: 'Business profile, receipt details, data sync and workspace preferences.' },
+  { key: 'help', label: 'Help & Keyboard Shortcuts', category: 'Intelligence & Marketing', description: 'Shortcut reference and support guidance for daily operations.' },
 ];
+
+/** Human label for any module key (falls back to the raw key for AI-only modules). */
+const MODULE_LABELS: Partial<Record<SystemModuleKey, string>> = MODULE_DEFINITIONS.reduce(
+  (acc, mod) => ({ ...acc, [mod.key]: mod.label }),
+  {} as Partial<Record<SystemModuleKey, string>>
+);
+
+const moduleLabel = (key: SystemModuleKey): string =>
+  MODULE_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const COUNTRY_CURRENCY_PRESETS = [
   { country: 'United States', currency: 'USD' as CurrencyCode, symbol: '$', label: 'United States — USD ($)' },
@@ -131,18 +147,18 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
   const { completeOnboarding } = useVelcora();
 
   const [step, setStep] = useState<number>(1);
-  const [businessName, setBusinessName] = useState<string>('Solstice Atelier');
+  const [businessName, setBusinessName] = useState<string>('');
   const [industry, setIndustry] = useState<IndustryType>('clothing');
   const [businessModel, setBusinessModel] = useState<'product' | 'service' | 'hybrid'>('product');
   const [country, setCountry] = useState<string>('United States');
   const [primaryColor, setPrimaryColor] = useState<string>('#5B5CE2');
   const [currency, setCurrency] = useState<CurrencyCode>('USD');
   const [language, setLanguage] = useState<LocaleCode>('en');
-  const [taxRate, setTaxRate] = useState<number>(8.0);
+  const [taxRate, setTaxRate] = useState<number>(0.0);
   const [taxInclusive, setTaxInclusive] = useState<boolean>(false);
-  const [enabledModules, setEnabledModules] = useState<SystemModuleKey[]>([
-    'pos', 'products', 'variants', 'inventory', 'customers', 'loyalty', 'online_store', 'business_brain', 'financial_reports'
-  ]);
+  const [enabledModules, setEnabledModules] = useState<SystemModuleKey[]>(() =>
+    presetModulesForIndustry('clothing')
+  );
 
   // AI Prompt Builder
   const [aiPrompt, setAiPrompt] = useState<string>('');
@@ -152,21 +168,24 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
 
   if (!isOpen) return null;
 
-  const getModelForIndustry = (ind: IndustryType): 'product' | 'service' | 'hybrid' => {
-    if (['salon', 'barber', 'repair', 'workshop', 'service', 'professional'].includes(ind)) {
-      return 'service';
-    }
-    if (['restaurant', 'cafe'].includes(ind)) {
-      return 'hybrid';
-    }
-    return 'product';
-  };
-
   const handleSelectIndustry = (preset: typeof INDUSTRY_PRESETS[0]) => {
     setIndustry(preset.id);
     setTaxRate(preset.defaultTax);
-    setEnabledModules(preset.defaultModules);
-    setBusinessModel(getModelForIndustry(preset.id));
+
+    // An option must bring its COMPLETE function set with it: the industry
+    // blueprint defines both the catalog capabilities (what the POS renders)
+    // and the modules (what the workspace exposes). Because the wizard used to
+    // only store the ticked module keys — which nothing in the app read — the
+    // chosen functions never appeared. Now the selection is applied to the
+    // catalog schema itself, and an AI-tailored set is never discarded.
+    const blueprintModules = presetModulesForIndustry(preset.id);
+    setEnabledModules((prev) =>
+      aiCatalogSchema ? Array.from(new Set<SystemModuleKey>([...blueprintModules, ...prev])) : blueprintModules
+    );
+
+    // Keep the profile's business model in lock-step with the catalog schema it
+    // will be launched with (Reports/Products read this).
+    setBusinessModel(deriveOnboardingFromSchema(buildPresetCatalogSchema(preset.id)).businessModel);
   };
 
   const handleToggleModule = (key: SystemModuleKey) => {
@@ -176,52 +195,206 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
     );
   };
 
+  const generateLocalAiCatalogSchema = (prompt: string): CatalogSchema => {
+    const p = prompt.toLowerCase();
+    const isEggOrPoultry = /egg|poultry|chicken|layer|broiler|birds|bird|farm|hatchery|feed|dairy/.test(p);
+    const isJewelryOrGold = /gold|jewelry|jewel|silver|diamond|karat|tola|ornament|gem/.test(p);
+    const isDoctorOrClinic = /doctor|clinic|patient|health|medic|prescri|hospital|consultant|therapy|dentist/.test(p);
+    const isSalonOrSpa = /salon|spa|barber|hair|facial|massage|stylist|beauty/.test(p);
+    const isRestaurant = /restaurant|cafe|food|dining|bakery|kitchen|chef|pizza|burger|drink|bar/.test(p);
+    const isRepairOrTech = /repair|phone|tech|laptop|imei|serial|screen|mechanic|garage|auto|workshop/.test(p);
+    const isDinoOrVault = /dinosaur|rare specimen|incubator specimen|specimen vault|fossil/.test(p);
+    const hasOnlineStore = /online|store|ecommerce|website|delivery|web/.test(p);
+    const hasDiscounts = /discount|promo|coupon|deal|sale|offer/.test(p);
+    const hasAppointments = /appointment|booking|session|duration|slot|schedule/.test(p) || isDoctorOrClinic || isSalonOrSpa;
+    const hasBatches = /batch|expiry|expire|feefo|fifo|perishable|lot/.test(p) || isDoctorOrClinic || isDinoOrVault || isEggOrPoultry;
+    const hasSerials = /serial|imei|device|chassis|engine/.test(p) || isRepairOrTech || isJewelryOrGold;
+    const hasBarcodes = !isDoctorOrClinic && !isSalonOrSpa && !isDinoOrVault;
+
+    let businessType = 'Custom Business';
+    let singular = 'Item';
+    let plural = 'Items';
+    let sellingModel: 'unit' | 'weight' | 'service' | 'duration' | 'measure' | 'mixed' | 'custom' = 'unit';
+
+    if (isEggOrPoultry) {
+      businessType = 'Egg & Poultry Farm / Store';
+      singular = 'Egg / Poultry Product';
+      plural = 'Egg & Poultry Products';
+      sellingModel = 'unit';
+    } else if (isJewelryOrGold) {
+      businessType = 'Gold & Jewelry Retail';
+      singular = 'Jewelry Piece / Bullion';
+      plural = 'Jewelry Items';
+      sellingModel = 'weight';
+    } else if (isDoctorOrClinic) {
+      businessType = 'Medical Clinic & Practice';
+      singular = 'Patient Service';
+      plural = 'Services & Consultations';
+      sellingModel = 'service';
+    } else if (isDinoOrVault) {
+      businessType = 'Specialty Incubator & Storage';
+      singular = 'Specimen / Vault';
+      plural = 'Vault Specimens';
+      sellingModel = 'custom';
+    } else if (isSalonOrSpa) {
+      businessType = 'Salon & Beauty Studio';
+      singular = 'Service';
+      plural = 'Services';
+      sellingModel = 'service';
+    } else if (isRestaurant) {
+      businessType = 'Food & Beverage';
+      singular = 'Dish';
+      plural = 'Menu Items';
+      sellingModel = 'unit';
+    } else if (isRepairOrTech) {
+      businessType = 'Tech Repair & Service';
+      singular = 'Job / Part';
+      plural = 'Repairs & Parts';
+      sellingModel = 'mixed';
+    }
+
+    const units: string[] = isEggOrPoultry
+      ? ['Dozen', 'Tray (30)', 'Carton', 'Piece', 'Kg', 'Crate']
+      : isJewelryOrGold
+      ? ['Gram', 'Tola', 'Carat', 'Piece']
+      : isDoctorOrClinic
+      ? ['Consultation', 'Session', 'Visit']
+      : isDinoOrVault
+      ? ['Specimen', 'Unit']
+      : ['Unit', 'Pcs'];
+
+    const categories: string[] = isEggOrPoultry
+      ? ['Farm Fresh White Eggs', 'Organic Brown Eggs', 'Free Range Eggs', 'Quail Eggs', 'Poultry Feed', 'Broiler Chicken']
+      : isJewelryOrGold
+      ? ['Gold 24K', 'Gold 22K', 'Gold 21K', 'Gold 18K', 'Diamond Rings', 'Silver 925']
+      : isDoctorOrClinic
+      ? ['Consultations', 'Diagnostics', 'Procedures']
+      : isDinoOrVault
+      ? ['Rare Grade A', 'Incubating', 'Preserved']
+      : ['General'];
+
+    const recommendedMods: SystemModuleKey[] = ['pos', 'products', 'settings', 'dashboard', 'business_brain'];
+    if (hasOnlineStore) recommendedMods.push('online_store');
+    if (hasDiscounts) recommendedMods.push('promotions');
+    if (hasAppointments) recommendedMods.push('appointments');
+    if (hasBatches) recommendedMods.push('batch_tracking', 'inventory');
+    if (hasSerials) recommendedMods.push('serial_tracking');
+    if (isDoctorOrClinic || isSalonOrSpa) recommendedMods.push('services', 'customers');
+    if (isRepairOrTech) recommendedMods.push('services', 'inventory', 'sales_orders');
+
+    const fields = [
+      { key: 'name', label: `${singular} Name`, type: 'text' as const, scope: 'item' as const, required: true, core: 'name' as const },
+      { key: 'category', label: 'Category', type: 'select' as const, scope: 'item' as const, required: false, options: categories, core: 'category' as const },
+      { key: 'selling_price', label: 'Rate / Price', type: 'currency' as const, scope: 'item' as const, required: true, core: 'sellingPrice' as const },
+      { key: 'unit', label: 'Unit of Measure', type: 'select' as const, scope: 'item' as const, required: false, options: units, core: 'unit' as const },
+      ...(isEggOrPoultry ? [
+        { key: 'egg_grade', label: 'Egg Grade / Size', type: 'select' as const, scope: 'item' as const, required: false, options: ['Grade AA', 'Grade A', 'Grade B', 'Jumbo', 'Large', 'Medium', 'Standard'] },
+        { key: 'pack_candling_date', label: 'Packing / Candling Date', type: 'date' as const, scope: 'item' as const, required: false },
+        { key: 'expiry_date', label: 'Expiry / Best Before', type: 'date' as const, scope: 'item' as const, required: false },
+        { key: 'batch_flock_no', label: 'Batch / Flock Number', type: 'text' as const, scope: 'item' as const, required: false }
+      ] : []),
+      ...(isJewelryOrGold ? [
+        { key: 'purity_karat', label: 'Purity / Karat', type: 'select' as const, scope: 'item' as const, required: false, options: ['24K (99.9%)', '22K (91.6%)', '21K (87.5%)', '18K (75.0%)', '14K (58.3%)', '925 Sterling Silver'] },
+        { key: 'gross_weight', label: 'Gross Weight', type: 'weight' as const, scope: 'item' as const, required: false, unit: 'g' },
+        { key: 'net_weight', label: 'Net Weight (Gold/Metal Only)', type: 'weight' as const, scope: 'item' as const, required: false, unit: 'g' },
+        { key: 'making_charges', label: 'Making / Labor Charges', type: 'currency' as const, scope: 'item' as const, required: false },
+        { key: 'hallmark_cert', label: 'Hallmark / Certificate No', type: 'text' as const, scope: 'item' as const, required: false }
+      ] : []),
+      ...(isDoctorOrClinic ? [
+        { key: 'dosage_notes', label: 'Clinical & Dosage Notes', type: 'textarea' as const, scope: 'item' as const, required: false },
+        { key: 'duration_minutes', label: 'Consultation Duration (Mins)', type: 'number' as const, scope: 'item' as const, required: false, core: 'duration' as const }
+      ] : []),
+      ...(isDinoOrVault ? [
+        { key: 'incubator_temp', label: 'Incubator Temp (°C)', type: 'number' as const, scope: 'item' as const, required: false },
+        { key: 'viability_status', label: 'Viability Status', type: 'text' as const, scope: 'item' as const, required: false }
+      ] : []),
+      ...(isRepairOrTech ? [
+        { key: 'device_imei', label: 'Device IMEI / Serial', type: 'text' as const, scope: 'item' as const, required: false },
+        { key: 'technician_labor', label: 'Labor Estimate', type: 'currency' as const, scope: 'item' as const, required: false }
+      ] : [])
+    ];
+
+    return {
+      version: 1 as const,
+      businessType,
+      summary: `AI analyzed "${prompt.slice(0, 80)}" and configured tailored fields, units, and workflows.`,
+      itemLabelSingular: singular,
+      itemLabelPlural: plural,
+      sellingModel,
+      units,
+      categories,
+      fields,
+      capabilities: {
+        barcodes: hasBarcodes,
+        sku: hasBarcodes,
+        stock: !isDoctorOrClinic && !isSalonOrSpa,
+        variants: !isDoctorOrClinic && !isDinoOrVault && !isSalonOrSpa,
+        batchTracking: hasBatches,
+        serialTracking: hasSerials,
+        expiry: hasBatches,
+        weightBased: isJewelryOrGold,
+        appointments: hasAppointments,
+        suppliers: !isDoctorOrClinic && !isSalonOrSpa,
+        loyalty: !isDoctorOrClinic,
+        onlineStore: hasOnlineStore
+      },
+      workflows: hasAppointments ? ['pos', 'appointments'] : ['pos'],
+      recommendedModules: recommendedMods,
+      confidence: 0.95,
+      source: 'ai' as const
+    };
+  };
+
   const handleAiConfigure = async () => {
     if (!aiPrompt.trim()) return;
     setIsAnalyzingAi(true);
     try {
-      const res = await fetch(getApiUrl('/api/ai/recommend-pos'), {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const cRes = await fetch(getApiUrl('/api/ai/catalog-schema'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessDescription: aiPrompt }),
+        body: JSON.stringify({
+          businessRequirements: aiPrompt,
+          industry,
+          businessName,
+          country,
+          currency,
+        }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (data.presetId) {
-        setIndustry(data.presetId);
-      }
-      if (data.businessName && !businessName) {
-        setBusinessName(data.businessName);
-      }
-      if (data.recommendedModules && Array.isArray(data.recommendedModules)) {
-        setEnabledModules(data.recommendedModules);
-      }
-      if (data.rationale || data.analysis) {
-        setAiRationale(data.rationale || data.analysis);
-      }
+      clearTimeout(timeoutId);
 
-      // Generate the AI-adaptive, business-specific catalog schema using the
-      // platform's unified engine (DeepSeek V4 Pro primary -> Gemini fallback).
-      try {
-        const cRes = await fetch(getApiUrl('/api/ai/catalog-schema'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            businessRequirements: aiPrompt,
-            industry: data.presetId || industry,
-            businessName: data.businessName || businessName,
-            country,
-            currency,
-          }),
-        });
-        const cData = await cRes.json();
-        if (cData.success && cData.schema) {
-          setAiCatalogSchema(cData.schema as CatalogSchema);
-        }
-      } catch (cErr) {
-        console.warn('Business catalog generation failed (non-fatal):', cErr);
+      const cData = await cRes.json();
+      if (cData.success && cData.schema && Array.isArray(cData.schema.fields) && cData.schema.fields.length > 0) {
+        const schema = cData.schema as CatalogSchema;
+        setAiCatalogSchema(schema);
+        setAiRationale(schema.summary || `Configured ${schema.businessType} blueprint successfully.`);
+
+        const derivation = deriveOnboardingFromSchema(schema);
+        setBusinessModel(derivation.businessModel);
+        setEnabledModules(derivation.enabledModules);
+        setIndustry(derivation.industry);
+      } else {
+        // Instant smart local fallback if server response was fallback
+        const fallbackSchema = generateLocalAiCatalogSchema(aiPrompt);
+        setAiCatalogSchema(fallbackSchema);
+        setAiRationale(fallbackSchema.summary || 'Configured tailored business blueprint.');
+        const derivation = deriveOnboardingFromSchema(fallbackSchema);
+        setBusinessModel(derivation.businessModel);
+        setEnabledModules(derivation.enabledModules);
+        setIndustry(derivation.industry);
       }
     } catch (err) {
-      console.error(err);
+      console.warn('[AI Config] Falling back to instant local schema analysis:', err);
+      const fallbackSchema = generateLocalAiCatalogSchema(aiPrompt);
+      setAiCatalogSchema(fallbackSchema);
+      setAiRationale(fallbackSchema.summary || 'Configured tailored business blueprint.');
+      const derivation = deriveOnboardingFromSchema(fallbackSchema);
+      setBusinessModel(derivation.businessModel);
+      setEnabledModules(derivation.enabledModules);
+      setIndustry(derivation.industry);
     } finally {
       setIsAnalyzingAi(false);
     }
@@ -237,6 +410,9 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
   };
 
   const handleFinish = () => {
+    const baseSchema = aiCatalogSchema || buildPresetCatalogSchema(industry);
+    const finalSchema = applyModulesToSchema(baseSchema, enabledModules);
+
     completeOnboarding({
       businessName: businessName.trim() || 'My Business',
       industry,
@@ -249,7 +425,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       enabledModules,
       taxRate,
       taxInclusive,
-      catalogSchema: aiCatalogSchema || undefined,
+      catalogSchema: finalSchema,
     });
     onClose();
   };
@@ -651,8 +827,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
                   <span className="text-[10px] uppercase font-extrabold text-primary tracking-wider">Active Modules ({enabledModules.length})</span>
                   <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto">
                     {enabledModules.map(m => (
-                      <span key={m} className="px-2 py-1 rounded-lg bg-white dark:bg-[#111C30] border border-slate-200 dark:border-[#1F2E4D] text-[10px] font-bold text-slate-700 dark:text-[#94A3B8] capitalize">
-                        {m.replace(/_/g, ' ')}
+                      <span key={m} className="px-2 py-1 rounded-lg bg-white dark:bg-[#111C30] border border-slate-200 dark:border-[#1F2E4D] text-[10px] font-bold text-slate-700 dark:text-[#94A3B8]">
+                        {moduleLabel(m)}
                       </span>
                     ))}
                   </div>

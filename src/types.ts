@@ -15,7 +15,7 @@ export type SystemModuleKey =
   | 'dashboard' | 'business_brain'
   | 'pos'
   | 'orders' | 'sales_orders' | 'estimates' | 'invoices' | 'credit_notes' | 'delivery_notes'
-  | 'products' | 'services' | 'variants' | 'barcodes'
+  | 'products' | 'services' | 'barcodes'
   | 'inventory' | 'batch_tracking' | 'serial_tracking'
   | 'customers' | 'loyalty'
   | 'suppliers'
