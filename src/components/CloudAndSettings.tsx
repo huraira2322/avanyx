@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import { signInWithGoogle } from '../lib/firebase';
 import {
   Building2, Palette, ShoppingCart, Receipt, Package, Sparkles,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { BusinessProfile, CurrencyCode, LocaleCode, IndustryType } from '../types';
 import { getOrCreateDeviceId } from '../lib/deviceManager';
-import { VELCORA_COLOR_PALETTES } from '../constants/themeColors';
+import { AVANYX_COLOR_PALETTES } from '../constants/themeColors';
 import { useTranslation } from '../context/TranslationContext';
 import { generateBarcodeSvg } from '../utils/barcodeGenerator';
 
@@ -24,7 +24,7 @@ type SettingsTab =
   | 'inventory_loyalty'
   | 'security_fleet'
   | 'backup_cloud'
-  | 'subscription_partner'
+  | 'subscription'
   | 'shortcuts';
 
 const CURRENCIES: { code: CurrencyCode; label: string; symbol: string; country: string }[] = [
@@ -94,10 +94,6 @@ export const CloudAndSettings: React.FC = () => {
     authUser,
     userProfile,
     logout,
-    activeReferralCode,
-    isReferralCodeApplied,
-    applyReferralCode,
-    removeReferralCode,
     setCurrentModule,
     openCheckoutModal,
     activeSubscription,
@@ -107,7 +103,7 @@ export const CloudAndSettings: React.FC = () => {
     updateShortcut,
     deleteShortcut,
     resetShortcuts,
-  } = useVelcora();
+  } = useAvanyx();
 
   const { t, locale, setLocale } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('business');
@@ -177,12 +173,12 @@ export const CloudAndSettings: React.FC = () => {
   }, [listeningShortcutId, updateShortcut, addShortcut, newShortcutAction, newShortcutLabel]);
 
   // Business Profile form states
-  const [name, setName] = useState(activeBusiness?.name || 'Velcora Business');
+  const [name, setName] = useState(activeBusiness?.name || 'Avanyx Business');
   const [legalName, setLegalName] = useState(activeBusiness?.legalName || '');
   const [industry, setIndustry] = useState<IndustryType>(activeBusiness?.industry || 'retail');
   const [businessModel, setBusinessModel] = useState<'product' | 'service' | 'hybrid'>(activeBusiness?.businessModel || 'hybrid');
   const [phone, setPhone] = useState(activeBusiness?.phone || '+1 (555) 234-5678');
-  const [email, setEmail] = useState(activeBusiness?.email || 'store@velcora.com');
+  const [email, setEmail] = useState(activeBusiness?.email || 'store@avanyx.ai');
   const [address, setAddress] = useState(activeBusiness?.address || '');
   const [taxNumber, setTaxNumber] = useState(
     activeBusiness?.taxNumber && activeBusiness.taxNumber !== 'VAT-US-98234110' && activeBusiness.taxNumber !== 'US-TAX-892182'
@@ -193,8 +189,8 @@ export const CloudAndSettings: React.FC = () => {
     Math.round(((activeBusiness?.taxRateDefault !== undefined ? activeBusiness.taxRateDefault : 0)) * 100)
   );
   const [taxInclusive, setTaxInclusive] = useState(activeBusiness?.taxInclusive || false);
-  const [receiptHeader, setReceiptHeader] = useState(activeBusiness?.receiptHeader || '*** VELCORA ENTERPRISE POS ***\nThank you for shopping with us!');
-  const [receiptFooter, setReceiptFooter] = useState(activeBusiness?.receiptFooter || 'Exchange within 7 days with original invoice.\nCustomer Support: support@velcora.com');
+  const [receiptHeader, setReceiptHeader] = useState(activeBusiness?.receiptHeader || '*** Avanyx ENTERPRISE POS ***\nThank you for shopping with us!');
+  const [receiptFooter, setReceiptFooter] = useState(activeBusiness?.receiptFooter || 'Exchange within 7 days with original invoice.\nCustomer Support: support@avanyx.ai');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Extended POS & Hardware preferences
@@ -215,11 +211,6 @@ export const CloudAndSettings: React.FC = () => {
   const [pointRedemptionValue, setPointRedemptionValue] = useState(0.01);
   const [minRedemptionPoints, setMinRedemptionPoints] = useState(50);
   const [autoLockMinutes, setAutoLockMinutes] = useState<'5' | '15' | '30' | '60' | 'never'>('15');
-
-  // Referral code state
-  const [inputRefCode, setInputRefCode] = useState('');
-  const [refCodeMsg, setRefCodeMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [refLoading, setRefLoading] = useState(false);
 
   // Google sign in state
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -259,7 +250,7 @@ export const CloudAndSettings: React.FC = () => {
     const currObj = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
 
     updateBusinessProfile({
-      name: name.trim() || 'Velcora Business',
+      name: name.trim() || 'Avanyx Business',
       legalName: legalName.trim(),
       industry,
       businessModel,
@@ -280,20 +271,6 @@ export const CloudAndSettings: React.FC = () => {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  const handleApplyRefCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputRefCode.trim()) return;
-    setRefLoading(true);
-    setRefCodeMsg(null);
-    const res = await applyReferralCode(inputRefCode);
-    setRefLoading(false);
-    if (res.valid) {
-      setRefCodeMsg({ type: 'success', text: res.message });
-      setInputRefCode('');
-    } else {
-      setRefCodeMsg({ type: 'error', text: res.message });
-    }
-  };
 
   const handleGoogleSignInFromSettings = async () => {
     setGoogleLoading(true);
@@ -316,14 +293,14 @@ export const CloudAndSettings: React.FC = () => {
       expenses,
       workstations,
       exportedAt: new Date().toISOString(),
-      platform: 'VELCORA Universal Enterprise System',
+      platform: 'Avanyx Universal Enterprise System',
       version: '4.2.0',
     };
 
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupData, null, 2));
     const dlAnchor = document.createElement('a');
     dlAnchor.setAttribute('href', dataStr);
-    dlAnchor.setAttribute('download', `Velcora_Backup_${(name || 'store').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`);
+    dlAnchor.setAttribute('download', `Avanyx_Backup_${(name || 'store').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`);
     document.body.appendChild(dlAnchor);
     dlAnchor.click();
     dlAnchor.remove();
@@ -374,8 +351,8 @@ export const CloudAndSettings: React.FC = () => {
     setTimeout(() => {
       handleExportFullBackup();
       setDriveSyncing(false);
-      const bizSanitized = (name || 'velcora').toLowerCase().replace(/[^a-z0-9]/g, '_');
-      setDriveSyncSuccess(`Backup synced to Google Drive folder: "Velcora_Cloud_Backups/velcora_backup_${bizSanitized}.json"`);
+      const bizSanitized = (name || 'avanyx').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      setDriveSyncSuccess(`Backup synced to Google Drive folder: "Avanyx_Cloud_Backups/avanyx_backup_${bizSanitized}.json"`);
       setTimeout(() => setDriveSyncSuccess(null), 7000);
     }, 1200);
   };
@@ -389,11 +366,11 @@ export const CloudAndSettings: React.FC = () => {
     { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Sliders },
     { id: 'security_fleet', label: 'Workstations & Security', icon: ShieldCheck },
     { id: 'backup_cloud', label: 'Cloud & Backups', icon: Cloud },
-    { id: 'subscription_partner', label: 'Subscription & Partner', icon: CreditCard },
+    { id: 'subscription', label: 'Subscription & Billing', icon: CreditCard },
   ];
 
   return (
-    <div id="velcora-settings-container" className="space-y-6 pb-12">
+    <div id="avanyx-settings-container" className="space-y-6 pb-12">
       {/* Hidden File Input for JSON Restore */}
       <input
         type="file"
@@ -502,7 +479,7 @@ export const CloudAndSettings: React.FC = () => {
                     required
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Velcora Supermarket"
+                    placeholder="e.g. Avanyx Supermarket"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold focus:border-primary focus:outline-hidden"
                   />
                 </div>
@@ -515,7 +492,7 @@ export const CloudAndSettings: React.FC = () => {
                     type="text"
                     value={legalName}
                     onChange={e => setLegalName(e.target.value)}
-                    placeholder="e.g. Velcora Retail Enterprises LLC"
+                    placeholder="e.g. Avanyx Retail Enterprises LLC"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-medium focus:border-primary focus:outline-hidden"
                   />
                 </div>
@@ -571,7 +548,7 @@ export const CloudAndSettings: React.FC = () => {
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="billing@velcora.com"
+                    placeholder="billing@avanyx.ai"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-medium focus:border-primary focus:outline-hidden"
                   />
                 </div>
@@ -648,7 +625,7 @@ export const CloudAndSettings: React.FC = () => {
                         {activeUser?.name || 'Store Owner'}
                       </div>
                       <div className="text-[11px] text-slate-400 font-medium truncate">
-                        {activeUser?.email || 'admin@velcora.com'}
+                        {activeUser?.email || 'admin@avanyx.ai'}
                       </div>
                     </div>
                   </div>
@@ -696,7 +673,7 @@ export const CloudAndSettings: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                {VELCORA_COLOR_PALETTES.map(palette => {
+                {AVANYX_COLOR_PALETTES.map(palette => {
                   const isSelected = primaryColor.toLowerCase() === palette.hex.toLowerCase();
                   return (
                     <button
@@ -852,7 +829,7 @@ export const CloudAndSettings: React.FC = () => {
               </select>
 
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Velcora natively supports full bilingual English and Urdu RTL thermal receipt generation and digital billing invoices.
+                Avanyx natively supports full bilingual English and Urdu RTL thermal receipt generation and digital billing invoices.
               </p>
             </div>
           </div>
@@ -953,7 +930,7 @@ export const CloudAndSettings: React.FC = () => {
             <div className="bg-white dark:bg-[#0F1424] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 text-xs">
               <h4 className="font-extrabold text-slate-900 dark:text-white">Fiscal Compliance Notice</h4>
               <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-                Velcora POS is engineered for universal multi-regional tax audit compliance. All completed orders store cryptographic sequential invoice signatures.
+                Avanyx POS is engineered for universal multi-regional tax audit compliance. All completed orders store cryptographic sequential invoice signatures.
               </p>
               <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold">
                 ✓ Immutable Sales Ledger Active
@@ -1087,7 +1064,7 @@ export const CloudAndSettings: React.FC = () => {
 
             <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 space-y-2 max-w-sm mx-auto shadow-inner">
               <div className="text-center font-bold text-slate-900 dark:text-white uppercase">
-                {name || 'VELCORA STORE'}
+                {name || 'Avanyx STORE'}
               </div>
               <div className="text-center text-[10px] text-slate-500 whitespace-pre-line">
                 {receiptHeader}
@@ -1100,7 +1077,7 @@ export const CloudAndSettings: React.FC = () => {
               <div className="border-t border-dashed border-slate-300 dark:border-slate-700 my-2"></div>
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span>1x Velcora Smart Item</span>
+                  <span>1x Avanyx Smart Item</span>
                   <span>{currency || '$'}24.00</span>
                 </div>
                 <div className="flex justify-between">
@@ -1451,19 +1428,19 @@ export const CloudAndSettings: React.FC = () => {
         </div>
       )}
 
-      {/* 9. SUBSCRIPTION & PARTNER TAB */}
-      {activeTab === 'subscription_partner' && (
+      {/* 9. SUBSCRIPTION & BILLING TAB */}
+      {activeTab === 'subscription' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fade-in">
           {/* Subscription Tier */}
-          <div className="lg:col-span-6 bg-white dark:bg-[#0F1424] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4 text-xs">
+          <div className="lg:col-span-8 bg-white dark:bg-[#0F1424] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4 text-xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                   <CreditCard className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-[#F8FAFC]">Velcora Enterprise Subscription</h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Cloud multi-terminal licenses and token quotas</p>
+                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-[#F8FAFC]">Avanyx Enterprise Subscription</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Cloud multi-terminal licenses and store configurations</p>
                 </div>
               </div>
               <span className="px-2.5 py-0.5 rounded-full bg-primary/20 text-primary font-bold text-[10px] uppercase">
@@ -1474,104 +1451,68 @@ export const CloudAndSettings: React.FC = () => {
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
               <div className="flex justify-between">
                 <span className="text-slate-400">Active Tier:</span>
-                <span className="font-black text-slate-900 dark:text-white">{activeSubscription?.planName || 'Velcora Professional'}</span>
+                <span className="font-black text-slate-900 dark:text-white">{activeSubscription?.planName || 'Avanyx Professional'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Connected Terminals:</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">{activeSubscription?.maxWorkstations || 5} Terminals Allowed</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Included AI Tokens:</span>
-                <span className="font-bold text-amber-500">{activeSubscription?.tokensRemaining?.toLocaleString() || '200,000'}</span>
+                <span className="text-slate-400">Included Plan AI Tokens:</span>
+                <span className="font-bold text-amber-500">{activeSubscription?.tokensIncludedMonthly?.toLocaleString() || '10,000'} / mo</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="pt-1">
               <button
                 type="button"
                 onClick={() => openCheckoutModal('subscriptions')}
-                className="py-2.5 px-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                className="w-full py-2.5 px-3 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-xs shadow-xs transition cursor-pointer text-center"
               >
-                Upgrade Subscription
+                Upgrade Subscription Plan
               </button>
+            </div>
+
+            {/* Referral / Affiliate Program Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-purple-900/20 border border-blue-500/30 text-white space-y-3 mt-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
+                    <Share2 className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Avanyx Referral & Affiliate Portal</h4>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Earn up to $13 recurring commission for every paying business you refer</p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[9px] uppercase">
+                  Earn Cash
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                Connect directly to your isolated Referral Center. Monitor referred stores, commission ledgers, and cash payouts in real time.
+              </p>
               <button
                 type="button"
-                onClick={() => openCheckoutModal('tokens')}
-                className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition cursor-pointer"
+                onClick={async () => {
+                  try {
+                    const token = authUser ? await authUser.getIdToken() : null;
+                    if (token) {
+                      window.open(`https://nym667-nasheedvoice-tech12.vercel.app/api/handoff?token=${encodeURIComponent(token)}`, '_blank');
+                    } else {
+                      window.open(`https://nym667-nasheedvoice-tech12.vercel.app`, '_blank');
+                    }
+                  } catch {
+                    window.open(`https://nym667-nasheedvoice-tech12.vercel.app`, '_blank');
+                  }
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                Buy AI Tokens
+                <Share2 className="w-3.5 h-3.5" />
+                Launch Referral Dashboard
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
-
-          {/* Referral Partner Attribution */}
-          <div className="lg:col-span-6 bg-white dark:bg-[#0F1424] p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4 text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                  <Share2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-[#F8FAFC]">Referral Partner Attribution</h3>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Attribute your store to an authorized partner</p>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-extrabold">
-                $3.00 Reward / Sub
-              </span>
-            </div>
-
-            {isReferralCodeApplied ? (
-              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200 font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span>Partner Code <code className="font-mono bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-md font-black">{activeReferralCode}</code> attributed</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={removeReferralCode}
-                  className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 hover:bg-rose-50 text-rose-600 font-bold text-[11px] border border-slate-200 dark:border-slate-800 transition cursor-pointer"
-                >
-                  <X className="w-3 h-3" /> Remove
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleApplyRefCode} className="space-y-3">
-                <div className="relative">
-                  <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Referral Code (e.g. VEL453821)"
-                    value={inputRefCode}
-                    onChange={(e) => setInputRefCode(e.target.value.toUpperCase())}
-                    className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono uppercase font-bold text-slate-900 dark:text-white focus:border-primary focus:outline-hidden"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={refLoading || !inputRefCode.trim()}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {refLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                  <span>Apply Partner Code</span>
-                </button>
-              </form>
-            )}
-
-            {refCodeMsg && (
-              <div className={`text-[11px] font-bold ${refCodeMsg.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                {refCodeMsg.text}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setCurrentModule('referral_hub')}
-              className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-slate-800 transition flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>Open Full Partner Dashboard</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       )}
