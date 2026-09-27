@@ -370,7 +370,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 seconds max deadline
 
       let reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
       try {
@@ -733,7 +733,50 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
                     <span>Auto-Configure</span>
                   </button>
                 </div>
-                {aiRationale && !isAnalyzingAi && (
+                {aiCatalogSchema && !isAnalyzingAi && (
+                  <div className="mt-3 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-extrabold text-emerald-900 dark:text-emerald-200">
+                          ✓ Auto-Configured: {aiCatalogSchema.businessType || 'Tailored Store Blueprint'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                        {aiCatalogSchema.fields?.length || 4} custom fields
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {aiRationale || aiCatalogSchema.summary}
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/40">
+                      <div className="flex flex-wrap gap-1.5">
+                        {enabledModules.slice(0, 4).map(mod => (
+                          <span key={mod} className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white dark:bg-[#111C30] border border-emerald-200 dark:border-emerald-800 text-slate-700 dark:text-slate-200">
+                            ✓ {mod.replace(/_/g, ' ').toUpperCase()}
+                          </span>
+                        ))}
+                        {enabledModules.length > 4 && (
+                          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 self-center">
+                            +{enabledModules.length - 4} more modules
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setStep(3)}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer ml-auto"
+                      >
+                        <span>Review Configured Modules</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {aiRationale && !aiCatalogSchema && !isAnalyzingAi && (
                   <p className="text-[11px] text-primary bg-primary-light p-2.5 rounded-xl border border-primary/20 font-medium">
                     💡 <strong>AI Analysis:</strong> {aiRationale}
                   </p>

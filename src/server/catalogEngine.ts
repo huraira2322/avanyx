@@ -614,12 +614,12 @@ export async function generateCatalogSchema(
       attempt === 0 ? baseMessages : [...baseMessages, { role: 'user' as const, content: REPAIR_INSTRUCTION }];
 
     const normalized: NormalizedRequest & { userId?: string; requestId?: string; businessId?: string } = {
-      // Use DeepSeek V4 Pro for deep reasoning
-      engineId: 'avanyx-brain',
+      // Use Avanyx Neural Flash for ultra-fast responsive onboarding
+      engineId: 'flash',
       messages,
-      maxTokens: 8000,
+      maxTokens: 2500,
       temperature: 0.2,
-      timeoutMs: 50000,
+      timeoutMs: 25000,
       maxRetries: 0,
       userId: ctx?.userId,
       requestId: ctx?.requestId,

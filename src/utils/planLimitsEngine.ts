@@ -184,8 +184,8 @@ export const ALL_PLAN_LIMITS: ResourceLimitDefinition[] = [
 
 export const DEFAULT_FREE_FEATURE_ACCESS: PlanFeatureAccess = {
   beta_store: false,
-  ai_chat: false,
-  ai_brain: false,
+  ai_chat: true,
+  ai_brain: true,
   advanced_analytics: true,
   multi_terminal: false,
   custom_branding: false,
@@ -205,7 +205,7 @@ export const DEFAULT_FREE_RESOURCE_LIMITS: PlanResourceLimits = {
   maxStaff: 2,
   maxProducts: 500,
   maxWorkstations: 1,
-  monthlyAiCredits: 0,
+  monthlyAiCredits: 5000,
   maxCustomers: 200,
   maxSuppliers: 10,
   maxWarehouses: 1,

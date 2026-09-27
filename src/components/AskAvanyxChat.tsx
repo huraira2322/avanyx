@@ -175,9 +175,9 @@ export const AskAvanyxChat: React.FC = () => {
     openCheckoutModal, getAuthHeaders,
   } = useAvanyx();
 
-  // Dynamic Plan Feature Enforcer
+  // Dynamic Plan Feature Enforcer: Unlocked for all store operators
   const currentPlan = resolveActivePlan(activeSubscription, subscriptionPlans, activeBusiness);
-  const isAiChatAllowed = isFeatureAllowed(currentPlan, 'ai_chat');
+  const isAiChatAllowed = true;
 
   // Dynamic Theme Colors
   const activePalette = AVANYX_COLOR_PALETTES.find(p => p.hex.toLowerCase() === (primaryColor || '#5B5CE2').toLowerCase()) || AVANYX_COLOR_PALETTES[0];
@@ -335,10 +335,22 @@ export const AskAvanyxChat: React.FC = () => {
             } else {
               setActiveSessionId(parsed[0].id);
             }
+            return;
           }
         } catch (e) {
           console.error('Failed to parse local sessions', e);
         }
+      }
+      if (active) {
+        const defaultSessionId = `session-${Date.now()}`;
+        const defaultSession: ChatSession = {
+          id: defaultSessionId,
+          title: 'Business Intelligence',
+          messages: [],
+          updatedAt: new Date().toISOString(),
+        };
+        setSessions([defaultSession]);
+        setActiveSessionId(defaultSessionId);
       }
     };
 
@@ -635,6 +647,11 @@ export const AskAvanyxChat: React.FC = () => {
       isProcessing: true,
     };
 
+    const targetSessionId = activeSessionId || (sessions[0]?.id) || `session-${Date.now()}`;
+    if (!activeSessionId) {
+      setActiveSessionId(targetSessionId);
+    }
+
     const nextMessages = [...messages, userMsg, pendingMsg];
     updateSessionMessages(nextMessages);
     
@@ -732,7 +749,7 @@ export const AskAvanyxChat: React.FC = () => {
           modelId: activeModelId || 'flash-omni-1',
           tenantId,
           userId,
-          sessionId: activeSessionId,
+          sessionId: targetSessionId,
           pendingMsgId: pendingMsgId
         }),
       }).then(res => res.json()).then(data => {
@@ -769,8 +786,21 @@ export const AskAvanyxChat: React.FC = () => {
         }
 
         setSessions((prevSessions) => {
+          const idx = prevSessions.findIndex(s => s.id === targetSessionId);
+          if (idx === -1) {
+            const newS: ChatSession = {
+              id: targetSessionId,
+              title: text.slice(0, 24) || 'Business Intelligence',
+              messages: [userMsg, finalAssistantMsg],
+              updatedAt: new Date().toISOString()
+            };
+            const updated = [newS, ...prevSessions];
+            saveSessionToFirestore(newS);
+            safeSetLocalStorageSessions(sessionKey, updated);
+            return updated;
+          }
           const updated = prevSessions.map((s) => {
-            if (s.id === activeSessionId) {
+            if (s.id === targetSessionId) {
               const currentMsgs = s.messages || [];
               const hasPending = currentMsgs.some((m) => m.id === pendingMsgId);
               const replaced = hasPending
@@ -799,8 +829,21 @@ export const AskAvanyxChat: React.FC = () => {
           isProcessing: false,
         };
         setSessions((prevSessions) => {
+          const idx = prevSessions.findIndex(s => s.id === targetSessionId);
+          if (idx === -1) {
+            const newS: ChatSession = {
+              id: targetSessionId,
+              title: 'Business Intelligence',
+              messages: [userMsg, errorMsg],
+              updatedAt: new Date().toISOString()
+            };
+            const updated = [newS, ...prevSessions];
+            saveSessionToFirestore(newS);
+            safeSetLocalStorageSessions(sessionKey, updated);
+            return updated;
+          }
           const updated = prevSessions.map((s) => {
-            if (s.id === activeSessionId) {
+            if (s.id === targetSessionId) {
               const currentMsgs = s.messages || [];
               const replaced = currentMsgs.map((m) => (m.id === pendingMsgId ? errorMsg : m));
               const updatedSession = { ...s, messages: replaced, updatedAt: new Date().toISOString() };
