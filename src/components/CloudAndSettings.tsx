@@ -1473,46 +1473,7 @@ export const CloudAndSettings: React.FC = () => {
               </button>
             </div>
 
-            {/* Referral / Affiliate Program Card */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-purple-900/20 border border-blue-500/30 text-white space-y-3 mt-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
-                    <Share2 className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-xs text-slate-900 dark:text-white">Avanyx Referral & Affiliate Portal</h4>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Earn up to $13 recurring commission for every paying business you refer</p>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[9px] uppercase">
-                  Earn Cash
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Connect directly to your isolated Referral Center. Monitor referred stores, commission ledgers, and cash payouts in real time.
-              </p>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const token = authUser ? await authUser.getIdToken() : null;
-                    if (token) {
-                      window.open(`https://nym667-nasheedvoice-tech12.vercel.app/api/handoff?token=${encodeURIComponent(token)}`, '_blank');
-                    } else {
-                      window.open(`https://nym667-nasheedvoice-tech12.vercel.app`, '_blank');
-                    }
-                  } catch {
-                    window.open(`https://nym667-nasheedvoice-tech12.vercel.app`, '_blank');
-                  }
-                }}
-                className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                Launch Referral Dashboard
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            
           </div>
         </div>
       )}
