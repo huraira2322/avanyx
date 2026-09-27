@@ -1,6 +1,6 @@
-# VELCORA — Development Tooling
+# AVANYX — Development Tooling
 
-VS Code workspace tooling for Velcora. All eight tools are installed and **interconnected** —
+VS Code workspace tooling for Avanyx. All eight tools are installed and **interconnected** —
 each is used for the job it is best at, and none duplicates another.
 
 > **Nothing was changed in `package.json` or application source code.** The tooling lives in
@@ -39,7 +39,7 @@ flowchart LR
         TC["Thunder Client<br/>.thunderclient/*.json"]
     end
 
-    subgraph VELCORA["Velcora App"]
+    subgraph AVANYX["Avanyx App"]
         SRC["src/** (.ts/.tsx)"]
         CSS["src/index.css<br/>Tailwind v4 @theme"]
         API["Express API<br/>server.ts"]
@@ -136,14 +136,14 @@ node node_modules/prettier/bin/prettier.cjs --write  src/lib/catalogSchema.ts
 npm run test
 ```
 
-Thunder Client collection: **`.thunderclient/velcora-api.json`** — 8 requests (provider health,
-DeepSeek ping, Gemini ping, credits wallet, Ask Velcora, catalog schema, plus PRODUCTION variants).
+Thunder Client collection: **`.thunderclient/avanyx-api.json`** — 8 requests (provider health,
+DeepSeek ping, Gemini ping, credits wallet, Ask Avanyx, catalog schema, plus PRODUCTION variants).
 
 ---
 
 ## 5. Local-only tooling (package.json untouched)
 
-ESLint and Prettier are **not** dependencies of Velcora, so they are installed without saving:
+ESLint and Prettier are **not** dependencies of Avanyx, so they are installed without saving:
 
 ```bash
 npm install --no-save --no-package-lock --no-audit --no-fund eslint@9 typescript-eslint prettier
@@ -172,7 +172,7 @@ npm i -D eslint@9 typescript-eslint prettier
 | **Tailwind CSS IntelliSense** | ✅ PASS | Tailwind v4 via `@tailwindcss/vite` + `src/index.css` (`@import "tailwindcss"`, `@theme`) |
 | **GitLens** | ✅ PASS | `git log/blame/status` functional (blame shows “Not Committed Yet” for new files) |
 | **Mermaid Chart** | ✅ PASS | `docs/architecture.mmd` + `docs/catalog-flow.mmd` created and rendered |
-| **Thunder Client** | ✅ PASS | `.thunderclient/velcora-api.json` — valid JSON, **8 requests** |
+| **Thunder Client** | ✅ PASS | `.thunderclient/avanyx-api.json` — valid JSON, **8 requests** |
 | **TypeScript (`npm run lint`)** | ✅ PASS | 0 errors |
 | **package.json untouched** | ✅ PASS | 0 references to `eslint` / `prettier` / `typescript-eslint` |
 

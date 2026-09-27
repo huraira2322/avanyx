@@ -8,9 +8,9 @@ for (const file of files) {
   let content = fs.readFileSync(filePath, 'utf8');
   let originalContent = content;
 
-  // Fix the syntax error: `, tStr} = useVelcora();` where there was a newline before `}`
-  content = content.replace(/,\s*tStr\}\s*=\s*useVelcora\(\);/g, ', tStr } = useVelcora();');
-  // Or more broadly: `executeAiAction,\n  , tStr} = useVelcora();`
+  // Fix the syntax error: `, tStr} = useAvanyx();` where there was a newline before `}`
+  content = content.replace(/,\s*tStr\}\s*=\s*useAvanyx\(\);/g, ', tStr } = useAvanyx();');
+  // Or more broadly: `executeAiAction,\n  , tStr} = useAvanyx();`
   content = content.replace(/,\s*,\s*tStr/g, ', tStr');
   
   if (content !== originalContent) {

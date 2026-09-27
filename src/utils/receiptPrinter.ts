@@ -1,6 +1,6 @@
 import { SaleTransaction, BusinessProfile, CartItem } from '../types';
 import { generateBarcodeSvg, generateQrMatrixSvg } from './barcodeGenerator';
-import { VelcoraPricingEngine } from './pricingEngine';
+import { AvanyxPricingEngine } from './pricingEngine';
 
 export interface PrintReceiptOptions {
   sale: SaleTransaction;
@@ -29,7 +29,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'GRAND TOTAL:',
     change_due: 'Change Due:',
     points_earned: '★ You earned {points} Loyalty Points on this purchase! ★',
-    powered_by: 'Powered by Velcora Intelligence ERP',
+    powered_by: 'Powered by Avanyx Intelligence ERP',
     invoice_title: 'Invoice',
     billed_to: 'Billed To',
     account: 'Account:',
@@ -70,7 +70,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'کل رقم:',
     change_due: 'بقایا رقم:',
     points_earned: '★ آپ نے اس خریداری پر {points} لائلٹی پوائنٹس حاصل کیے! ★',
-    powered_by: 'ویلکورا انٹیلیجنس ERP کی پیشکش',
+    powered_by: 'ایوینکس انٹیلیجنس ERP کی پیشکش',
     invoice_title: 'انوائس',
     billed_to: 'بل بنام',
     account: 'اکاؤنٹ نمبر:',
@@ -111,7 +111,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'المجموع الإجمالي:',
     change_due: 'المتبقي للعميل:',
     points_earned: '★ لقد ربحت {points} من نقاط الولاء على هذه العملية! ★',
-    powered_by: 'مشغل بواسطة نظام فيلكورا الذكي',
+    powered_by: 'مشغل بواسطة نظام افينكس الذكي',
     invoice_title: 'فاتورة',
     billed_to: 'فاتورة إلى',
     account: 'رقم الحساب:',
@@ -152,7 +152,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: '实付总计:',
     change_due: '找零:',
     points_earned: '★ 此次消费您赚取了 {points} 会员积分！ ★',
-    powered_by: '由 Velcora 智能 ERP 提供技术支持',
+    powered_by: '由 Avanyx 智能 ERP 提供技术支持',
     invoice_title: '发票',
     billed_to: '账单寄送至',
     account: '账户:',
@@ -193,7 +193,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'TOTAL GENERAL:',
     change_due: 'Cambio:',
     points_earned: '★ ¡Has ganado {points} Puntos de Lealtad en esta compra! ★',
-    powered_by: 'Desarrollado por Velcora Intelligence ERP',
+    powered_by: 'Desarrollado por Avanyx Intelligence ERP',
     invoice_title: 'Factura',
     billed_to: 'Facturado a',
     account: 'Cuenta:',
@@ -234,7 +234,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'TOTAL GÉNÉRAL:',
     change_due: 'Monnaie Rendue:',
     points_earned: '★ Vous avez gagné {points} Points de Fidélité lors de cet achat ! ★',
-    powered_by: 'Propulsé par Velcora Intelligence ERP',
+    powered_by: 'Propulsé par Avanyx Intelligence ERP',
     invoice_title: 'Facture',
     billed_to: 'Facturé à',
     account: 'Compte:',
@@ -275,7 +275,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'GESAMTSUMME:',
     change_due: 'Rückgeld:',
     points_earned: '★ Sie haben bei diesem Einkauf {points} Treuepunkte gesammelt! ★',
-    powered_by: 'Unterstützt von Velcora Intelligence ERP',
+    powered_by: 'Unterstützt von Avanyx Intelligence ERP',
     invoice_title: 'Rechnung',
     billed_to: 'Rechnungsempfänger',
     account: 'Konto:',
@@ -316,7 +316,7 @@ const RECEIPT_TRANSLATIONS: Record<string, Record<string, string>> = {
     grand_total: 'TOTAL GERAL:',
     change_due: 'Troco:',
     points_earned: '★ Você ganhou {points} Pontos de Fidelidade nesta compra! ★',
-    powered_by: 'Distribuído por Velcora Intelligence ERP',
+    powered_by: 'Distribuído por Avanyx Intelligence ERP',
     invoice_title: 'Fatura',
     billed_to: 'Faturado para',
     account: 'Conta:',
@@ -362,7 +362,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
   const widthMm = is58mm ? '58mm' : '80mm';
   const barcodeSvg = generateBarcodeSvg(sale.invoiceNumber, is58mm ? 140 : 200, 32);
 
-  const origin = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname) : 'https://velcora.app';
+  const origin = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname) : 'https://avanyx.ai';
   const digitalReceiptUrl = `${origin}?b=${business.id}&s=${sale.id}`;
   const qrCodeSvg = generateQrMatrixSvg(digitalReceiptUrl, is58mm ? 90 : 110);
 
@@ -391,12 +391,12 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
           <td style="padding: 3px 0; text-align: ${isRtl ? 'right' : 'left'}; vertical-align: top;">
             <div style="font-weight: 700; word-break: break-word;">${it.name}</div>
             <div style="font-size: 10px; color: #555;">
-              ${it.quantity} x ${VelcoraPricingEngine.formatCurrency(it.unitPrice, currency)}
-              ${it.discount ? ` (${rT('discount', 'Discount')}: -${VelcoraPricingEngine.formatCurrency(it.discount, currency)})` : ''}
+              ${it.quantity} x ${AvanyxPricingEngine.formatCurrency(it.unitPrice, currency)}
+              ${it.discount ? ` (${rT('discount', 'Discount')}: -${AvanyxPricingEngine.formatCurrency(it.discount, currency)})` : ''}
             </div>
           </td>
           <td style="padding: 3px 0; text-align: ${isRtl ? 'left' : 'right'}; vertical-align: top; font-weight: 700;">
-            ${VelcoraPricingEngine.formatCurrency(lineTotal, currency)}
+            ${AvanyxPricingEngine.formatCurrency(lineTotal, currency)}
           </td>
         </tr>
       `;
@@ -409,7 +409,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
       return `
         <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 2px; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
           <span style="text-transform: uppercase;">${displayMethod}${p.reference ? ` (${p.reference})` : ''}:</span>
-          <span style="font-weight: 700;">${VelcoraPricingEngine.formatCurrency(p.amount, currency)}</span>
+          <span style="font-weight: 700;">${AvanyxPricingEngine.formatCurrency(p.amount, currency)}</span>
         </div>
       `;
     })
@@ -508,7 +508,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
     ${business.address ? `<div class="sub-header">${business.address}</div>` : ''}
     ${business.phone ? `<div class="sub-header">${rT('tel', 'Tel:')} ${business.phone}</div>` : ''}
     ${business.email ? `<div class="sub-header">${rT('email', 'Email:')} ${business.email}</div>` : ''}
-    ${business.taxNumber ? `<div class="sub-header">${rT('tax_reg', 'Tax/VAT Reg:')} ${business.taxNumber}</div>` : ''}
+    ${business.taxNumber && business.taxNumber.trim() !== '' && business.taxNumber !== 'US-TAX-892182' && business.taxNumber !== 'VAT-US-98234110' ? `<div class="sub-header">${rT('tax_reg', 'Tax/VAT Reg:')} ${business.taxNumber}</div>` : ''}
   </div>
 
   <div class="divider"></div>
@@ -541,13 +541,13 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
   <div style="font-size: 11px;">
     <div style="display: flex; justify-content: space-between; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
       <span>${rT('subtotal', 'Subtotal:')}</span>
-      <span>${VelcoraPricingEngine.formatCurrency(sale.subtotal, currency)}</span>
+      <span>${AvanyxPricingEngine.formatCurrency(sale.subtotal, currency)}</span>
     </div>
     ${
       sale.discountTotal > 0
         ? `<div style="display: flex; justify-content: space-between; color: #111; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
             <span>${rT('discount', 'Discount:')}</span>
-            <span>-${VelcoraPricingEngine.formatCurrency(sale.discountTotal, currency)}</span>
+            <span>-${AvanyxPricingEngine.formatCurrency(sale.discountTotal, currency)}</span>
           </div>`
         : ''
     }
@@ -555,7 +555,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
       sale.taxTotal > 0
         ? `<div style="display: flex; justify-content: space-between; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
             <span>${rT('tax', 'Tax / VAT:')}</span>
-            <span>${VelcoraPricingEngine.formatCurrency(sale.taxTotal, currency)}</span>
+            <span>${AvanyxPricingEngine.formatCurrency(sale.taxTotal, currency)}</span>
           </div>`
         : ''
     }
@@ -570,7 +570,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
     <div class="double-divider"></div>
     <div class="total-row" style="display: flex; justify-content: space-between; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
       <span>${rT('grand_total', 'GRAND TOTAL:')}</span>
-      <span>${VelcoraPricingEngine.formatCurrency(sale.grandTotal, currency)}</span>
+      <span>${AvanyxPricingEngine.formatCurrency(sale.grandTotal, currency)}</span>
     </div>
     <div class="double-divider"></div>
   </div>
@@ -582,7 +582,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
       changeDue > 0
         ? `<div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 2px; font-weight: bold; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
             <span>${rT('change_due', 'Change Due:')}</span>
-            <span>${VelcoraPricingEngine.formatCurrency(changeDue, currency)}</span>
+            <span>${AvanyxPricingEngine.formatCurrency(changeDue, currency)}</span>
           </div>`
         : ''
     }
@@ -607,7 +607,7 @@ export function generateThermalReceiptHtml(options: PrintReceiptOptions): string
 
   <div class="text-center" style="font-size: 9px; margin-top: 4px; color: #333;">
     <div>${footerMessage}</div>
-    <div style="margin-top: 2px; font-size: 8px; color: #777;">${rT('powered_by', 'Powered by Velcora Intelligence ERP')}</div>
+    <div style="margin-top: 2px; font-size: 8px; color: #777;">${rT('powered_by', 'Powered by Avanyx Intelligence ERP')}</div>
   </div>
 </body>
 </html>
@@ -621,7 +621,7 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
   const { sale, business, currency = 'USD', cashierName = sale.cashierName || 'Cashier', customerName = sale.customerName || 'Walk-in Customer' } = options;
   const barcodeSvg = generateBarcodeSvg(sale.invoiceNumber, 240, 36);
 
-  const origin = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname) : 'https://velcora.app';
+  const origin = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname) : 'https://avanyx.ai';
   const digitalReceiptUrl = `${origin}?b=${business.id}&s=${sale.id}`;
   const qrCodeSvg = generateQrMatrixSvg(digitalReceiptUrl, 90);
 
@@ -648,12 +648,12 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
             <div style="font-size: 11px; color: #64748B; font-family: monospace;">SKU: ${it.sku}</div>
           </td>
           <td style="padding: 10px; text-align: center; font-weight: 600;">${it.quantity}</td>
-          <td style="padding: 10px; text-align: ${isRtl ? 'left' : 'right'};">${VelcoraPricingEngine.formatCurrency(it.unitPrice, currency)}</td>
+          <td style="padding: 10px; text-align: ${isRtl ? 'left' : 'right'};">${AvanyxPricingEngine.formatCurrency(it.unitPrice, currency)}</td>
           <td style="padding: 10px; text-align: ${isRtl ? 'left' : 'right'}; color: ${it.discount ? '#E11D48' : '#64748B'};">
-            ${it.discount ? `-${VelcoraPricingEngine.formatCurrency(it.discount, currency)}` : '—'}
+            ${it.discount ? `-${AvanyxPricingEngine.formatCurrency(it.discount, currency)}` : '—'}
           </td>
           <td style="padding: 10px; text-align: ${isRtl ? 'left' : 'right'}; font-weight: 700; color: #0F172A;">
-            ${VelcoraPricingEngine.formatCurrency(lineTotal, currency)}
+            ${AvanyxPricingEngine.formatCurrency(lineTotal, currency)}
           </td>
         </tr>
       `;
@@ -796,7 +796,7 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
       <div class="logo-brand">${business.name}</div>
       <div style="color: #475569; margin-top: 4px; font-size: 12px;">${business.address || ''}</div>
       <div style="color: #64748B;">${rT('tel', 'Tel:')} ${business.phone || 'N/A'} | ${rT('email', 'Email:')} ${business.email || 'N/A'}</div>
-      ${business.taxNumber ? `<div style="color: #64748B; font-weight: 600;">${rT('tax_reg', 'Tax/VAT Reg:')} ${business.taxNumber}</div>` : ''}
+      ${business.taxNumber && business.taxNumber.trim() !== '' && business.taxNumber !== 'US-TAX-892182' && business.taxNumber !== 'VAT-US-98234110' ? `<div style="color: #64748B; font-weight: 600;">${rT('tax_reg', 'Tax/VAT Reg:')} ${business.taxNumber}</div>` : ''}
     </div>
     <div style="text-align: ${isRtl ? 'left' : 'right'};">
       <div class="invoice-tag">${rT('invoice', 'INVOICE')}</div>
@@ -840,13 +840,13 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
     <div class="totals-box">
       <div class="total-row">
         <span>${rT('subtotal', 'Subtotal:')}</span>
-        <span style="font-weight: 600;">${VelcoraPricingEngine.formatCurrency(sale.subtotal, currency)}</span>
+        <span style="font-weight: 600;">${AvanyxPricingEngine.formatCurrency(sale.subtotal, currency)}</span>
       </div>
       ${
         sale.discountTotal > 0
           ? `<div class="total-row" style="color: #E11D48;">
               <span>${rT('discount', 'Total Discount:')}</span>
-              <span style="font-weight: 600;">-${VelcoraPricingEngine.formatCurrency(sale.discountTotal, currency)}</span>
+              <span style="font-weight: 600;">-${AvanyxPricingEngine.formatCurrency(sale.discountTotal, currency)}</span>
             </div>`
           : ''
       }
@@ -854,16 +854,16 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
         sale.taxTotal > 0
           ? `<div class="total-row">
               <span>${rT('tax', 'Tax / VAT:')}</span>
-              <span style="font-weight: 600;">${VelcoraPricingEngine.formatCurrency(sale.taxTotal, currency)}</span>
+              <span style="font-weight: 600;">${AvanyxPricingEngine.formatCurrency(sale.taxTotal, currency)}</span>
             </div>`
           : ''
       }
       <div class="grand-total-row">
         <span>${rT('amount_due', 'Amount Due:')}</span>
-        <span>${VelcoraPricingEngine.formatCurrency(sale.grandTotal, currency)}</span>
+        <span>${AvanyxPricingEngine.formatCurrency(sale.grandTotal, currency)}</span>
       </div>
       <div style="font-size: 11px; color: #64748B; margin-top: 8px; border-top: 1px dashed #CBD5E1; padding-top: 6px; text-align: ${isRtl ? 'right' : 'left'};">
-        ${rT('payment', 'Payment:')} ${sale.payments.map(p => `${rT(p.method.toLowerCase(), p.method.replace('_', ' ')).toUpperCase()} (${VelcoraPricingEngine.formatCurrency(p.amount, currency)})`).join(', ')}
+        ${rT('payment', 'Payment:')} ${sale.payments.map(p => `${rT(p.method.toLowerCase(), p.method.replace('_', ' ')).toUpperCase()} (${AvanyxPricingEngine.formatCurrency(p.amount, currency)})`).join(', ')}
       </div>
     </div>
   </div>
@@ -871,7 +871,7 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
   <div class="footer">
     <div style="text-align: ${isRtl ? 'right' : 'left'};">
       <div>${footerMessage}</div>
-      <div style="font-size: 10px; color: #94A3B8; margin-top: 2px;">${rT('powered_by', 'Powered by Velcora Intelligence ERP')}</div>
+      <div style="font-size: 10px; color: #94A3B8; margin-top: 2px;">${rT('powered_by', 'Powered by Avanyx Intelligence ERP')}</div>
     </div>
     <div style="display: flex; gap: 15px; align-items: center; justify-content: flex-end;">
       <div style="text-align: center;">
@@ -889,30 +889,42 @@ export function generateA4InvoiceHtml(options: PrintReceiptOptions): string {
 }
 
 /**
- * Triggers clean print job in an isolated hidden iframe
+ * Triggers clean print job in an isolated print frame optimized for desktop and mobile devices (iOS Safari & Android Chrome)
  */
 export function executePrintJob(htmlContent: string): void {
   // Remove any previous print iframes
-  const existingFrame = document.getElementById('velcora-print-iframe');
+  const existingFrame = document.getElementById('avanyx-print-iframe');
   if (existingFrame) {
     existingFrame.remove();
   }
 
+  // Check if we are on a mobile device
+  const isMobile = typeof navigator !== 'undefined' && (
+    /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent) ||
+    (typeof window !== 'undefined' && window.innerWidth <= 768)
+  );
+
   const iframe = document.createElement('iframe');
-  iframe.id = 'velcora-print-iframe';
+  iframe.id = 'avanyx-print-iframe';
+  
+  // Mobile & desktop compliant styling:
+  // On iOS Safari and Android Chrome, zero-dimension or visibility:hidden iframes get ignored by the browser's print engine.
+  // Using full viewport with near-zero opacity & pointer-events: none ensures the native print preview sheet launches reliably.
   iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
+  iframe.style.top = '0';
+  iframe.style.left = '0';
+  iframe.style.width = '100vw';
+  iframe.style.height = '100vh';
   iframe.style.border = '0';
-  iframe.style.visibility = 'hidden';
+  iframe.style.opacity = '0.001';
+  iframe.style.pointerEvents = 'none';
+  iframe.style.zIndex = '999999';
 
   document.body.appendChild(iframe);
 
   const doc = iframe.contentWindow?.document;
   if (!doc) {
-    // Fallback to popout window if iframe document not accessible
+    // Fallback to popout window if iframe document is not accessible
     const popout = window.open('', '_blank', 'width=450,height=700');
     if (popout) {
       popout.document.open();
@@ -921,7 +933,7 @@ export function executePrintJob(htmlContent: string): void {
       popout.focus();
       setTimeout(() => {
         popout.print();
-      }, 350);
+      }, isMobile ? 500 : 350);
     }
     return;
   }
@@ -930,10 +942,46 @@ export function executePrintJob(htmlContent: string): void {
   doc.write(htmlContent);
   doc.close();
 
-  iframe.contentWindow?.focus();
-  setTimeout(() => {
-    iframe.contentWindow?.print();
-  }, 400);
+  const triggerPrint = () => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch (e) {
+      console.warn('Print iframe execution failed, falling back to popup window:', e);
+      const popout = window.open('', '_blank', 'width=450,height=700');
+      if (popout) {
+        popout.document.open();
+        popout.document.write(htmlContent);
+        popout.document.close();
+        popout.focus();
+        setTimeout(() => {
+          popout.print();
+        }, 400);
+      }
+    } finally {
+      // Clean up iframe after a safe delay
+      setTimeout(() => {
+        try {
+          if (document.getElementById('avanyx-print-iframe')) {
+            iframe.remove();
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      }, 4000);
+    }
+  };
+
+  // Wait for resources (SVGs, fonts, styles) to finish loading
+  if (iframe.contentWindow?.document.readyState === 'complete') {
+    setTimeout(triggerPrint, isMobile ? 400 : 250);
+  } else {
+    iframe.onload = () => {
+      setTimeout(triggerPrint, isMobile ? 400 : 250);
+    };
+    // Fallback timeout in case onload does not fire
+    setTimeout(triggerPrint, isMobile ? 600 : 450);
+  }
 }
 
 /**
@@ -981,13 +1029,13 @@ export function downloadReceiptAsText(options: PrintReceiptOptions): void {
   });
 
   txt += dash;
-  txt += `${rT('subtotal', 'Subtotal:')}                     ${VelcoraPricingEngine.formatCurrency(sale.subtotal, currency)}\n`;
-  if (sale.discountTotal > 0) txt += `${rT('discount', 'Discount:')}                    -${VelcoraPricingEngine.formatCurrency(sale.discountTotal, currency)}\n`;
-  if (sale.taxTotal > 0) txt += `${rT('tax', 'Tax/VAT:')}                      ${VelcoraPricingEngine.formatCurrency(sale.taxTotal, currency)}\n`;
+  txt += `${rT('subtotal', 'Subtotal:')}                     ${AvanyxPricingEngine.formatCurrency(sale.subtotal, currency)}\n`;
+  if (sale.discountTotal > 0) txt += `${rT('discount', 'Discount:')}                    -${AvanyxPricingEngine.formatCurrency(sale.discountTotal, currency)}\n`;
+  if (sale.taxTotal > 0) txt += `${rT('tax', 'Tax/VAT:')}                      ${AvanyxPricingEngine.formatCurrency(sale.taxTotal, currency)}\n`;
   txt += line;
-  txt += `${rT('grand_total', 'GRAND TOTAL:')}                  ${VelcoraPricingEngine.formatCurrency(sale.grandTotal, currency)}\n`;
+  txt += `${rT('grand_total', 'GRAND TOTAL:')}                  ${AvanyxPricingEngine.formatCurrency(sale.grandTotal, currency)}\n`;
   txt += line;
-  txt += `${rT('payment', 'Payment:')} ${sale.payments.map(p => `${rT(p.method.toLowerCase(), p.method.replace('_', ' ')).toUpperCase()}: ${VelcoraPricingEngine.formatCurrency(p.amount, currency)}`).join(', ')}\n`;
+  txt += `${rT('payment', 'Payment:')} ${sale.payments.map(p => `${rT(p.method.toLowerCase(), p.method.replace('_', ' ')).toUpperCase()}: ${AvanyxPricingEngine.formatCurrency(p.amount, currency)}`).join(', ')}\n`;
   
   const footerMessage = business.receiptFooter && business.receiptFooter.trim() !== 'Thank you for your business! Please visit again.'
     ? business.receiptFooter

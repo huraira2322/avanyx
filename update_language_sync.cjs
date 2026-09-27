@@ -13,7 +13,7 @@ const newSelect = `onChange={e => {
               }}`;
 
 // Wait, the prompt says "Ensure language state persists across refreshes and logins". LocalStorage satisfies both for a single browser.
-// But if they mean cloud persist, we can do it. VelcoraContext has a function to update activeBusiness. Wait, VelcoraContext had setLocale which synced to Firebase! I removed that.
+// But if they mean cloud persist, we can do it. AvanyxContext has a function to update activeBusiness. Wait, AvanyxContext had setLocale which synced to Firebase! I removed that.
 // Let's add it back in CloudAndSettings.tsx!
 // Is there a function to update the business?
 

@@ -1,5 +1,5 @@
 /**
- * Velcora Centralized DeepSeek AI Service
+ * Avanyx Centralized DeepSeek AI Service
  * Single source of truth for all DeepSeek API calls.
  * SECURITY: API key is server-side only (DEEPSEEK_API_KEY env var).
  */
@@ -14,11 +14,11 @@ export interface DeepSeekModelConfig {
 }
 
 export const DEEPSEEK_MODELS: Record<DeepSeekModelId, DeepSeekModelConfig> = {
-  'deepseek-v4-flash': { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', supportsThinking: true, maxContextTokens: 128000 },
-  'deepseek-v4-pro': { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', supportsThinking: true, maxContextTokens: 128000 },
+  'deepseek-v4-flash': { id: 'deepseek-v4-flash', label: 'Avanyx Neural Flash', supportsThinking: true, maxContextTokens: 128000 },
+  'deepseek-v4-pro': { id: 'deepseek-v4-pro', label: 'Avanyx Neural Pro', supportsThinking: true, maxContextTokens: 128000 },
 };
 
-export type VelcoraEngineKind = 'NORMAL_CHAT' | 'FLASH' | 'OMNI' | 'FINANCIAL_AGENT';
+export type AvanyxEngineKind = 'NORMAL_CHAT' | 'FLASH' | 'OMNI' | 'FINANCIAL_AGENT';
 
 export interface EngineRoute {
   model: DeepSeekModelId;
@@ -28,19 +28,19 @@ export interface EngineRoute {
   description: string;
 }
 
-export const ENGINE_ROUTES: Record<VelcoraEngineKind, EngineRoute> = {
+export const ENGINE_ROUTES: Record<AvanyxEngineKind, EngineRoute> = {
   NORMAL_CHAT: { model: 'deepseek-v4-flash', thinking: false, reasoningEffort: 'off', temperature: 0.7, description: 'Fast everyday AI.' },
   FLASH: { model: 'deepseek-v4-flash', thinking: true, reasoningEffort: 'medium', temperature: 0.5, description: 'Fast reasoning for business analysis.' },
   OMNI: { model: 'deepseek-v4-pro', thinking: true, reasoningEffort: 'high', temperature: 0.6, description: 'Advanced reasoning for complex business intelligence.' },
   FINANCIAL_AGENT: { model: 'deepseek-v4-pro', thinking: true, reasoningEffort: 'high', temperature: 0.2, description: 'Financial analysis. NEVER invents numbers.' },
 };
 
-const UI_ENGINE_MAP: Record<string, VelcoraEngineKind> = {
-  chat: 'NORMAL_CHAT', 'velcora-chat': 'NORMAL_CHAT',
-  flash: 'FLASH', 'velcora-neural-flash': 'FLASH',
-  omni: 'OMNI', 'velcora-omni': 'OMNI',
-  axiom: 'FINANCIAL_AGENT', 'velcora-axiom': 'FINANCIAL_AGENT', 'velcora-financial': 'FINANCIAL_AGENT',
-  'financial-axiom': 'FINANCIAL_AGENT', 'flash-omni-1': 'FLASH', 'velcora-brain': 'OMNI',
+const UI_ENGINE_MAP: Record<string, AvanyxEngineKind> = {
+  chat: 'NORMAL_CHAT', 'avanyx-chat': 'NORMAL_CHAT',
+  flash: 'FLASH', 'avanyx-neural-flash': 'FLASH',
+  omni: 'OMNI', 'avanyx-omni': 'OMNI',
+  axiom: 'FINANCIAL_AGENT', 'avanyx-axiom': 'FINANCIAL_AGENT', 'avanyx-financial': 'FINANCIAL_AGENT',
+  'financial-axiom': 'FINANCIAL_AGENT', 'flash-omni-1': 'FLASH', 'avanyx-brain': 'OMNI',
 };
 
 export function resolveEngineRoute(uiEngineId: string): EngineRoute {

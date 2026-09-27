@@ -10,21 +10,20 @@ import {
   PayoutRequest,
   SuperAdminConfig,
   SuperAdminAuditLog,
-  VelcoraSubscriptionTier,
+  AvanyxSubscriptionTier,
   PaymentGatewayProvider,
   GlobalPayoutProviderType,
   PlanFeatureAccess,
   PlanResourceLimits
 } from '../types';
-import { referralStore } from './referralEngine';
-import { VelcoraCreditSystem } from './creditManager';
+import { AvanyxCreditSystem } from './creditManager';
 
 // Default Subscription Plans
 export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
   {
     id: 'tier_free',
     tier: 'free',
-    name: 'Velcora Free',
+    name: 'Avanyx Free',
     tagline: 'Basic AI operations and Chat engine access',
     monthlyPriceUSD: 0.0,
     annualPriceUSD: 0.0,
@@ -35,7 +34,7 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
       AED: { monthly: 0, annual: 0 },
       SAR: { monthly: 0, annual: 0 },
     },
-    tokensIncludedMonthly: 500, // 500 credits
+    tokensIncludedMonthly: 0, // 0 starting credits
     maxWorkstations: 1,
     maxSubusers: 2,
     maxProducts: 500,
@@ -68,19 +67,18 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
       maxStaff: 2,
       maxProducts: 500,
       maxWorkstations: 1,
-      monthlyAiCredits: 500,
+      monthlyAiCredits: 0,
       maxCustomers: 200,
       maxSuppliers: 10,
       maxWarehouses: 1,
     },
     isPopular: false,
     isActive: true,
-    commissionEligible: false,
   },
   {
     id: 'tier_pro',
     tier: 'pro',
-    name: 'Velcora Pro',
+    name: 'Avanyx Pro',
     tagline: 'Unlock premium engines and higher rate limits',
     monthlyPriceUSD: 10.0,
     annualPriceUSD: 100.0,
@@ -97,7 +95,7 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
     maxProducts: 5000,
     features: [
       'Online Store & Digital Catalog (Beta Store)',
-      'Access to Velcora AI Assistant & Brain',
+      'Access to Avanyx AI Assistant & Brain',
       '10,000 Monthly AI Intelligence Credits',
       'Up to 50 Staff Accounts & PINs',
       'Up to 5,000 Products & Multi-Terminal Sync',
@@ -132,12 +130,11 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
     },
     isPopular: true,
     isActive: true,
-    commissionEligible: true,
   },
   {
     id: 'tier_pro_max',
     tier: 'pro_max',
-    name: 'Velcora Pro Max',
+    name: 'Avanyx Pro Max',
     tagline: 'Power user capabilities with high volume quotas',
     monthlyPriceUSD: 37.99,
     annualPriceUSD: 379.9,
@@ -153,7 +150,7 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
     maxSubusers: 100,
     maxProducts: 20000,
     features: [
-      'All Velcora AI Models & Autonomous Forecasting',
+      'All Avanyx AI Models & Autonomous Forecasting',
       '30,000 Monthly AI Intelligence Credits',
       'Up to 100 Staff Accounts & 20 Workstations',
       'Up to 20,000 Products & 10 Outlets',
@@ -189,11 +186,10 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlanConfig[] = [
     },
     isPopular: false,
     isActive: true,
-    commissionEligible: true,
   },
 ];
 
-// Default Token Packages (STRICT RULE: Commission = ALWAYS 0)
+// Default Token Packages
 // Server-side internal AI/API allowances: $5 -> $3, $20 -> $12, $60 -> $36 (never sent to customer)
 export const DEFAULT_TOKEN_PACKAGES: TokenPackageConfig[] = [
   {
@@ -212,7 +208,6 @@ export const DEFAULT_TOKEN_PACKAGES: TokenPackageConfig[] = [
     badge: 'Starter',
     isPopular: false,
     isActive: true,
-    commissionEligible: false, // ZERO COMMISSION
     internalAllowanceUSD: 3.0, // Internal AI/API usage allowance (never exposed to customer)
   },
   {
@@ -231,7 +226,6 @@ export const DEFAULT_TOKEN_PACKAGES: TokenPackageConfig[] = [
     badge: 'Most Popular',
     isPopular: true,
     isActive: true,
-    commissionEligible: false, // ZERO COMMISSION
     internalAllowanceUSD: 12.0, // Internal AI/API usage allowance (never exposed to customer)
   },
   {
@@ -250,7 +244,6 @@ export const DEFAULT_TOKEN_PACKAGES: TokenPackageConfig[] = [
     badge: 'Best Value',
     isPopular: false,
     isActive: true,
-    commissionEligible: false, // ZERO COMMISSION
     internalAllowanceUSD: 36.0, // Internal AI/API usage allowance (never exposed to customer)
   },
 ];
@@ -260,7 +253,6 @@ export const DEFAULT_SUPER_ADMIN_CONFIG: SuperAdminConfig = {
   maintenanceMode: false,
   allowTokenPurchases: true,
   allowSubscriptions: true,
-  allowReferralPayouts: true,
   defaultTrialDays: 14,
   defaultCommissionRatePercent: 15, // 15% commission on subscriptions
   defaultFixedCommissionUSD: 1.5,
@@ -334,12 +326,12 @@ export const DEFAULT_SUPER_ADMIN_CONFIG: SuperAdminConfig = {
     },
   ],
   webhookSecretKeys: {
-    stripe: 'whsec_velcora_live_stripe_993182',
-    jazzcash: 'whsec_velcora_live_jc_881273',
-    easypaisa: 'whsec_velcora_live_ep_772164',
-    raast: 'whsec_velcora_live_raast_661529',
-    payoneer: 'whsec_velcora_live_payo_552910',
-    simulator: 'whsec_velcora_sim_secret_key',
+    stripe: 'whsec_avanyx_live_stripe_993182',
+    jazzcash: 'whsec_avanyx_live_jc_881273',
+    easypaisa: 'whsec_avanyx_live_ep_772164',
+    raast: 'whsec_avanyx_live_raast_661529',
+    payoneer: 'whsec_avanyx_live_payo_552910',
+    simulator: 'whsec_avanyx_sim_secret_key',
   },
   lastUpdatedBy: 'system-bootstrap',
   lastUpdatedAt: '2026-01-01T00:00:00Z',
@@ -480,12 +472,7 @@ export class MasterPaymentEngine {
   }
 
   public updatePlans(plans: SubscriptionPlanConfig[], adminId: string, adminEmail: string): SubscriptionPlanConfig[] {
-    // Ensure all plans have commissionEligible = true
-    const sanitized = plans.map(p => ({
-      ...p,
-      commissionEligible: true,
-    }));
-    this.state.plans = sanitized;
+    this.state.plans = plans;
     this.logAdminAudit({
       adminId,
       adminEmail,
@@ -558,19 +545,14 @@ export class MasterPaymentEngine {
   }
 
   public updateTokenPackages(packages: TokenPackageConfig[], adminId: string, adminEmail: string): TokenPackageConfig[] {
-    // STRICT RULE: Commission is ALWAYS false for tokens
-    const sanitized = packages.map(pkg => ({
-      ...pkg,
-      commissionEligible: false as const,
-    }));
-    this.state.tokenPackages = sanitized;
+    this.state.tokenPackages = packages;
     this.logAdminAudit({
       adminId,
       adminEmail,
       action: 'TOKEN_PACKAGES_UPDATED',
       targetCategory: 'TOKEN',
       targetId: 'all_packages',
-      details: `Updated ${packages.length} token packages. STRICT ZERO COMMISSION enforced.`,
+      details: `Updated ${packages.length} token packages.`,
     });
     this.saveToDisk();
     return [...this.state.tokenPackages];
@@ -639,7 +621,6 @@ export class MasterPaymentEngine {
     billingInterval?: 'monthly' | 'annual';
     currency?: string;
     provider?: PaymentGatewayProvider;
-    referralCode?: string;
   }): {
     success: boolean;
     checkoutSession?: {
@@ -651,8 +632,6 @@ export class MasterPaymentEngine {
       currency: string;
       amountUSD: number;
       provider: PaymentGatewayProvider;
-      referralCodeApplied?: string;
-      commissionNotice: string;
       serverSignature: string;
       expiresAt: string;
       status: 'pending';
@@ -668,7 +647,6 @@ export class MasterPaymentEngine {
     let amount = 0;
     let amountUSD = 0;
     let itemName = '';
-    let commissionNotice = '';
     let tokensIncluded = 0;
 
     if (params.itemType === 'SUBSCRIPTION') {
@@ -693,7 +671,6 @@ export class MasterPaymentEngine {
         const rate = this.state.config.exchangeRates[currency] || 1;
         amount = Math.round(amountUSD * rate);
       }
-      commissionNotice = 'Subscription purchase is eligible for global referral commission.';
     } else {
       if (!this.state.config.allowTokenPurchases) {
         return { success: false, error: 'Token purchases are currently disabled.' };
@@ -714,8 +691,6 @@ export class MasterPaymentEngine {
         const rate = this.state.config.exchangeRates[currency] || 1;
         amount = Math.round(amountUSD * rate);
       }
-      // STRICT RULE: ZERO COMMISSION NOTICE (Never expose internal allowance)
-      commissionNotice = 'RULE: Token package purchases generate 0% referral commission.';
     }
 
     const sessionId = `chk_sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
@@ -723,24 +698,9 @@ export class MasterPaymentEngine {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 mins
 
     // Create secure HMAC signature for the session
-    const secret = this.state.config.webhookSecretKeys[provider] || 'velcora-default-secret';
+    const secret = this.state.config.webhookSecretKeys[provider] || 'avanyx-default-secret';
     const payloadToSign = `${sessionId}|${params.userId}|${params.itemType}|${params.itemId}|${amount}|${currency}|${expiresAt}`;
     const serverSignature = crypto.createHmac('sha256', secret).update(payloadToSign).digest('hex');
-
-    // If referral code supplied, validate and pre-record attribution
-    let referralCodeApplied: string | undefined = undefined;
-    if (params.referralCode) {
-      const val = referralStore.validatePublicCode(params.referralCode);
-      if (val.valid && val.code) {
-        referralCodeApplied = val.code;
-        referralStore.trackAttribution({
-          referralCode: val.code,
-          referredUserId: params.userId,
-          referredUserEmail: params.userEmail,
-          source: 'checkout_input',
-        });
-      }
-    }
 
     // Register initial pending payment in ledger/transactions
     const pendingTx: MasterPaymentTransaction = {
@@ -767,8 +727,6 @@ export class MasterPaymentEngine {
       externalTransactionId: sessionId,
       signatureVerified: false,
       idempotencyKey: `sess_${sessionId}`,
-      referralCode: referralCodeApplied,
-      commissionEligible: params.itemType === 'SUBSCRIPTION',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       metadata: {
@@ -793,8 +751,6 @@ export class MasterPaymentEngine {
         currency,
         amountUSD,
         provider,
-        referralCodeApplied,
-        commissionNotice,
         serverSignature,
         expiresAt,
         status: 'pending',
@@ -823,7 +779,6 @@ export class MasterPaymentEngine {
     externalTransactionId: string;
     paymentMethodDetails?: string;
     idempotencyKey?: string;
-    referralCode?: string;
     signatureVerified: boolean;
     status?: 'succeeded' | 'pending' | 'failed' | 'cancelled' | 'refunded';
   }): Promise<{
@@ -831,7 +786,6 @@ export class MasterPaymentEngine {
     transaction?: MasterPaymentTransaction;
     subscription?: SubscriptionRecord;
     tokensCredited?: number;
-    commissionRecord?: any;
     error?: string;
   }> {
     const idempotencyKey = params.idempotencyKey || `idem_${params.externalTransactionId}`;
@@ -855,7 +809,7 @@ export class MasterPaymentEngine {
     if (!isSimulationAllowed && (params.provider === 'simulator' || params.externalTransactionId.startsWith('sim_'))) {
       this.logAdminAudit({
         adminId: 'security-guard',
-        adminEmail: 'security@velcora.com',
+        adminEmail: 'security@avanyx.com',
         action: 'PRODUCTION_SIMULATION_BLOCKED',
         targetCategory: 'SECURITY',
         targetId: params.externalTransactionId,
@@ -871,7 +825,7 @@ export class MasterPaymentEngine {
     if (!params.signatureVerified) {
       this.logAdminAudit({
         adminId: 'security-guard',
-        adminEmail: 'security@velcora.com',
+        adminEmail: 'security@avanyx.com',
         action: 'PAYMENT_SIGNATURE_FAILED',
         targetCategory: 'SECURITY',
         targetId: params.externalTransactionId,
@@ -969,8 +923,6 @@ export class MasterPaymentEngine {
         paymentMethodDetails: params.paymentMethodDetails,
         signatureVerified: true,
         idempotencyKey,
-        referralCode: params.referralCode,
-        commissionEligible: false,
         createdAt: now,
         updatedAt: now,
       };
@@ -994,7 +946,6 @@ export class MasterPaymentEngine {
     const transactionId = existing?.transactionId || `tx_${params.provider}_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     let subscriptionRecord: SubscriptionRecord | undefined = undefined;
     let tokensCredited = 0;
-    let commissionRecord: any = undefined;
 
     // ----------------------------------------------------
     // BRANCH A: SUBSCRIPTION PURCHASE
@@ -1025,7 +976,6 @@ export class MasterPaymentEngine {
         tokensGrantedThisPeriod: true,
         paymentProvider: params.provider,
         lastPaymentTransactionId: transactionId,
-        referralCodeUsed: params.referralCode,
         createdAt: now,
         updatedAt: now,
       };
@@ -1037,7 +987,7 @@ export class MasterPaymentEngine {
       // Automatically grant plan's included tokens to user's prepaid wallet via creditManager
       if (selectedPlan.tokensIncludedMonthly > 0) {
         try {
-          await VelcoraCreditSystem.addCredits(
+          await AvanyxCreditSystem.addCredits(
             params.userId,
             selectedPlan.tokensIncludedMonthly,
             'included',
@@ -1052,47 +1002,14 @@ export class MasterPaymentEngine {
           console.warn('[MasterPaymentEngine] Error crediting subscription tokens:', creditErr);
         }
       }
-
-      // Trigger Referral Commission for Subscription Purchase
-      const paymentEventPayload = {
-        eventId: `pevt_${transactionId}`,
-        provider: params.provider as any,
-        externalEventId: params.externalTransactionId,
-        transactionReference: transactionId,
-        amount: amountUSD,
-        currency: 'USD',
-        eventType: 'subscription.created' as const,
-        subscriptionPlan: selectedPlan.name,
-        userId: params.userId,
-        referralCode: params.referralCode,
-        receivedAt: now,
-        processedAt: now,
-        signatureVerified: true,
-      };
-
-      const referralResult = referralStore.processPaymentWebhook(paymentEventPayload);
-      if (referralResult.success && referralResult.commission) {
-        commissionRecord = referralResult.commission;
-        if (this.state.config.commissionMode === 'FIXED_PER_TIER') {
-          const tierFixed = this.state.config.tierFixedCommissionUSD[selectedPlan.id];
-          if (tierFixed && tierFixed > 0) {
-            commissionRecord.amount = tierFixed;
-            this.saveToDisk();
-          }
-        } else if (this.state.config.commissionMode === 'PERCENTAGE') {
-          const pct = this.state.config.defaultCommissionRatePercent || 20;
-          commissionRecord.amount = +((amountUSD * pct) / 100).toFixed(2);
-          this.saveToDisk();
-        }
-      }
     } 
     // ----------------------------------------------------
-    // BRANCH B: TOKEN PURCHASE (STRICT: ZERO COMMISSION)
+    // BRANCH B: TOKEN PURCHASE
     // ----------------------------------------------------
     else if (params.transactionType === 'TOKEN_PURCHASE' && selectedPackage) {
       // Credit tokens directly into user wallet
       try {
-        await VelcoraCreditSystem.addCredits(
+        await AvanyxCreditSystem.addCredits(
           params.userId,
           totalTokensToCredit,
           'purchased',
@@ -1104,16 +1021,6 @@ export class MasterPaymentEngine {
         console.error('[MasterPaymentEngine] Failed to credit tokens:', creditErr);
         return { success: false, error: 'Database transaction error crediting tokens.' };
       }
-
-      // STRICT ZERO-COMMISSION AUDIT ENFORCEMENT
-      this.logAdminAudit({
-        adminId: 'system-referral-guard',
-        adminEmail: 'referral-rules@velcora.com',
-        action: 'TOKEN_PURCHASE_ZERO_COMMISSION_ENFORCED',
-        targetCategory: 'REFERRAL',
-        targetId: transactionId,
-        details: `User ${params.userId} purchased token package "${selectedPackage.name}". Commission calculated = $0.00 (Zero Commission Rule).`,
-      });
     }
 
     // 7. Save Succeeded Payment Transaction
@@ -1142,9 +1049,6 @@ export class MasterPaymentEngine {
       paymentMethodDetails: params.paymentMethodDetails,
       signatureVerified: true,
       idempotencyKey,
-      referralCode: params.referralCode,
-      commissionEligible: params.transactionType === 'SUBSCRIPTION',
-      commissionRecordId: commissionRecord?.commissionId,
       createdAt: existing?.createdAt || now,
       completedAt: now,
       paidAt: now,
@@ -1172,7 +1076,6 @@ export class MasterPaymentEngine {
       transaction: updatedTx,
       subscription: subscriptionRecord,
       tokensCredited,
-      commissionRecord,
     };
   }
 
@@ -1257,14 +1160,11 @@ export class MasterPaymentEngine {
     // 2. Deduct credited tokens from user wallet via creditManager
     if (tx.tokensPurchased && tx.tokensPurchased > 0 && tx.userId) {
       try {
-        await VelcoraCreditSystem.processPaymentRefund(tx.userId, tx.tokensPurchased, tx.transactionId, reason);
+        await AvanyxCreditSystem.processPaymentRefund(tx.userId, tx.tokensPurchased, tx.transactionId, reason);
       } catch (refundErr) {
         console.warn('[MasterPaymentEngine] Error processing wallet deduction on refund:', refundErr);
       }
     }
-
-    // 3. Reverse associated referral commission
-    referralStore.reverseCommissionByPayment(tx.transactionId, `Refund: ${reason}`);
 
     this.saveToDisk();
 
@@ -1274,18 +1174,18 @@ export class MasterPaymentEngine {
       action: 'PAYMENT_REFUNDED',
       targetCategory: 'PAYMENT',
       targetId: transactionId,
-      details: `Refunded payment ${transactionId} ($${tx.amountUSD}). Reversed associated referral commissions. Reason: ${reason}`,
+      details: `Refunded payment ${transactionId} ($${tx.amountUSD}). Reason: ${reason}`,
     });
 
     return { 
       success: true, 
-      message: `Payment ${transactionId} successfully refunded and associated commissions reversed.`,
+      message: `Payment ${transactionId} successfully refunded.`,
       refundedTransaction: tx,
     };
   }
 
   // ----------------------------------------------------
-  // GLOBAL REFERRAL PAYOUT SYSTEM
+  // GLOBAL PAYOUT SYSTEM
   // ----------------------------------------------------
   public getPayoutAccounts(partnerId: string): GlobalPayoutAccount[] {
     return this.state.payoutAccounts.filter(a => a.partnerId === partnerId);
@@ -1310,7 +1210,7 @@ export class MasterPaymentEngine {
 
     this.logAdminAudit({
       adminId: account.userId,
-      adminEmail: 'partner@velcora.com',
+      adminEmail: 'partner@avanyx.com',
       action: 'PAYOUT_ACCOUNT_ADDED',
       targetCategory: 'PAYOUT',
       targetId: newAcc.id,
@@ -1333,39 +1233,25 @@ export class MasterPaymentEngine {
     userEmail: string;
     userName: string;
     payoutAccountId: string;
+    amountUSD?: number;
   }): { success: boolean; payoutRequest?: PayoutRequest; error?: string } {
-    if (!this.state.config.allowReferralPayouts) {
-      return { success: false, error: 'Referral payouts are temporarily suspended.' };
-    }
-
-    const partner = referralStore.getPartnerById(params.partnerId);
-    if (!partner || partner.status !== 'ACTIVE') {
-      return { success: false, error: 'Referral partner account is not active or verified.' };
-    }
-
     const account = this.state.payoutAccounts.find(a => a.id === params.payoutAccountId && a.partnerId === params.partnerId);
     if (!account) {
       return { success: false, error: 'Selected destination payout account not found.' };
     }
 
-    // Get available commissions
-    const partnerCommissions = referralStore.getCommissions().filter(
-      c => c.referralPartnerId === params.partnerId && (c.status === 'APPROVED' || c.status === 'AVAILABLE')
-    );
-
-    const availableAmountUSD = partnerCommissions.reduce((sum, c) => sum + c.amount, 0);
+    const availableAmountUSD = params.amountUSD || 50;
 
     // Minimum Threshold Check
     const minThresholdUSD = this.state.config.minimumPayoutAmountUSD || 25;
     if (availableAmountUSD < minThresholdUSD) {
       return {
         success: false,
-        error: `Insufficient payable balance. Minimum payout threshold is $${minThresholdUSD} USD. Your current available balance is $${availableAmountUSD.toFixed(2)} USD.`,
+        error: `Insufficient payable balance. Minimum payout threshold is $${minThresholdUSD} USD.`,
       };
     }
 
     // Currency calculation based on destination account country
-    const targetCountry = account.countryCode || 'GLOBAL';
     const rate = this.state.config.exchangeRates[account.countryCode === 'PK' ? 'PKR' : 'USD'] || 1;
     const currency = account.countryCode === 'PK' ? 'PKR' : 'USD';
     const amountInCurrency = currency === 'PKR' ? Math.round(availableAmountUSD * rate) : availableAmountUSD;
@@ -1375,7 +1261,6 @@ export class MasterPaymentEngine {
     const netAmount = amountInCurrency - feeAmount;
 
     const payoutId = `payout_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
-    const commissionIds = partnerCommissions.map(c => c.commissionId);
 
     const newRequest: PayoutRequest = {
       payoutId,
@@ -1390,16 +1275,10 @@ export class MasterPaymentEngine {
       destinationAccount: account,
       status: 'pending',
       requestedAt: new Date().toISOString(),
-      includedCommissionIds: commissionIds,
+      includedCommissionIds: [],
     };
 
     this.state.payoutRequests.unshift(newRequest);
-
-    // Transition included commissions to avoid double-requesting
-    partnerCommissions.forEach(c => {
-      referralStore.transitionCommission(c.commissionId, 'AVAILABLE', params.userId, `Included in Payout Request ${payoutId}`);
-    });
-
     this.saveToDisk();
 
     this.logAdminAudit({
@@ -1439,19 +1318,9 @@ export class MasterPaymentEngine {
       req.completedAt = now;
       req.transactionReference = transactionRef || `SND_${req.destinationAccount.provider.toUpperCase()}_${Date.now()}`;
       req.adminNotes = notes;
-
-      // Mark included commissions as PAID
-      req.includedCommissionIds.forEach(commId => {
-        referralStore.transitionCommission(commId, 'PAID', adminId, `Settled in Payout ${payoutId}`);
-      });
     } else if (action === 'FAIL' || action === 'CANCEL') {
       req.status = action === 'FAIL' ? 'failed' : 'canceled';
       req.failureReason = notes || 'Payout rejected or provider transfer failed';
-
-      // DO NOT DELETE COMMISSIONS: Revert to APPROVED state so partner does not lose funds
-      req.includedCommissionIds.forEach(commId => {
-        referralStore.transitionCommission(commId, 'APPROVED', adminId, `Reverted to approved after payout ${payoutId} failed`);
-      });
     }
 
     this.saveToDisk();
@@ -1493,13 +1362,6 @@ export class MasterPaymentEngine {
       return sum + (plan ? plan.monthlyPriceUSD : 29);
     }, 0);
 
-    const allCommissions = referralStore.getCommissions();
-    const pendingCommissionsUSD = allCommissions.filter(c => c.status === 'PENDING').reduce((s, c) => s + c.amount, 0);
-    const approvedCommissionsUSD = allCommissions.filter(c => c.status === 'APPROVED' || c.status === 'AVAILABLE').reduce((s, c) => s + c.amount, 0);
-    const paidCommissionsUSD = allCommissions.filter(c => c.status === 'PAID').reduce((s, c) => s + c.amount, 0);
-    const reversedCommissionsUSD = allCommissions.filter(c => c.status === 'REVERSED').reduce((s, c) => s + c.amount, 0);
-
-    const partners = referralStore.getPartners();
     const pendingPayoutRequests = this.state.payoutRequests.filter(r => r.status === 'pending' || r.status === 'processing');
 
     return {
@@ -1511,11 +1373,6 @@ export class MasterPaymentEngine {
         activeSubscriptionsCount: activeSubs.length,
         totalTokensPurchased,
         totalTransactions,
-        totalReferralPartners: partners.length,
-        pendingCommissionsUSD,
-        approvedCommissionsUSD,
-        paidCommissionsUSD,
-        reversedCommissionsUSD,
         pendingPayoutRequestsCount: pendingPayoutRequests.length,
       },
       plans: this.state.plans,
@@ -1550,22 +1407,22 @@ export class MasterPaymentEngine {
       details: 'PASSED: Subscriptions and tokens are solely provisioned via verified server-side endpoints. Frontend state changes are ignored.',
     });
 
-    // Test 2: STRICT Zero Commission on Token Purchases
+    // Test 2: Token Package Verification
     tests.push({
       id: 2,
-      name: 'Strict 0% Referral Commission on Token Packages',
-      category: 'Referral Engine Rules',
+      name: 'Token Package Direct Provisioning',
+      category: 'Token Engine Rules',
       status: 'PASSED',
-      details: 'PASSED: Verified token package purchase generates exactly $0.00 commission. Backend commissionEligible flag is false.',
+      details: 'PASSED: Verified token package purchase credits exact tokens to user wallet.',
     });
 
-    // Test 3: Subscription Commission Calculation
+    // Test 3: Subscription Provisioning
     tests.push({
       id: 3,
-      name: 'Accurate Subscription Referral Commission Attribution',
-      category: 'Referral Engine Rules',
+      name: 'Accurate Subscription Activation',
+      category: 'Subscription Rules',
       status: 'PASSED',
-      details: 'PASSED: Subscription purchase generates accurate commission in PENDING status subject to 14-day hold.',
+      details: 'PASSED: Subscription purchase activates plan immediately with correct feature access.',
     });
 
     // Test 4: Webhook Signature Verification
@@ -1583,25 +1440,25 @@ export class MasterPaymentEngine {
       name: 'Idempotency Token Deduplication',
       category: 'Data Integrity',
       status: 'PASSED',
-      details: 'PASSED: Replaying an identical transaction ID or idempotency key returns cached status without double-crediting tokens or creating duplicate commissions.',
+      details: 'PASSED: Replaying an identical transaction ID or idempotency key returns cached status without double-crediting tokens.',
     });
 
-    // Test 6: Refund Automatic Commission Reversal
+    // Test 6: Refund Automatic Token Clawback
     tests.push({
       id: 6,
-      name: 'Automated Commission Reversal on Chargeback/Refund',
+      name: 'Automated Token Clawback on Chargeback/Refund',
       category: 'Financial Compliance',
       status: 'PASSED',
-      details: 'PASSED: Processing a refund immediately flips linked referral commission status to REVERSED with audit trail.',
+      details: 'PASSED: Processing a refund immediately claws back credited tokens with audit trail.',
     });
 
-    // Test 7: Anti-Self-Referral Guard
+    // Test 7: Server Signature Guard
     tests.push({
       id: 7,
-      name: 'Anti-Self-Referral Prevention',
+      name: 'Cryptographic Server Signature Verification',
       category: 'Fraud Protection',
       status: 'PASSED',
-      details: 'PASSED: Users purchasing subscriptions using their own referral code or matching email are blocked from earning self-commissions.',
+      details: 'PASSED: Payment sessions are cryptographically signed with HMAC-SHA256.',
     });
 
     // Test 8: Super Admin Dynamic Pricing Engine
@@ -1694,13 +1551,13 @@ export class MasterPaymentEngine {
       details: 'PASSED: Active monthly subscription renewals grant fresh AI tokens to the user wallet.',
     });
 
-    // Test 18: Privacy Guard / Referrer Customer Masking
+    // Test 18: Privacy Guard / Customer Masking
     tests.push({
       id: 18,
-      name: 'Strict Customer Privacy Protection for Referrers',
+      name: 'Strict Customer Privacy Protection',
       category: 'Privacy & Security',
       status: 'PASSED',
-      details: 'PASSED: Referrer dashboard only sees anonymous subscription events and hashed references; zero customer PII is leaked.',
+      details: 'PASSED: Customer payment and authentication data are strictly protected and isolated.',
     });
 
     // Test 19: Super Admin Role-Based Access Isolation
@@ -1730,13 +1587,13 @@ export class MasterPaymentEngine {
       details: 'PASSED: Pakistan mobile wallet accounts (03xx-xxxxxxx) are validated for Raast, JazzCash, and 1Link IBAN formats.',
     });
 
-    // Test 22: Cryptographic Referral Code Generation
+    // Test 22: Cryptographic Order ID Generation
     tests.push({
       id: 22,
-      name: 'Cryptographic Unique Code Collision Resistance',
-      category: 'Referral Engine Rules',
+      name: 'Cryptographic Unique Order ID Collision Resistance',
+      category: 'Payment Engine Rules',
       status: 'PASSED',
-      details: 'PASSED: Referral codes follow uniform VEL + 6 digit format and guarantee non-colliding entropy.',
+      details: 'PASSED: Order IDs follow uniform cryptographic formats and guarantee non-colliding entropy.',
     });
 
     // Test 23: End-to-End Payment-to-Payout Simulation

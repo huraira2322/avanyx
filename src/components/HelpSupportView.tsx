@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import { useTranslation } from '../context/TranslationContext';
 import {
   HelpCircle, Keyboard, Printer, Barcode,
@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 export const HelpSupportView: React.FC = () => {
-  const { setCurrentModule } = useVelcora();
+  const { setCurrentModule, shortcuts, activeUser, activeSubuser } = useAvanyx();
   const { t } = useTranslation();
   const [activeFaq, setActiveFaq] = useState<number | null>(0);
   const [hardwareStatus, setHardwareStatus] = useState<{
@@ -20,17 +20,6 @@ export const HelpSupportView: React.FC = () => {
     scanner: 'ready',
     drawer: 'ready',
   });
-
-  const shortcuts = [
-    { key: 'F1', description: 'Fast Cash Checkout (Exact Tender / Quick Pay)' },
-    { key: 'F2', description: 'Card / EMV Terminal Checkout' },
-    { key: 'F3', description: 'Split Payment Modal' },
-    { key: 'Space', description: 'Focus Product Search Bar' },
-    { key: 'Esc', description: 'Clear Active Cart / Close Modal' },
-    { key: 'Enter', description: 'Add Highlighted Product / Confirm' },
-    { key: 'Ctrl + P', description: 'Print Last Receipt' },
-    { key: 'Ctrl + H', description: 'Hold / Park Current Cart' },
-  ];
 
   const faqs = [
     {
@@ -47,7 +36,7 @@ export const HelpSupportView: React.FC = () => {
     },
     {
       q: 'How does offline mode work if internet disconnects?',
-      a: 'Velcora POS caches your product catalog, prices, and tax rates locally in IndexedDB. Offline sales will queue automatically and sync to the cloud as soon as connection is restored.',
+      a: 'Avanyx POS caches your product catalog, prices, and tax rates locally in IndexedDB. Offline sales will queue automatically and sync to the cloud as soon as connection is restored.',
     },
   ];
 
@@ -61,7 +50,7 @@ export const HelpSupportView: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header Banner */}
-      <div className="velcora-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="avanyx-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -73,14 +62,14 @@ export const HelpSupportView: React.FC = () => {
             </span>
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Keyboard shortcuts, POS hardware testing diagnostics, staff training guides, and Velcora AI Assistant.
+            Keyboard shortcuts, POS hardware testing diagnostics, staff training guides, and Avanyx AI Assistant.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setCurrentModule('ask_velcora')}
-            className="velcora-btn-primary flex items-center gap-2"
+            onClick={() => setCurrentModule('ask_avanyx')}
+            className="avanyx-btn-primary flex items-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
             <span>{t('ask_ai')}</span>
@@ -92,34 +81,59 @@ export const HelpSupportView: React.FC = () => {
         {/* Left 2 Cols: Keyboard Shortcuts & Hardware Tests */}
         <div className="lg:col-span-2 space-y-6">
           {/* Keyboard Shortcuts Cheat-sheet */}
-          <div className="velcora-card p-5 space-y-4">
+          <div className="avanyx-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Keyboard className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                <h2 className="font-bold text-slate-900 dark:text-white text-base">POS Keyboard Shortcuts</h2>
+                <div>
+                  <h2 className="font-bold text-slate-900 dark:text-white text-base">Active POS Keyboard Shortcuts</h2>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Operator: <strong className="text-slate-800 dark:text-white">{activeSubuser?.name || activeUser?.name || 'Current User'}</strong>
+                  </p>
+                </div>
               </div>
-              <span className="text-xs text-slate-400">Speed up checkout 3x</span>
+              <button
+                type="button"
+                onClick={() => setCurrentModule('settings')}
+                className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 font-bold text-xs transition cursor-pointer"
+              >
+                Customize My Hotkeys
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {shortcuts.map((sc, i) => (
-                <div
-                  key={i}
-                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
-                >
-                  <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                    {sc.description}
-                  </span>
-                  <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-sm text-purple-600 dark:text-purple-400 shrink-0">
-                    {sc.key}
-                  </kbd>
-                </div>
-              ))}
+              {(shortcuts || []).map((sc, i) => {
+                const parts: string[] = [];
+                if (sc.ctrlKey) parts.push('Ctrl');
+                if (sc.altKey) parts.push('Alt');
+                if (sc.shiftKey) parts.push('Shift');
+                parts.push(sc.key === ' ' ? 'Space' : sc.key);
+                const comboStr = parts.join(' + ');
+
+                return (
+                  <div
+                    key={sc.id || i}
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {sc.label}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {sc.description}
+                      </div>
+                    </div>
+                    <kbd className="px-2.5 py-1 text-xs font-mono font-bold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg shadow-sm text-purple-600 dark:text-purple-400 shrink-0">
+                      {comboStr}
+                    </kbd>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {/* Hardware Diagnostics */}
-          <div className="velcora-card p-5 space-y-4">
+          <div className="avanyx-card p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Printer className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -185,7 +199,7 @@ export const HelpSupportView: React.FC = () => {
 
         {/* Right Col: FAQs & Quick Guides */}
         <div className="space-y-4">
-          <div className="velcora-card p-5 space-y-3">
+          <div className="avanyx-card p-5 space-y-3">
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               <h2 className="font-bold text-slate-900 dark:text-white text-sm">Staff FAQ & Knowledge</h2>
@@ -214,19 +228,19 @@ export const HelpSupportView: React.FC = () => {
             </div>
           </div>
 
-          <div className="velcora-card p-5 bg-gradient-to-br from-purple-900/20 to-indigo-900/10 border-purple-200 dark:border-purple-800/60 space-y-3">
+          <div className="avanyx-card p-5 bg-gradient-to-br from-purple-900/20 to-indigo-900/10 border-purple-200 dark:border-purple-800/60 space-y-3">
             <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-bold text-sm">
               <Sparkles className="w-4 h-4" />
               <span>Need Advanced Setup?</span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300">
-              Velcora AI Assistant can generate reports, adjust stock, write marketing copy, or analyze sales trends instantly.
+              Avanyx AI Assistant can generate reports, adjust stock, write marketing copy, or analyze sales trends instantly.
             </p>
             <button
-              onClick={() => setCurrentModule('ask_velcora')}
+              onClick={() => setCurrentModule('ask_avanyx')}
               className="w-full py-2 text-xs font-semibold rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center justify-center gap-1.5"
             >
-              <span>Open Velcora AI Chat</span>
+              <span>Open Avanyx AI Chat</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>

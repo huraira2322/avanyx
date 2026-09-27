@@ -8,7 +8,7 @@ import { runAdminSecurityAuditTests } from './admin-security-audit.test';
 
 async function main() {
   console.log('================================================================================');
-  console.log('⚡ VELCORA POS — FULL SYSTEM MASSIVE AUTOMATED TEST & VERIFICATION SUITE');
+  console.log('⚡ AVANYX POS — FULL SYSTEM MASSIVE AUTOMATED TEST & VERIFICATION SUITE');
   console.log('================================================================================\n');
 
   const startTime = Date.now();

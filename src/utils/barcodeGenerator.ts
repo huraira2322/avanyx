@@ -22,7 +22,7 @@ const CODE128_PATTERNS: string[] = [
 
 export function generateBarcodeSvg(value?: string | number | null, width: number = 220, height: number = 55): string {
   const str = value !== null && value !== undefined ? String(value) : '';
-  const safeVal = str.replace(/[^\x20-\x7E]/g, '') || 'VELCORA';
+  const safeVal = str.replace(/[^\x20-\x7E]/g, '') || 'AVANYX';
   
   // Code 128 Set B encoding
   const codeSequence: number[] = [104]; // Start Code B

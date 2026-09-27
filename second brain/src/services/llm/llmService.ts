@@ -38,7 +38,7 @@ export class BrainLLMService {
         const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
         for (const model of models) {
           try {
-            const prompt = `You are Velcora Second Brain knowledge extractor.
+            const prompt = `You are Avanyx Second Brain knowledge extractor.
 Analyze this business text and extract JSON:
 {
   "entities": ["list of key products, vendors, locations, or people"],

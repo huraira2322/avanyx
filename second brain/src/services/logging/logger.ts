@@ -19,7 +19,7 @@ export class BrainLogger {
       if (!fs.existsSync(this.logFilePath)) {
         fs.writeFileSync(
           this.logFilePath,
-          `# VELCORA SECOND BRAIN — AUDIT & TELEMETRY LOG\n\n| Timestamp | Level | Tenant | Module | Action | Details |\n|---|---|---|---|---|---|\n`,
+          `# AVANYX SECOND BRAIN — AUDIT & TELEMETRY LOG\n\n| Timestamp | Level | Tenant | Module | Action | Details |\n|---|---|---|---|---|---|\n`,
           'utf8'
         );
       }

@@ -3,7 +3,7 @@ import { retrievalService } from '../retrieval/retrievalService';
 import { logger } from '../logging/logger';
 
 export class ReasoningEngine {
-  // Generates structured context packages for Velcora's AI model to consume
+  // Generates structured context packages for Avanyx's AI model to consume
   public buildContext(options: QueryOptions): ReasoningContext {
     const start = Date.now();
     const result = retrievalService.retrieveContext(options);
@@ -28,7 +28,7 @@ export class ReasoningEngine {
       return '';
     }
 
-    let prompt = `\n--- [VELCORA SECOND BRAIN HISTORICAL GROUNDING] ---\n`;
+    let prompt = `\n--- [AVANYX SECOND BRAIN HISTORICAL GROUNDING] ---\n`;
     prompt += context.answerContext;
     if (context.contradictions.length > 0) {
       prompt += `\n\nNOTE: Acknowledge any active contradictions if discussing conflicting metrics or historical facts.\n`;

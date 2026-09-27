@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Brain, Sparkles, Search, Database, FileText, Share2, AlertTriangle,
   CheckCircle2, Plus, RefreshCw, Layers, ShieldCheck, Tag, Clock,
@@ -10,8 +10,8 @@ import { secondBrainClient, BrainHealthReport } from '../lib/secondBrainClient';
 import { getApiUrl } from '../lib/apiConfig';
 
 export const SecondBrainExplorer: React.FC = () => {
-  const { activeBusiness, authUser, activeUser } = useVelcora();
-  const tenantId = `velcora-${activeBusiness.id || 'default-store'}`;
+  const { activeBusiness, authUser, activeUser } = useAvanyx();
+  const tenantId = `avanyx-${activeBusiness.id || 'default-store'}`;
   const userId = authUser?.uid || activeUser?.id || 'default-user';
 
   const [loading, setLoading] = useState(false);
@@ -161,7 +161,7 @@ export const SecondBrainExplorer: React.FC = () => {
   };
 
   return (
-    <div id="velcora-second-brain-explorer" className="space-y-5">
+    <div id="avanyx-second-brain-explorer" className="space-y-5">
       {/* Top Banner & Quick Metrics */}
       <div className="bg-white dark:bg-[#0B101D] border border-slate-200 dark:border-[#19253F] rounded-3xl p-5 sm:p-6 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -172,7 +172,7 @@ export const SecondBrainExplorer: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-slate-900 dark:text-[#F8FAFC]">
-                  Velcora Second Brain & Knowledge Core
+                  Avanyx Second Brain & Knowledge Core
                 </h3>
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-blue-50 text-blue-700 dark:bg-cyan-500/10 dark:text-cyan-400 border border-blue-200 dark:border-cyan-500/30">
                   TENANT ISOLATED
@@ -357,7 +357,7 @@ export const SecondBrainExplorer: React.FC = () => {
               <Database className="w-8 h-8 text-slate-400 mx-auto" />
               <p className="text-sm font-bold text-slate-700 dark:text-[#94A3B8]">No memories matched your query</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Interact with Ask Velcora AI or use the "Add Memory" tab above to record durable business facts.
+                Interact with Ask Avanyx AI or use the "Add Memory" tab above to record durable business facts.
               </p>
             </div>
           ) : (

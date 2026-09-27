@@ -9,7 +9,7 @@ export interface BusinessAnalyticsInput {
   suppliers: Supplier[];
 }
 
-export class VelcoraBusinessBrainEngine {
+export class AvanyxBusinessBrainEngine {
   public static computeDiagnostics(input: BusinessAnalyticsInput): {
     metrics: {
       totalRevenue: number;
@@ -324,12 +324,12 @@ export class VelcoraBusinessBrainEngine {
 
   public static generateDailyBriefing(
     businessName: string,
-    metrics: ReturnType<typeof VelcoraBusinessBrainEngine.computeDiagnostics>['metrics'],
+    metrics: ReturnType<typeof AvanyxBusinessBrainEngine.computeDiagnostics>['metrics'],
     health: BusinessHealthEvaluation
   ): string {
     if (!health.hasData || health.overallScore === null) {
       return `
-=== DAILY VELCORA BUSINESS BRIEFING ===
+=== DAILY AVANYX BUSINESS BRIEFING ===
 Business: ${businessName}
 Health Score: No data available
 
@@ -343,7 +343,7 @@ OPERATIONAL STATUS:
     const topOpp = health.opportunities[0];
 
     return `
-=== DAILY VELCORA BUSINESS BRIEFING ===
+=== DAILY AVANYX BUSINESS BRIEFING ===
 Business: ${businessName}
 Health Score: ${health.overallScore}/100 [${health.overallScore >= 80 ? 'EXCELLENT' : health.overallScore >= 65 ? 'GOOD' : 'ATTENTION REQUIRED'}]
 

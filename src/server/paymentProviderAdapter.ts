@@ -14,7 +14,6 @@ export interface CheckoutSessionRequest {
   currency: string;
   amountUSD?: number;
   provider: PaymentGatewayProvider;
-  referralCode?: string;
   returnUrl?: string;
   successUrl?: string;
   cancelUrl?: string;
@@ -59,7 +58,7 @@ export class PaymentProviderAdapter {
   private safepayWebhookSecret = process.env.SAFEPAY_WEBHOOK_SECRET || '';
   private safepayEnv = process.env.SAFEPAY_ENVIRONMENT || 'sandbox';
 
-  private defaultSecret = process.env.PAYMENT_WEBHOOK_SECRET || 'velcora_prod_whsec_9938217';
+  private defaultSecret = process.env.PAYMENT_WEBHOOK_SECRET || 'avanyx_prod_whsec_9938217';
 
   // Get status of configured providers
   public getProviderStatus(): {

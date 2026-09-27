@@ -1,33 +1,33 @@
 /**
- * Velcora Centralized Model & Engine Registry
+ * Avanyx Centralized Model & Engine Registry
  *
- * Defines the unified, user-facing Velcora AI Engine identities,
+ * Defines the unified, user-facing Avanyx AI Engine identities,
  * their capabilities, and their mappings to backend neural models/providers.
  *
  * Directives:
- * - User-facing names represent Velcora's proprietary engine identity.
+ * - User-facing names represent Avanyx's proprietary engine identity.
  * - Provider names and raw model strings are abstracted from normal user conversations.
  * - Every engine defines fallback candidates, input/output capabilities, and resilience rules.
  */
 
-export type VelcoraEngineId =
+export type AvanyxEngineId =
   | 'chat'
   | 'omni'
   | 'flash'
   | 'axiom'
   | 'flash-omni-1'
   | 'financial-axiom'
-  | 'velcora-chat'
-  | 'velcora-neural-flash'
-  | 'velcora-axiom'
-  | 'velcora-omni'
-  | 'velcora-financial'
-  | 'velcora-prism-lite'
-  | 'velcora-prism'
-  | 'velcora-prism-pro'
-  | 'velcora-veyra-lite'
-  | 'velcora-veyra'
-  | 'velcora-veyra-pro';
+  | 'avanyx-chat'
+  | 'avanyx-neural-flash'
+  | 'avanyx-axiom'
+  | 'avanyx-omni'
+  | 'avanyx-financial'
+  | 'avanyx-prism-lite'
+  | 'avanyx-prism'
+  | 'avanyx-prism-pro'
+  | 'avanyx-veyra-lite'
+  | 'avanyx-veyra'
+  | 'avanyx-veyra-pro';
 
 export type EngineCapability =
   | 'fast_text'
@@ -41,13 +41,13 @@ export type EngineCapability =
 export type InputModality = 'text' | 'image' | 'document' | 'audio' | 'video';
 export type OutputModality = 'text' | 'json' | 'image' | 'video' | 'financial_report';
 
-export interface VelcoraEngineDefinition {
-  id: VelcoraEngineId | string;
+export interface AvanyxEngineDefinition {
+  id: AvanyxEngineId | string;
   name: string;
   shortName: string;
   subtitle: string;
   description: string;
-  provider: 'Velcora AI';
+  provider: 'Avanyx AI';
   capability: EngineCapability;
   category: 'Fast & Direct' | 'Reasoning' | 'Multimodal Vision' | 'Creative Writing' | 'Code & Math';
   latencyMs: number;
@@ -62,21 +62,21 @@ export interface VelcoraEngineDefinition {
   isCreativeSubEngine?: boolean;
 }
 
-export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
+export const AVANYX_ENGINES: AvanyxEngineDefinition[] = [
   {
     id: 'chat',
     name: 'Normal Chat',
     shortName: 'Chat',
-    subtitle: 'DeepSeek V4 Flash • Fast & Direct',
+    subtitle: 'Avanyx Neural • Fast & Direct',
     description: 'Everyday conversational AI for general questions, quick assistance, and basic business inquiries. Optimized for speed and low cost.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'fast_text',
     category: 'Fast & Direct',
     latencyMs: 90,
     costPer1kTokens: 0,
     contextWindow: '128,000',
     status: 'active',
-    badge: '💬 DeepSeek V4 Flash',
+    badge: '💬 Avanyx Flash',
     backendModelCandidates: ['deepseek-v4-flash'],
     supportedInputs: ['text', 'image', 'document'],
     supportedOutputs: ['text', 'json'],
@@ -85,34 +85,34 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     id: 'flash',
     name: 'Flash',
     shortName: 'Flash',
-    subtitle: 'DeepSeek V4 Flash • Fast Reasoning',
+    subtitle: 'Avanyx Neural • Fast Reasoning',
     description: 'Fast reasoning AI for business analysis, data analysis, and more complex questions. Balances speed with reasoning capability.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'deep_reasoning',
     category: 'Fast & Direct',
     latencyMs: 70,
     costPer1kTokens: 0.00015,
     contextWindow: '128,000',
     status: 'active',
-    badge: '⚡ DeepSeek V4 Flash + Thinking',
+    badge: '⚡ Avanyx Flash + Thinking',
     backendModelCandidates: ['deepseek-v4-flash'],
     supportedInputs: ['text', 'image', 'document'],
     supportedOutputs: ['text', 'json'],
   },
   {
     id: 'omni',
-    name: 'Omni',
-    shortName: 'Omni',
-    subtitle: 'DeepSeek V4 Pro • Deep Reasoning',
-    description: 'Advanced reasoning engine for complex questions, multi-step analysis, sales/inventory/historical analysis, and recommendations.',
-    provider: 'Velcora AI',
+    name: 'Avanyx Nexus',
+    shortName: 'Nexus',
+    subtitle: 'Avanyx Neural • Advanced Reasoning',
+    description: "Avanyx Nexus is Avanyx's advanced conversational AI model, designed for fast, intelligent, and natural interactions.",
+    provider: 'Avanyx AI',
     capability: 'deep_reasoning',
     category: 'Reasoning',
     latencyMs: 190,
     costPer1kTokens: 0.0008,
     contextWindow: '128,000',
     status: 'active',
-    badge: '🧠 DeepSeek V4 Pro + Thinking',
+    badge: '🧠 Avanyx Nexus + Thinking',
     backendModelCandidates: ['deepseek-v4-pro'],
     supportedInputs: ['text', 'image', 'document'],
     supportedOutputs: ['text', 'json'],
@@ -121,16 +121,16 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     id: 'axiom',
     name: 'Financial Agent',
     shortName: 'Financial',
-    subtitle: 'DeepSeek V4 Pro • Financial Analysis',
+    subtitle: 'Avanyx Neural • Financial Analysis',
     description: 'Specialized financial analysis for revenue, profit/loss, expenses, cash flow, margins, and budget analysis. NEVER invents numbers — retrieves real data only.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'financial',
     category: 'Reasoning',
     latencyMs: 220,
     costPer1kTokens: 0.001,
     contextWindow: '128,000',
     status: 'active',
-    badge: '📊 DeepSeek V4 Pro Financial',
+    badge: '📊 Avanyx Financial Intelligence',
     backendModelCandidates: ['deepseek-v4-pro'],
     supportedInputs: ['text', 'image', 'document'],
     supportedOutputs: ['text', 'json', 'financial_report'],
@@ -142,7 +142,7 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     shortName: 'Axiom Financial',
     subtitle: 'Claude Opus 5 Engine • Financial BI',
     description: 'Specialized business and financial intelligence engine powered by Claude Opus 5 backend engine calculating real-time margin math, profit audits, cash flow telemetry, and POS analytics.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'financial',
     category: 'Code & Math',
     latencyMs: 120,
@@ -161,7 +161,7 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     shortName: 'Flash Omni.1',
     subtitle: 'Fast & General Purpose',
     description: 'High-speed intelligence for POS operations, quick customer lookups, instant answers, inventory inquiries, and day-to-day store management.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'fast_text',
     category: 'Fast & Direct',
     latencyMs: 140,
@@ -179,7 +179,7 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     shortName: 'Financial Axiom',
     subtitle: 'Financial Analysis Expert',
     description: 'Specialized ledger computation and financial analysis engine executing margin math, profit audits, cash flow projections, and fiscal reporting.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'financial',
     category: 'Code & Math',
     latencyMs: 180,
@@ -193,12 +193,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isDeterministicFirst: true,
   },
   {
-    id: 'velcora-brain',
-    name: 'Velcora Business Brain',
+    id: 'avanyx-brain',
+    name: 'Avanyx Business Brain',
     shortName: 'Business Brain',
     subtitle: 'Central Strategic Business & Ledger Brain',
     description: 'Central executive intelligence engine deeply integrated with live store telemetry, inventory velocity, Second Brain durable memory, and universal business problem solving.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'deep_reasoning',
     category: 'Reasoning',
     latencyMs: 200,
@@ -211,12 +211,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     supportedOutputs: ['text', 'json'],
   },
   {
-    id: 'velcora-fashion-dealer',
-    name: 'Velcora FashionDealer',
+    id: 'avanyx-fashion-dealer',
+    name: 'Avanyx FashionDealer',
     shortName: 'FashionDealer',
     subtitle: 'Specialized Fashion Market Intelligence',
     description: 'Specialized high-fidelity neural engine for fashion forecasting, apparel design ideation, and lifestyle merchandising strategies.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'creative_studio',
     category: 'Creative Writing',
     latencyMs: 220,
@@ -229,12 +229,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     supportedOutputs: ['text', 'json'],
   },
   {
-    id: 'velcora-chat',
-    name: 'Velcora Chat',
-    shortName: 'Velcora Chat',
+    id: 'avanyx-chat',
+    name: 'Avanyx Chat',
+    shortName: 'Avanyx Chat',
     subtitle: 'Claude Haiku 4.5 Executive Chat',
     description: 'Fast, general-purpose operational assistant utilizing Anthropic\'s Claude Haiku 4.5 model for superior customer responses.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'fast_text',
     category: 'Fast & Direct',
     latencyMs: 150,
@@ -247,12 +247,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     supportedOutputs: ['text', 'json'],
   },
   {
-    id: 'velcora-neural-flash',
-    name: 'Velcora Neural Flash',
+    id: 'avanyx-neural-flash',
+    name: 'Avanyx Neural Flash',
     shortName: 'Neural Flash',
     subtitle: 'Ultra-fast sub-second operational assistant',
     description: 'Frontier lightweight neural pipeline powered by Claude Sonnet 5 optimized for POS workflows, instant customer lookups, and receipt analysis.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'fast_text',
     category: 'Fast & Direct',
     latencyMs: 180,
@@ -265,12 +265,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     supportedOutputs: ['text', 'json'],
   },
   {
-    id: 'velcora-axiom',
-    name: 'Velcora Axiom',
+    id: 'avanyx-axiom',
+    name: 'Avanyx Axiom',
     shortName: 'Axiom',
     subtitle: 'Fast Business Intelligence & POS Operations',
     description: 'Ultra-fast neural BI engine connected to Claude Opus 5. Sub-second responses for POS stock, product counts, daily revenue, and operational queries.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'fast_text',
     category: 'Fast & Direct',
     latencyMs: 140,
@@ -283,12 +283,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     supportedOutputs: ['text', 'json'],
   },
   {
-    id: 'velcora-omni',
-    name: 'Velcora Omni',
+    id: 'avanyx-omni',
+    name: 'Avanyx Omni',
     shortName: 'Omni',
     subtitle: 'Universal AI Router & Deep Reasoning Engine',
     description: 'High-capacity frontier reasoning engine powered by Claude Sonnet 5. Optimized for multi-step strategic planning, large code/script analysis, Second Brain knowledge, and complex workflows.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'deep_reasoning',
     category: 'Reasoning',
     latencyMs: 380,
@@ -301,12 +301,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     supportedOutputs: ['text', 'json'],
   },
   {
-    id: 'velcora-financial',
-    name: 'Velcora Financial',
+    id: 'avanyx-financial',
+    name: 'Avanyx Financial',
     shortName: 'Financial Engine',
     subtitle: 'Deterministic ledger mathematics + natural language explanation',
     description: 'Audited financial computation engine powered by Claude Opus 5 executing exact ledger math (revenue, margins, COGS, tax ledgers, break-even, budgets) grounded by AI explanations.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'financial',
     category: 'Code & Math',
     latencyMs: 190,
@@ -320,14 +320,14 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isDeterministicFirst: true,
   },
 
-  // Studio Sub-Engines: Image (Velcora Prism Suite)
+  // Studio Sub-Engines: Image (Avanyx Prism Suite)
   {
-    id: 'velcora-prism-lite',
-    name: 'Velcora Prism Lite',
+    id: 'avanyx-prism-lite',
+    name: 'Avanyx Prism Lite',
     shortName: 'Prism Lite',
     subtitle: 'Fast commercial image & product isolation',
     description: 'High-speed image generation tuned for e-commerce catalog isolation and clean single-subject product photography.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'image_generation',
     category: 'Multimodal Vision',
     latencyMs: 1400,
@@ -341,12 +341,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isCreativeSubEngine: true,
   },
   {
-    id: 'velcora-prism',
-    name: 'Velcora Prism',
+    id: 'avanyx-prism',
+    name: 'Avanyx Prism',
     shortName: 'Prism',
     subtitle: 'High-fidelity commercial studio photography',
     description: 'Primary creative image synthesis engine rendering editorial compositions, realistic fabrics, lighting reflections, and human models.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'image_generation',
     category: 'Multimodal Vision',
     latencyMs: 2200,
@@ -360,12 +360,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isCreativeSubEngine: true,
   },
   {
-    id: 'velcora-prism-pro',
-    name: 'Velcora Prism Pro',
+    id: 'avanyx-prism-pro',
+    name: 'Avanyx Prism Pro',
     shortName: 'Prism Pro',
     subtitle: 'Ultra-resolution luxury editorial synthesis',
     description: 'Professional visual studio engine for billboard-grade advertisements, intricate multi-entity staging, and custom luxury styling.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'image_generation',
     category: 'Multimodal Vision',
     latencyMs: 3800,
@@ -379,14 +379,14 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isCreativeSubEngine: true,
   },
 
-  // Studio Sub-Engines: Video (Velcora Veyra Suite)
+  // Studio Sub-Engines: Video (Avanyx Veyra Suite)
   {
-    id: 'velcora-veyra-lite',
-    name: 'Velcora Veyra Lite',
+    id: 'avanyx-veyra-lite',
+    name: 'Avanyx Veyra Lite',
     shortName: 'Veyra Lite',
     subtitle: 'Fast 720p social motion & promotional reels',
     description: 'Rapid video generation pipeline for dynamic social ads, product rotations, and animated storefront announcements.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'video_generation',
     category: 'Multimodal Vision',
     latencyMs: 8000,
@@ -400,12 +400,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isCreativeSubEngine: true,
   },
   {
-    id: 'velcora-veyra',
-    name: 'Velcora Veyra',
+    id: 'avanyx-veyra',
+    name: 'Avanyx Veyra',
     shortName: 'Veyra',
     subtitle: '1080p cinematic commercial video pipeline',
     description: 'Full neural video synthesis engine producing continuous camera movements, temporal physics consistency, and lighting transitions.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'video_generation',
     category: 'Multimodal Vision',
     latencyMs: 14000,
@@ -419,12 +419,12 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
     isCreativeSubEngine: true,
   },
   {
-    id: 'velcora-veyra-pro',
-    name: 'Velcora Veyra Pro',
+    id: 'avanyx-veyra-pro',
+    name: 'Avanyx Veyra Pro',
     shortName: 'Veyra Pro',
     subtitle: 'High-framerate multi-shot video orchestration',
     description: 'Flagship video creation engine orchestrating multi-cut editorial sequences, smooth dolly shots, and audio-reactive pacing.',
-    provider: 'Velcora AI',
+    provider: 'Avanyx AI',
     capability: 'video_generation',
     category: 'Multimodal Vision',
     latencyMs: 22000,
@@ -440,96 +440,98 @@ export const VELCORA_ENGINES: VelcoraEngineDefinition[] = [
 ];
 
 /**
- * Maps any legacy or user-entered engine ID to the canonical Velcora Engine definition.
+ * Maps any legacy or user-entered engine ID to the canonical Avanyx Engine definition.
  */
-export function resolveVelcoraEngine(engineIdOrModel?: string): VelcoraEngineDefinition {
+export function resolveAvanyxEngine(engineIdOrModel?: string): AvanyxEngineDefinition {
   if (!engineIdOrModel) {
-    return VELCORA_ENGINES[0]; // Velcora Neural Flash
+    return AVANYX_ENGINES[0]; // Avanyx Neural Flash
   }
 
   const normalized = engineIdOrModel.trim().toLowerCase();
 
   // 1. Direct ID match
-  const directMatch = VELCORA_ENGINES.find(e => e.id.toLowerCase() === normalized);
+  const directMatch = AVANYX_ENGINES.find(e => e.id.toLowerCase() === normalized);
   if (directMatch) return directMatch;
 
   // 2. Name or alias match
-  if (normalized === 'chat' || normalized === 'velcora-chat' || normalized.includes('chat')) {
-    return VELCORA_ENGINES.find(e => e.id === 'chat' || e.id === 'velcora-chat') || VELCORA_ENGINES[0];
+  if (normalized === 'chat' || normalized === 'avanyx-chat' || normalized.includes('chat')) {
+    return AVANYX_ENGINES.find(e => e.id === 'chat' || e.id === 'avanyx-chat') || AVANYX_ENGINES[0];
   }
   if (normalized === 'omni' || normalized.includes('omni') && !normalized.includes('flash-omni')) {
-    return VELCORA_ENGINES.find(e => e.id === 'omni') || VELCORA_ENGINES[1];
+    return AVANYX_ENGINES.find(e => e.id === 'omni') || AVANYX_ENGINES[1];
   }
   if (normalized === 'flash' || normalized.includes('neural-flash')) {
-    return VELCORA_ENGINES.find(e => e.id === 'flash') || VELCORA_ENGINES[2];
+    return AVANYX_ENGINES.find(e => e.id === 'flash') || AVANYX_ENGINES[2];
   }
   if (normalized === 'axiom' || normalized.includes('axiom') && !normalized.includes('financial-axiom')) {
-    return VELCORA_ENGINES.find(e => e.id === 'axiom') || VELCORA_ENGINES[3];
+    return AVANYX_ENGINES.find(e => e.id === 'axiom') || AVANYX_ENGINES[3];
   }
   if (normalized.includes('flash-omni') || normalized.includes('flash omni') || normalized.includes('omni.1')) {
-    return VELCORA_ENGINES.find(e => e.id === 'flash') || VELCORA_ENGINES[2];
+    return AVANYX_ENGINES.find(e => e.id === 'flash') || AVANYX_ENGINES[2];
   }
   if (normalized.includes('financial-axiom') || normalized.includes('financial axiom')) {
-    return VELCORA_ENGINES.find(e => e.id === 'axiom') || VELCORA_ENGINES[3];
+    return AVANYX_ENGINES.find(e => e.id === 'axiom') || AVANYX_ENGINES[3];
   }
   if (normalized.includes('brain') || normalized.includes('business-brain')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-brain') || VELCORA_ENGINES[0];
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-brain') || AVANYX_ENGINES[0];
   }
   if (normalized.includes('fashion-dealer') || normalized.includes('fashiondealer')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-fashion-dealer')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-fashion-dealer')!;
   }
   if (normalized.includes('axiom') || normalized.includes('axoum') || normalized.includes('deep-thinking') || normalized.includes('deep reasoning')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-axiom')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-axiom')!;
   }
   if (normalized.includes('omni')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-omni')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-omni')!;
   }
   if (normalized.includes('studio') || normalized.includes('creative')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-omni')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-omni')!;
   }
   if (normalized.includes('financial') || normalized.includes('finance') || normalized.includes('quant')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-financial')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-financial')!;
   }
   if (normalized.includes('prism-pro')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-prism-pro')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-prism-pro')!;
   }
   if (normalized.includes('prism-lite')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-prism-lite')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-prism-lite')!;
   }
   if (normalized.includes('prism')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-prism')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-prism')!;
   }
   if (normalized.includes('veyra-pro')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-veyra-pro')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-veyra-pro')!;
   }
   if (normalized.includes('veyra-lite')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-veyra-lite')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-veyra-lite')!;
   }
   if (normalized.includes('veyra') || normalized.includes('veo')) {
-    return VELCORA_ENGINES.find(e => e.id === 'velcora-veyra')!;
+    return AVANYX_ENGINES.find(e => e.id === 'avanyx-veyra')!;
   }
 
   // Default fallback to Chat
-  return VELCORA_ENGINES[0];
+  return AVANYX_ENGINES[0];
 }
 
 /**
  * Returns user-facing primary engines for AI Router interface (Chat, Omni, Flash, Axiom)
  */
-export function getPrimaryVelcoraEngines(): VelcoraEngineDefinition[] {
-  return VELCORA_ENGINES.filter(e => e.id === 'chat' || e.id === 'omni' || e.id === 'flash' || e.id === 'axiom');
+export function getPrimaryAvanyxEngines(): AvanyxEngineDefinition[] {
+  return AVANYX_ENGINES.filter(e => e.id === 'chat' || e.id === 'omni' || e.id === 'flash' || e.id === 'axiom');
 }
 
 /**
  * Returns all image sub-engines (Prism Suite)
  */
-export function getPrismImageEngines(): VelcoraEngineDefinition[] {
-  return VELCORA_ENGINES.filter(e => e.capability === 'image_generation');
+export function getPrismImageEngines(): AvanyxEngineDefinition[] {
+  return AVANYX_ENGINES.filter(e => e.capability === 'image_generation');
 }
 
 /**
  * Returns all video sub-engines (Veyra Suite)
  */
-export function getVeyraVideoEngines(): VelcoraEngineDefinition[] {
-  return VELCORA_ENGINES.filter(e => e.capability === 'video_generation');
+export function getVeyraVideoEngines(): AvanyxEngineDefinition[] {
+  return AVANYX_ENGINES.filter(e => e.capability === 'video_generation');
 }
+
+export const Avanyx_ENGINES = AVANYX_ENGINES;

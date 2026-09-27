@@ -7,10 +7,9 @@ import { createSecondBrainRouter } from './second brain/src/api/server';
 import { reasoningEngine } from './second brain/src/services/reasoning/reasoningEngine';
 import { learningService } from './second brain/src/services/learning/learningService';
 import { memoryService } from './second brain/src/services/memory/memoryService';
-import { createReferralRouter } from './src/server/referralRouter';
 import { createMasterPaymentRouter } from './src/server/masterPaymentRouter';
 import { masterPaymentEngine } from './src/server/masterPaymentEngine';
-import { VelcoraCreditSystem, ADMIN_CONFIG, ensureCentralAIConfigLoaded, db as adminDb } from './src/server/creditManager';
+import { AvanyxCreditSystem, ADMIN_CONFIG, ensureCentralAIConfigLoaded, db as adminDb } from './src/server/creditManager';
 import {
   authenticateStaff,
   registerStaffCredentials,
@@ -28,15 +27,56 @@ import {
 } from './src/server/concurrencyEngine';
 import { adminRouter, ensureAdminCredentials } from './src/server/adminRouter';
 import { resolveEngineRoute, isDeepSeekConfigured, generateWithRetry, checkDeepSeekHealth, DeepSeekMessage, DeepSeekResult } from './src/server/deepSeekService';
-import { routeAIRequest, getProviderHealthStatus, NormalizedRequest } from './src/server/aiRouter';
+import { routeAIRequest, getProviderHealthStatus, NormalizedRequest, NormalizedImageAttachment } from './src/server/aiRouter';
 import { isGeminiTextConfigured, checkGeminiTextHealth } from './src/server/geminiTextService';
 import { generateCatalogSchema, neutralFallbackSchema, CatalogRequest } from './src/server/catalogEngine';
 
 // Sync admin/founder credentials
 ensureAdminCredentials();
 
+import { getAuth } from 'firebase-admin/auth';
+
+// Global Auth Middleware to prevent IDOR and enforce backend validation
+const verifyFirebaseAuth = async (req: any, res: any, next: any) => {
+  if (
+    !req.url.startsWith('/api/') || 
+    req.url.startsWith('/api/health') || 
+    req.url.startsWith('/api/ai/health') || 
+    req.url.startsWith('/api/ai/providers/health') || 
+    req.url.startsWith('/api/ai/benchmark') ||
+    req.url.startsWith('/api/staff/login') ||
+    req.url.startsWith('/api/payment') ||
+    req.url.startsWith('/api/master-payment')
+  ) {
+    return next();
+  }
+  
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Missing or invalid Authorization header' });
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token);
+    req.user = decodedToken;
+    const requestedUserId = req.headers['x-user-id'];
+    
+    if (requestedUserId && requestedUserId !== 'anonymous' && requestedUserId !== 'default-user' && requestedUserId !== decodedToken.uid) {
+      console.warn(`IDOR ATTEMPT: Token UID ${decodedToken.uid} attempted to access x-user-id ${requestedUserId}`);
+      return res.status(403).json({ success: false, error: 'Access denied: Token UID does not match requested user ID.' });
+    }
+    next();
+  } catch (error) {
+    console.error('Firebase Auth Verification Failed:', error);
+    return res.status(401).json({ success: false, error: 'Invalid or expired authentication token.' });
+  }
+};
+
 const app = express();
 const PORT = 3000;
+
+app.use(verifyFirebaseAuth);
 
 app.use(cors({
   origin: true,
@@ -52,7 +92,7 @@ app.use(express.json({
 // Vercel Serverless URL Normalizer: guarantees /api routes match regardless of function rewrite stripping
 app.use((req, _res, next) => {
   if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/assets') && !req.url.includes('.')) {
-    const knownApiPrefixes = ['/ai', '/admin', '/health', '/referral', '/payment', '/staff', '/atomic', '/auth', '/second-brain'];
+    const knownApiPrefixes = ['/ai', '/admin', '/health', '/payment', '/staff', '/atomic', '/auth', '/second-brain'];
     if (knownApiPrefixes.some(p => req.url.startsWith(p))) {
       req.url = `/api${req.url}`;
     }
@@ -62,18 +102,13 @@ app.use((req, _res, next) => {
 
 // Route handlers
 const secondBrainRouter = createSecondBrainRouter();
-const referralRouter = createReferralRouter();
 const paymentRouter = createMasterPaymentRouter();
 
 // Mount Second Brain Endpoints
 app.use('/api/second-brain', secondBrainRouter);
 app.use('/second-brain', secondBrainRouter);
 
-// Mount Velcora Referral, Attribution & Commission Engine
-app.use('/api/referral', referralRouter);
-app.use('/referral', referralRouter);
-
-// Mount Volcora Master Payment, Subscription & Global Payout Engine
+// Mount Avanyx Master Payment, Subscription & Global Payout Engine
 app.use('/api/payment', paymentRouter);
 app.use('/payment', paymentRouter);
 app.use('/api/master-payment', paymentRouter);
@@ -98,14 +133,14 @@ function getGenAI(): GoogleGenAI | null {
         apiKey: key.trim(),
       });
     } catch (err) {
-      console.warn('[Velcora AI] GoogleGenAI initialization skipped:', err);
+      console.warn('[Avanyx AI] GoogleGenAI initialization skipped:', err);
       return null;
     }
   }
   return genAIClient;
 }
 
-// AI adapter — routes through unified aiRouter (DeepSeek primary + Gemini fallback)
+// AI adapter — routes through unified aiRouter (DeepSeek primary + Gemini fallback + Gemini Multimodal Vision)
 async function generateAIContent(
   engineId: string,
   generateParams: {
@@ -115,25 +150,47 @@ async function generateAIContent(
     thinkingConfig?: any;
     responseMimeType?: string;
     maxOutputTokens?: number;
+    images?: NormalizedImageAttachment[];
   }
 ): Promise<{ text: string; reasoningContent?: string }> {
-  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
+  const messages: { role: 'system' | 'user' | 'assistant'; content: string; images?: NormalizedImageAttachment[] }[] = [];
+  const extractedImages: NormalizedImageAttachment[] = [];
+  if (generateParams.images && Array.isArray(generateParams.images)) {
+    extractedImages.push(...generateParams.images);
+  }
   if (generateParams.systemInstruction) {
     messages.push({ role: 'system', content: generateParams.systemInstruction });
   }
   for (const item of generateParams.contents || []) {
     const parts = Array.isArray(item?.parts) ? item.parts : [];
     const textParts: string[] = [];
+    const turnImages: NormalizedImageAttachment[] = [];
     for (const part of parts) {
       if (typeof part?.text === 'string' && part.text.trim() !== '') {
         textParts.push(part.text);
-      } else if (part?.inlineData?.data && part?.inlineData?.mimeType) {
-        textParts.push(`[Image attached: ${part.inlineData.mimeType}]`);
+      } else if (part?.inlineData?.data) {
+        const mimeType = part.inlineData.mimeType || 'image/jpeg';
+        const data = part.inlineData.data.replace(/^data:.*?;base64,/, '').trim();
+        if (data) {
+          const imgObj = { mimeType, data, name: part.inlineData.name || 'image' };
+          turnImages.push(imgObj);
+          extractedImages.push(imgObj);
+        }
       }
     }
-    messages.push({ role: item?.role === 'model' ? 'assistant' : 'user', content: textParts.join('\n') || '(empty)' });
+    messages.push({
+      role: item?.role === 'model' ? 'assistant' : 'user',
+      content: textParts.join('\n') || (turnImages.length > 0 ? 'Analyze the attached image(s).' : '(empty)'),
+      images: turnImages.length > 0 ? turnImages : undefined,
+    });
   }
-  const request: NormalizedRequest = { engineId, messages, temperature: generateParams.temperature, maxTokens: generateParams.maxOutputTokens || 4096 };
+  const request: NormalizedRequest = {
+    engineId,
+    messages,
+    images: extractedImages.length > 0 ? extractedImages : undefined,
+    temperature: generateParams.temperature,
+    maxTokens: generateParams.maxOutputTokens || 4096,
+  };
   const response = await routeAIRequest(request);
   if (!response.success) throw new Error(response.error || 'AI request failed');
   return { text: response.content, reasoningContent: response.reasoningContent };
@@ -144,7 +201,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     version: '2.0.0',
-    platform: 'VELCORA Universal Business Intelligence & POS Platform',
+    platform: 'AVANYX Universal Business Intelligence & POS Platform',
     aiAvailable: isDeepSeekConfigured(),
     aiProvider: 'DeepSeek',
     defaultModel: 'deepseek-v4-flash',
@@ -198,7 +255,7 @@ app.get('/api/ai/providers/health', (req, res) => {
 // Credits: reserve -> generate -> settle (once); refund on failure.
 app.post('/api/ai/catalog-schema', async (req, res) => {
   const body = req.body || {};
-  const tenantId = (req.headers['x-tenant-id'] as string) || body.tenantId || 'velcora-default-store';
+  const tenantId = (req.headers['x-tenant-id'] as string) || body.tenantId || 'avanyx-default-store';
   const userId = (req.headers['x-user-id'] as string) || body.userId || 'default-user';
   const requestId = `req-catalog-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
@@ -218,21 +275,21 @@ app.post('/api/ai/catalog-schema', async (req, res) => {
     return res.json({
       success: false,
       error: 'MISSING_REQUIREMENTS',
-      message: 'Describe your business so Velcora can build the right catalog for it.',
+      message: 'Describe your business so Avanyx can build the right catalog for it.',
     });
   }
 
-  const engine = resolveServerEngine('velcora-brain');
-  const maxCost = VelcoraCreditSystem.calculateMaxCost(engine.id, 4000, 0);
+  const engine = resolveServerEngine('avanyx-brain');
+  const maxCost = AvanyxCreditSystem.calculateMaxCost(engine.id, 4000, 0);
 
   // Ensure the wallet exists first (creates the initial promotional grant for a
   // brand-new user). /api/ai/ask does the same before reserving; without this,
   // the very first request for a new user fails with "Wallet not found".
-  try { await VelcoraCreditSystem.getWallet(userId); } catch (_) {}
+  try { await AvanyxCreditSystem.getWallet(userId); } catch (_) {}
 
   let reservation: any = { allowed: true };
   try {
-    reservation = await VelcoraCreditSystem.reserveCredits(userId, engine.id, maxCost, requestId);
+    reservation = await AvanyxCreditSystem.reserveCredits(userId, engine.id, maxCost, requestId);
   } catch (creditErr) {
     console.warn('[Catalog] Credit reservation skipped (non-fatal):', (creditErr as any)?.message);
     reservation = { allowed: true };
@@ -255,8 +312,8 @@ app.post('/api/ai/catalog-schema', async (req, res) => {
       ),
     ]);
     const estTokens = Math.ceil((JSON.stringify(catalogReq).length + JSON.stringify(schema).length) / 4);
-    const actualCost = Math.min(maxCost, VelcoraCreditSystem.calculateMaxCost(engine.id, estTokens, 0));
-    try { await VelcoraCreditSystem.settleCredits(userId, requestId, actualCost); } catch (_) {}
+    const actualCost = Math.min(maxCost, AvanyxCreditSystem.calculateMaxCost(engine.id, estTokens, 0));
+    try { await AvanyxCreditSystem.settleCredits(userId, requestId, actualCost); } catch (_) {}
     return res.json({
       success: true,
       schema,
@@ -266,7 +323,7 @@ app.post('/api/ai/catalog-schema', async (req, res) => {
     });
   } catch (error: any) {
     console.error('[Catalog Engine Error]', error?.message || error);
-    try { await VelcoraCreditSystem.refundReservation(userId, requestId); } catch (_) {}
+    try { await AvanyxCreditSystem.refundReservation(userId, requestId); } catch (_) {}
     // Always return a usable, assumption-free schema instead of breaking the UI.
     return res.json({
       success: true,
@@ -284,8 +341,8 @@ app.post('/api/ai/catalog-schema', async (req, res) => {
 app.get('/api/credits/wallet', async (req, res) => {
   try {
     const userId = (req.headers['x-user-id'] as string) || 'default-user';
-    const wallet = await VelcoraCreditSystem.getWallet(userId);
-    const ledger = await VelcoraCreditSystem.getLedger(userId);
+    const wallet = await AvanyxCreditSystem.getWallet(userId);
+    const ledger = await AvanyxCreditSystem.getLedger(userId);
     res.json({
       success: true,
       wallet,
@@ -305,11 +362,11 @@ app.get('/api/credits/wallet', async (req, res) => {
 app.post('/api/credits/purchase', async (req, res) => {
   try {
     const userId = (req.headers['x-user-id'] as string) || req.body.userId || 'default-user';
-    const { packageId, amount, currency, provider, referralCode } = req.body;
+    const { packageId, amount, currency, provider } = req.body;
 
     const result = await masterPaymentEngine.processVerifiedPayment({
       userId,
-      userEmail: req.body.userEmail || `${userId}@volcora.user`,
+      userEmail: req.body.userEmail || `${userId}@AVANYX.user`,
       userName: req.body.userName,
       transactionType: 'TOKEN_PURCHASE',
       packageId: packageId || 'token_pack_50k',
@@ -317,7 +374,6 @@ app.post('/api/credits/purchase', async (req, res) => {
       currency: currency || 'USD',
       provider: (provider as any) || 'stripe',
       externalTransactionId: `token_buy_${Date.now()}`,
-      referralCode,
       signatureVerified: true,
     });
 
@@ -325,7 +381,7 @@ app.post('/api/credits/purchase', async (req, res) => {
       return res.status(400).json({ success: false, error: result.error });
     }
 
-    const wallet = await VelcoraCreditSystem.getWallet(userId);
+    const wallet = await AvanyxCreditSystem.getWallet(userId);
     res.json({
       success: true,
       wallet,
@@ -361,7 +417,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
 
     // 2. Altered Purchase Information
     try {
-      await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId: `GPA.test-${Date.now()}-2`,
         productId: 'hacked-ultra-package',
         purchaseToken: 'token-xyz',
@@ -381,14 +437,14 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
     try {
       const orderId = `GPA.dup-test-${Date.now()}`;
       // First call (completed)
-      await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-lite',
         purchaseToken: 'token-dup-123',
         purchaseState: 'completed'
       });
       // Second call (completed)
-      const res2 = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const res2 = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-lite',
         purchaseToken: 'token-dup-123',
@@ -413,14 +469,14 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
     try {
       const orderId = `GPA.replay-test-${Date.now()}`;
       // User A processes it
-      await VelcoraCreditSystem.verifyGooglePurchase('user-A-owner', {
+      await AvanyxCreditSystem.verifyGooglePurchase('user-A-owner', {
         orderId,
         productId: 'pkg-standard',
         purchaseToken: 'token-replay-555',
         purchaseState: 'completed'
       });
       // User B tries to replay the exact same orderId
-      await VelcoraCreditSystem.verifyGooglePurchase('user-B-malicious', {
+      await AvanyxCreditSystem.verifyGooglePurchase('user-B-malicious', {
         orderId,
         productId: 'pkg-standard',
         purchaseToken: 'token-replay-555',
@@ -440,7 +496,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
     try {
       const orderId = `GPA.refund-test-${Date.now()}`;
       // Initial purchase
-      const purchaseResult = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const purchaseResult = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-standard',
         purchaseToken: 'token-refund-777',
@@ -449,7 +505,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
       const balanceBefore = purchaseResult.wallet?.availableCredits || 0;
 
       // Trigger Refund Reconcile
-      const refundResult = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const refundResult = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-standard',
         purchaseToken: 'token-refund-777',
@@ -474,7 +530,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
     // 6. Cancelled Purchase
     try {
       const orderId = `GPA.cancel-test-${Date.now()}`;
-      const resPending = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const resPending = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-lite',
         purchaseToken: 'token-cancel-888',
@@ -482,7 +538,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
       });
       const balancePending = resPending.wallet?.availableCredits || 0;
 
-      const resCancel = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const resCancel = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-lite',
         purchaseToken: 'token-cancel-888',
@@ -507,7 +563,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
     // 7. Expired Subscription
     try {
       const orderId = `GPA.sub-expire-test-${Date.now()}`;
-      const buyRes = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const buyRes = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'sub-premium',
         purchaseToken: 'token-sub-111',
@@ -515,7 +571,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
         isSubscription: true
       });
 
-      const expireRes = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const expireRes = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'sub-premium',
         purchaseToken: 'token-sub-111',
@@ -540,10 +596,10 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
     // 8. Pending Purchase
     try {
       const orderId = `GPA.pending-test-${Date.now()}`;
-      const startWallet = await VelcoraCreditSystem.getWallet(testUserId);
+      const startWallet = await AvanyxCreditSystem.getWallet(testUserId);
       const startCredits = startWallet.availableCredits;
 
-      const res = await VelcoraCreditSystem.verifyGooglePurchase(testUserId, {
+      const res = await AvanyxCreditSystem.verifyGooglePurchase(testUserId, {
         orderId,
         productId: 'pkg-lite',
         purchaseToken: 'token-pending-999',
@@ -602,7 +658,7 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
       const brokeUserId = `broke-${Date.now()}`;
       
       // Override broke user balance locally to 0
-      const local = (VelcoraCreditSystem as any).readLocalDb ? (VelcoraCreditSystem as any).readLocalDb() : { wallets: {}, ledger: [] };
+      const local = (AvanyxCreditSystem as any).readLocalDb ? (AvanyxCreditSystem as any).readLocalDb() : { wallets: {}, ledger: [] };
       local.wallets[brokeUserId] = {
         userId: brokeUserId,
         availableCredits: 0,
@@ -611,11 +667,11 @@ app.post('/api/credits/simulate-security-test', async (req, res) => {
         usedCredits: 0,
         updatedAt: new Date().toISOString()
       };
-      if ((VelcoraCreditSystem as any).writeLocalDb) {
-        (VelcoraCreditSystem as any).writeLocalDb(local);
+      if ((AvanyxCreditSystem as any).writeLocalDb) {
+        (AvanyxCreditSystem as any).writeLocalDb(local);
       }
 
-      const res = await VelcoraCreditSystem.reserveCredits(brokeUserId, 'velcora-omni', 500, `req-broke-${Date.now()}`);
+      const res = await AvanyxCreditSystem.reserveCredits(brokeUserId, 'avanyx-omni', 500, `req-broke-${Date.now()}`);
       if (!res.allowed) {
         auditLog.push({
           id: 'test_insufficient_balance',
@@ -968,7 +1024,7 @@ function generateSmartDeterministicReply(
   conversationHistory?: any[]
 ): { text: string; actionProposal?: any } {
   const query = (userQuery || '').toLowerCase().trim();
-  const bizName = businessContext?.businessName || 'Velcora Enterprise Store';
+  const bizName = businessContext?.businessName || 'Avanyx Enterprise Store';
   const score = businessContext?.healthScore ?? 85;
   const revenue = businessContext?.revenue ?? 18450;
   const todaySales = businessContext?.todaySales ?? revenue;
@@ -1038,7 +1094,7 @@ Based on combined sales velocity, seasonal signals, and regional demand data:
   - **Online Trend Match**: Heavy engagement with social trends favoring quiet-luxury minimalist aesthetics.
   
 #### 💡 Strategy
-Target this segment with bespoke wardrobe-building lookbooks via **Velcora Studio** promos rather than mass discounting.`
+Target this segment with bespoke wardrobe-building lookbooks via **Avanyx Studio** promos rather than mass discounting.`
       };
     }
 
@@ -1085,7 +1141,7 @@ Answering: *"What is likely to sell well for this business in your local region,
     return {
       text: `### ℹ️ Fashion Market Intelligence Alert
 
-Velcora's specialized Fashion Market Intelligence and trend synthesis layers are active and optimized **exclusively for the Fashion, Apparel, Footwear, and cosmetics retail industries**.
+Avanyx's specialized Fashion Market Intelligence and trend synthesis layers are active and optimized **exclusively for the Fashion, Apparel, Footwear, and cosmetics retail industries**.
 
 Your business is currently classified as the **${businessContext?.industry || 'other'}** industry. 
 
@@ -1124,14 +1180,14 @@ However, I can still analyze your **general POS inventory metrics and stock velo
   // 4. Code & Programming Queries
   if (query.includes('python') || query.includes('javascript') || query.includes('code') || query.includes('function') || query.includes('algorithm') || query.includes('reverse a string') || query.includes('sql')) {
     return {
-      text: `### 💻 Code Solution & Algorithmic Analysis\n\nHere is the clean, idiomatic solution in **Python 3** and **TypeScript**:\n\n\`\`\`python\ndef reverse_string_and_analyze(text: str) -> dict:\n    """\n    Reverses a string and provides character telemetry.\n    Time Complexity: O(n) | Space Complexity: O(n)\n    """\n    reversed_text = text[::-1]\n    return {\n        "original": text,\n        "reversed": reversed_text,\n        "length": len(text),\n        "is_palindrome": text.lower() == reversed_text.lower()\n    }\n\n# Example usage\nprint(reverse_string_and_analyze("Velcora Intelligent System"))\n\`\`\`\n\n\`\`\`typescript\n// TypeScript equivalent with generic safety\nexport function reverseString(input: string): string {\n  return Array.from(input).reverse().join('');\n}\n\`\`\`\n\n**Complexity Notes:**\n• **Time Complexity**: $\\mathcal{O}(n)$ linear scan.\n• **Memory**: Uses native slicing which is optimized in CPython internal memory buffers.`
+      text: `### 💻 Code Solution & Algorithmic Analysis\n\nHere is the clean, idiomatic solution in **Python 3** and **TypeScript**:\n\n\`\`\`python\ndef reverse_string_and_analyze(text: str) -> dict:\n    """\n    Reverses a string and provides character telemetry.\n    Time Complexity: O(n) | Space Complexity: O(n)\n    """\n    reversed_text = text[::-1]\n    return {\n        "original": text,\n        "reversed": reversed_text,\n        "length": len(text),\n        "is_palindrome": text.lower() == reversed_text.lower()\n    }\n\n# Example usage\nprint(reverse_string_and_analyze("Avanyx Intelligent System"))\n\`\`\`\n\n\`\`\`typescript\n// TypeScript equivalent with generic safety\nexport function reverseString(input: string): string {\n  return Array.from(input).reverse().join('');\n}\n\`\`\`\n\n**Complexity Notes:**\n• **Time Complexity**: $\\mathcal{O}(n)$ linear scan.\n• **Memory**: Uses native slicing which is optimized in CPython internal memory buffers.`
     };
   }
 
   // B. Second Brain Memory Recall or Preferences
   if (secondBrainContext && (query.includes('project') || query.includes('goal') || query.includes('target') || query.includes('preference') || query.includes('remember') || query.includes('what is my') || query.includes('who am i'))) {
     return {
-      text: `### 🧠 Second Brain Memory Recall for **${bizName}**\n\nBased on your verified user profile and durable memory in Velcora's Second Brain:\n\n${secondBrainContext.trim()}\n\n**Operational Guidance:**\n• Your preferences and objectives are continuously synchronized across all Velcora analytical modules.\n• Say *"Update my goal to..."* or *"My project is now..."* at any time to revise these parameters.`
+      text: `### 🧠 Second Brain Memory Recall for **${bizName}**\n\nBased on your verified user profile and durable memory in Avanyx's Second Brain:\n\n${secondBrainContext.trim()}\n\n**Operational Guidance:**\n• Your preferences and objectives are continuously synchronized across all Avanyx analytical modules.\n• Say *"Update my goal to..."* or *"My project is now..."* at any time to revise these parameters.`
     };
   }
 
@@ -1169,11 +1225,11 @@ However, I can still analyze your **general POS inventory metrics and stock velo
       id: `act-task-${Date.now()}`,
       actionType: 'CREATE_TASK',
       label: `Create Task: ${taskTitle.slice(0, 35)}`,
-      description: `Schedule task in Velcora workflow engine with High priority.`,
+      description: `Schedule task in Avanyx workflow engine with High priority.`,
       requiresConfirmation: false,
       payload: {
         title: taskTitle.charAt(0).toUpperCase() + taskTitle.slice(1),
-        description: `Generated automatically via Ask Velcora AI Action Agent based on interaction: "${userQuery}"`,
+        description: `Generated automatically via Ask Avanyx AI Action Agent based on interaction: "${userQuery}"`,
         category: taskTitle.toLowerCase().includes('stock') || taskTitle.toLowerCase().includes('product') ? 'inventory' : 'general',
         priority: 'high',
         assignedTo: 'Store Manager',
@@ -1232,7 +1288,7 @@ However, I can still analyze your **general POS inventory metrics and stock velo
         category: query.includes('rent') ? 'Rent' : query.includes('ad') || query.includes('marketing') ? 'Marketing' : 'General Operations',
         date: new Date().toISOString().slice(0, 10),
         paymentMethod: 'cash',
-        notes: 'Logged via Velcora AI Action Agent'
+        notes: 'Logged via Avanyx AI Action Agent'
       },
       status: 'pending'
     };
@@ -1260,11 +1316,11 @@ However, I can still analyze your **general POS inventory metrics and stock velo
   // F. Anomaly Detection & Ledger Auditing
   if (query.includes('anomaly') || query.includes('unusual') || query.includes('audit') || query.includes('weird') || query.includes('suspicious') || query.includes('mismatch')) {
     return {
-      text: `### 🛡️ Velcora Anomaly Detection & Ledger Audit\n\nScanning active transactions, POS checkout logs, and expense disbursements for deviations > 2.5σ:\n\n---\n\n#### 🔍 Audit Findings\n1. **Large Expense Spike Detected**:\n   - **Transaction**: *Boutique Showroom Rent* (${currency}1,800.00) on Feb 1st.\n   - **Status**: **Verified Regular** (Scheduled monthly lease agreement).\n2. **Inventory Safety Threshold Deviation**:\n   - **Item**: *Cashmere Ribbed Scarf* (Stock: 4 units, Min: 8 units).\n   - **Status**: **Action Required** — Velocity increased by 40% following cold weather shift.\n3. **POS Discount & Refund Ratio**:\n   - **Current Discount Rate**: **3.4%** across all completed orders (Well within safe limit of 8.0%).\n   - **Refund Count**: **0 chargebacks/refunds** in the past 72 hours.\n\n#### 🟢 Security & Operational Integrity\nNo malicious activity or cash drawer discrepancies detected across active subuser shifts.`
+      text: `### 🛡️ Avanyx Anomaly Detection & Ledger Audit\n\nScanning active transactions, POS checkout logs, and expense disbursements for deviations > 2.5σ:\n\n---\n\n#### 🔍 Audit Findings\n1. **Large Expense Spike Detected**:\n   - **Transaction**: *Boutique Showroom Rent* (${currency}1,800.00) on Feb 1st.\n   - **Status**: **Verified Regular** (Scheduled monthly lease agreement).\n2. **Inventory Safety Threshold Deviation**:\n   - **Item**: *Cashmere Ribbed Scarf* (Stock: 4 units, Min: 8 units).\n   - **Status**: **Action Required** — Velocity increased by 40% following cold weather shift.\n3. **POS Discount & Refund Ratio**:\n   - **Current Discount Rate**: **3.4%** across all completed orders (Well within safe limit of 8.0%).\n   - **Refund Count**: **0 chargebacks/refunds** in the past 72 hours.\n\n#### 🟢 Security & Operational Integrity\nNo malicious activity or cash drawer discrepancies detected across active subuser shifts.`
     };
   }
 
-  // G. Velcora Studio Creative Connection -> Refactored to Marketing Campaign Task
+  // G. Avanyx Studio Creative Connection -> Refactored to Marketing Campaign Task
   if (query.includes('create a poster') || query.includes('promotional image') || query.includes('video script') || query.includes('flyer') || query.includes('studio') || query.includes('creative') || query.includes('advertisement') || query.includes('social ad')) {
     const targetProduct = topProducts[0]?.name || 'Luxury Tailored Collection';
     const actionProposal = {
@@ -1292,14 +1348,14 @@ However, I can still analyze your **general POS inventory metrics and stock velo
   if (query.includes('how many products') || query.includes('product count') || query.includes('total products')) {
     const productCount = (businessContext?.products || []).length || 42;
     return {
-      text: `### ⚡ Velcora Axiom Instant POS Lookup\n\nYou currently have **${productCount} active products** registered in your catalog across all categories.`
+      text: `### ⚡ Avanyx Axiom Instant POS Lookup\n\nYou currently have **${productCount} active products** registered in your catalog across all categories.`
     };
   }
 
   if (query.includes('what is my stock') || query.includes('stock count') || query.includes('total stock') || query.includes('how much stock')) {
     const totalUnits = (businessContext?.products || []).reduce((sum: number, p: any) => sum + (p.stock || 0), 0) || 158;
     return {
-      text: `### ⚡ Velcora Axiom Instant POS Lookup\n\nYour total active stock count is **${totalUnits} units** across all products in inventory.`
+      text: `### ⚡ Avanyx Axiom Instant POS Lookup\n\nYour total active stock count is **${totalUnits} units** across all products in inventory.`
     };
   }
 
@@ -1307,20 +1363,20 @@ However, I can still analyze your **general POS inventory metrics and stock velo
     const topName = topProducts[0]?.name || 'Silk Blend Tailored Blazer';
     const topPrice = topProducts[0]?.price || 189;
     return {
-      text: `### ⚡ Velcora Axiom Instant POS Lookup\n\nYour fastest-selling item is **${topName}** (${currency}${topPrice}) with an average sales velocity of **1.4 units/day**.`
+      text: `### ⚡ Avanyx Axiom Instant POS Lookup\n\nYour fastest-selling item is **${topName}** (${currency}${topPrice}) with an average sales velocity of **1.4 units/day**.`
     };
   }
 
   if (query.includes('how many customers') || query.includes('customer count') || query.includes('total customers')) {
     const custCount = (businessContext?.customers || []).length || 128;
     return {
-      text: `### ⚡ Velcora Axiom Instant POS Lookup\n\nYou have **${custCount} registered customers** in your Velcora business registry.`
+      text: `### ⚡ Avanyx Axiom Instant POS Lookup\n\nYou have **${custCount} registered customers** in your Avanyx business registry.`
     };
   }
 
   if (query.includes('current profit') || query.includes('what is my profit') || query.includes('my current profit')) {
     return {
-      text: `### ⚡ Velcora Axiom Instant Financial Lookup\n\nYour realized net operating profit is **${currency}${netProfit.toLocaleString()}** with a net profit margin of **${margin}%**.`
+      text: `### ⚡ Avanyx Axiom Instant Financial Lookup\n\nYour realized net operating profit is **${currency}${netProfit.toLocaleString()}** with a net profit margin of **${margin}%**.`
     };
   }
 
@@ -1368,43 +1424,43 @@ However, I can still analyze your **general POS inventory metrics and stock velo
 
   // L. Default General Assistant
   return {
-    text: `### 🌟 Velcora AI Executive Briefing for **${bizName}**\n\n**1. Operational Overview**\n• **Health Score**: **${score}/100** | **Total Sales**: **${currency}${revenue.toLocaleString()}**\n• **Net Operating Margin**: **${margin}%** | **Active Alerts**: **${lowStock} low stock items**\n\n**2. Direct Analysis for: "${userQuery}"**\n• **Sales Velocity**: Consistent transaction volume across primary catalog categories.\n• **Margin Efficiency**: Operating margin is performing well above industry standard benchmarks.\n• **Recommended Action**: Monitor low-stock reorder thresholds and explore our integrated **Business Brain** module.`
+    text: `### 🌟 Avanyx AI Executive Briefing for **${bizName}**\n\n**1. Operational Overview**\n• **Health Score**: **${score}/100** | **Total Sales**: **${currency}${revenue.toLocaleString()}**\n• **Net Operating Margin**: **${margin}%** | **Active Alerts**: **${lowStock} low stock items**\n\n**2. Direct Analysis for: "${userQuery}"**\n• **Sales Velocity**: Consistent transaction volume across primary catalog categories.\n• **Margin Efficiency**: Operating margin is performing well above industry standard benchmarks.\n• **Recommended Action**: Monitor low-stock reorder thresholds and explore our integrated **Business Brain** module.`
   };
 }
 
-// Velcora Engine Backend Mapping & Centralized Model Routing
-interface VelcoraEngineConfig {
+// Avanyx Engine Backend Mapping & Centralized Model Routing
+interface AvanyxEngineConfig {
   id: string;
   name: string;
   backendCandidates: string[];
   isDeterministicFirst?: boolean;
 }
 
-const VELCORA_SERVER_ENGINES: Record<string, VelcoraEngineConfig> = {
+const AVANYX_SERVER_ENGINES: Record<string, AvanyxEngineConfig> = {
   'chat': { id: 'chat', name: 'Normal Chat', backendCandidates: ['deepseek-v4-flash'] },
   'omni': { id: 'omni', name: 'Omni', backendCandidates: ['deepseek-v4-pro'] },
   'flash': { id: 'flash', name: 'Flash', backendCandidates: ['deepseek-v4-flash'] },
   'axiom': { id: 'axiom', name: 'Financial Agent', backendCandidates: ['deepseek-v4-pro'], isDeterministicFirst: true },
   'flash-omni-1': { id: 'flash-omni-1', name: 'Flash Omni.1', backendCandidates: ['deepseek-v4-flash'] },
   'financial-axiom': { id: 'financial-axiom', name: 'Financial Agent', backendCandidates: ['deepseek-v4-pro'], isDeterministicFirst: true },
-  'velcora-chat': { id: 'velcora-chat', name: 'Normal Chat', backendCandidates: ['deepseek-v4-flash'] },
-  'velcora-neural-flash': { id: 'velcora-neural-flash', name: 'Flash', backendCandidates: ['deepseek-v4-flash'] },
-  'velcora-axiom': { id: 'velcora-axiom', name: 'Financial Agent', backendCandidates: ['deepseek-v4-pro'] },
-  'velcora-omni': { id: 'velcora-omni', name: 'Omni', backendCandidates: ['deepseek-v4-pro'] },
-  'velcora-financial': { id: 'velcora-financial', name: 'Financial Agent', backendCandidates: ['deepseek-v4-pro'], isDeterministicFirst: true },
-  'velcora-brain': { id: 'velcora-brain', name: 'Omni', backendCandidates: ['deepseek-v4-pro'] },
-  'velcora-prism-lite': { id: 'velcora-prism-lite', name: 'Prism Lite', backendCandidates: ['imagen-3.0-generate-002'] },
-  'velcora-prism': { id: 'velcora-prism', name: 'Prism', backendCandidates: ['imagen-3.0-generate-002'] },
-  'velcora-prism-pro': { id: 'velcora-prism-pro', name: 'Prism Pro', backendCandidates: ['imagen-3.0-generate-002'] },
-  'velcora-veyra-lite': { id: 'velcora-veyra-lite', name: 'Veyra Lite', backendCandidates: ['veo-2.0-generate-001', 'veo-3.1-lite-generate-preview'] },
-  'velcora-veyra': { id: 'velcora-veyra', name: 'Veyra', backendCandidates: ['veo-2.0-generate-001', 'veo-3.1-lite-generate-preview'] },
-  'velcora-veyra-pro': { id: 'velcora-veyra-pro', name: 'Veyra Pro', backendCandidates: ['veo-2.0-generate-001', 'veo-3.1-lite-generate-preview'] },
-  'velcora-fashion-dealer': { id: 'velcora-fashion-dealer', name: 'FashionDealer', backendCandidates: ['deepseek-v4-pro'] },
+  'avanyx-chat': { id: 'avanyx-chat', name: 'Normal Chat', backendCandidates: ['deepseek-v4-flash'] },
+  'avanyx-neural-flash': { id: 'avanyx-neural-flash', name: 'Flash', backendCandidates: ['deepseek-v4-flash'] },
+  'avanyx-axiom': { id: 'avanyx-axiom', name: 'Financial Agent', backendCandidates: ['deepseek-v4-pro'] },
+  'avanyx-omni': { id: 'avanyx-omni', name: 'Omni', backendCandidates: ['deepseek-v4-pro'] },
+  'avanyx-financial': { id: 'avanyx-financial', name: 'Financial Agent', backendCandidates: ['deepseek-v4-pro'], isDeterministicFirst: true },
+  'avanyx-brain': { id: 'avanyx-brain', name: 'Omni', backendCandidates: ['deepseek-v4-pro'] },
+  'avanyx-prism-lite': { id: 'avanyx-prism-lite', name: 'Prism Lite', backendCandidates: ['imagen-3.0-generate-002'] },
+  'avanyx-prism': { id: 'avanyx-prism', name: 'Prism', backendCandidates: ['imagen-3.0-generate-002'] },
+  'avanyx-prism-pro': { id: 'avanyx-prism-pro', name: 'Prism Pro', backendCandidates: ['imagen-3.0-generate-002'] },
+  'avanyx-veyra-lite': { id: 'avanyx-veyra-lite', name: 'Veyra Lite', backendCandidates: ['veo-2.0-generate-001', 'veo-3.1-lite-generate-preview'] },
+  'avanyx-veyra': { id: 'avanyx-veyra', name: 'Veyra', backendCandidates: ['veo-2.0-generate-001', 'veo-3.1-lite-generate-preview'] },
+  'avanyx-veyra-pro': { id: 'avanyx-veyra-pro', name: 'Veyra Pro', backendCandidates: ['veo-2.0-generate-001', 'veo-3.1-lite-generate-preview'] },
+  'avanyx-fashion-dealer': { id: 'avanyx-fashion-dealer', name: 'FashionDealer', backendCandidates: ['deepseek-v4-pro'] },
 };
 
 /**
  * Builds a compact, lightweight Business Context Snapshot (< 200 tokens)
- * for Gemini Flash / Velcora Axiom sub-second responses.
+ * for Gemini Flash / Avanyx Axiom sub-second responses.
  */
 function buildCompactBusinessSnapshot(businessContext: any) {
   const products = businessContext?.topProducts || [];
@@ -1426,7 +1482,7 @@ function buildCompactBusinessSnapshot(businessContext: any) {
 
   return {
     biz: {
-      name: businessContext?.businessName || 'Velcora Enterprise Store',
+      name: businessContext?.businessName || 'Avanyx Enterprise Store',
       industry: businessContext?.industry || 'retail',
       currency,
       date: new Date().toISOString().slice(0, 10),
@@ -1454,7 +1510,7 @@ function buildCompactBusinessSnapshot(businessContext: any) {
  * Calculates exact revenue, COGS, gross & net profit, tax liability, margins,
  * inventory valuation, and break-even metrics using verified backend data.
  */
-function executeVelcoraFinancialEngine(userQuery: string, businessContext: any) {
+function executeAvanyxFinancialEngine(userQuery: string, businessContext: any) {
   const currency = businessContext?.currencySymbol || businessContext?.currency || '$';
   const products = businessContext?.topProducts || [];
   const expenses = businessContext?.expenses || [];
@@ -1507,7 +1563,7 @@ function executeVelcoraFinancialEngine(userQuery: string, businessContext: any) 
   const breakEvenRevenue = marginRatio > 0 ? Math.round(totalExpenses / marginRatio) : 0;
 
   const textReport = `
-[DETERMINISTIC FINANCIAL LEDGER AUDIT - VELCORA FINANCIAL ENGINE Core]
+[DETERMINISTIC FINANCIAL LEDGER AUDIT - AVANYX FINANCIAL ENGINE Core]
 • Verified Gross Revenue: ${currency}${revenue.toLocaleString()}
 • Calculated Cost of Goods Sold (COGS): ${currency}${cogs.toLocaleString()}
 • Verified Gross Profit: ${currency}${grossProfit.toLocaleString()} (${grossMarginPct}% Gross Margin)
@@ -1538,7 +1594,7 @@ MANDATORY RECONCILIATION: Always cite these exact verified mathematical results.
 }
 
 /**
- * Task Intent Detector for Velcora Fast Model Routing
+ * Task Intent Detector for Avanyx Fast Model Routing
  */
 
 export type QueryIntentCategory = 'POS_FAST_QUERY' | 'FINANCIAL_CALCULATION' | 'DEEP_REASONING_OR_CODE' | 'EVERYDAY_CHAT';
@@ -1573,7 +1629,7 @@ function routeUserQuery(
   requestedModelId?: string,
   businessContext?: any
 ): {
-  targetEngineConfig: VelcoraEngineConfig;
+  targetEngineConfig: AvanyxEngineConfig;
   intentCategory: QueryIntentCategory;
   snapshot?: any;
   financialAudit?: any;
@@ -1584,9 +1640,9 @@ function routeUserQuery(
   let targetEngineId = 'chat';
 
   // If user selected explicit specialized engine in UI, honor that identity
-  if (normalizedRequested && VELCORA_SERVER_ENGINES[normalizedRequested]) {
+  if (normalizedRequested && AVANYX_SERVER_ENGINES[normalizedRequested]) {
     targetEngineId = normalizedRequested;
-  } else if (normalizedRequested === 'velcora-chat' || normalizedRequested === 'chat') {
+  } else if (normalizedRequested === 'avanyx-chat' || normalizedRequested === 'chat') {
     targetEngineId = 'chat';
   } else {
     // Intelligent auto-routing based on intent category
@@ -1601,16 +1657,16 @@ function routeUserQuery(
     }
   }
 
-  const targetEngineConfig = VELCORA_SERVER_ENGINES[targetEngineId] || VELCORA_SERVER_ENGINES['chat'] || VELCORA_SERVER_ENGINES['velcora-chat'];
+  const targetEngineConfig = AVANYX_SERVER_ENGINES[targetEngineId] || AVANYX_SERVER_ENGINES['chat'] || AVANYX_SERVER_ENGINES['avanyx-chat'];
   let snapshot: any = null;
   let financialAudit: any = null;
 
-  if (targetEngineConfig.id === 'axiom' || targetEngineConfig.id === 'velcora-axiom' || intentCategory === 'POS_FAST_QUERY') {
+  if (targetEngineConfig.id === 'axiom' || targetEngineConfig.id === 'avanyx-axiom' || intentCategory === 'POS_FAST_QUERY') {
     snapshot = buildCompactBusinessSnapshot(businessContext);
   }
 
-  if (targetEngineConfig.id === 'velcora-financial' || intentCategory === 'FINANCIAL_CALCULATION') {
-    financialAudit = executeVelcoraFinancialEngine(message, businessContext);
+  if (targetEngineConfig.id === 'avanyx-financial' || intentCategory === 'FINANCIAL_CALCULATION') {
+    financialAudit = executeAvanyxFinancialEngine(message, businessContext);
   }
 
   return {
@@ -1624,10 +1680,10 @@ function routeUserQuery(
 function buildEngineSpecializationPrompt(engineId: string): string {
   switch (engineId) {
     case 'chat':
-    case 'velcora-chat':
+    case 'avanyx-chat':
       return `
-[ENGINE SPECIALIZATION: VOLCORA CHAT - SIMPLE • FAST • EVERYDAY AI]
-- Purpose & Identity: Volcora's friendly, intelligent, lightweight conversational AI chatbot.
+[ENGINE SPECIALIZATION: Avanyx CHAT - SIMPLE • FAST • EVERYDAY AI]
+- Purpose & Identity: Avanyx's friendly, intelligent, lightweight conversational AI chatbot.
 - Mission: Act as an approachable, helpful companion for everyday conversations, answering questions, explaining concepts clearly, discussing business, technology, education, science, history, brainstorming, simple calculations, quick writing assistance, and general knowledge.
 - Tone & Style: Direct, natural, friendly, articulate, and conversational. Deliver clear explanations with markdown formatting and structured clarity without unnecessary filler.
 - Multimodal Vision: Read, explain, and extract information from uploaded photos, receipts, documents, and screenshots with high precision.
@@ -1650,9 +1706,9 @@ function buildEngineSpecializationPrompt(engineId: string): string {
 - Delivery Style: Reconciled, mathematically exact, structured, and insightful.
 `;
 
-    case 'velcora-neural-flash':
+    case 'avanyx-neural-flash':
       return `
-[ENGINE SPECIALIZATION: VELCORA FLASH]
+[ENGINE SPECIALIZATION: Avanyx FLASH]
 - Optimization Focus: Sub-second high-speed operational coordination, rapid lookups, concise direct responses, and instant task completion.
 - Universal Capabilities Active: Full capability across programming, code debugging, software architecture, business logic, store telemetry, mathematical calculations, general knowledge, documents, strategy, and multimodal image analysis.
 - Delivery Style: Extremely crisp, direct, fast, and structured with clean bullet points or concise code/text blocks. Zero unnecessary filler.
@@ -1667,7 +1723,7 @@ function buildEngineSpecializationPrompt(engineId: string): string {
 `;
 
     case 'axiom':
-    case 'velcora-axiom':
+    case 'avanyx-axiom':
       return `
 [ENGINE SPECIALIZATION: AXIOM - FINANCIAL & BUSINESS INTELLIGENCE]
 - Optimization Focus: Financial and business intelligence, margin analysis, profit and loss computation, ledger math, cash flow telemetry, and POS analytics.
@@ -1677,89 +1733,91 @@ function buildEngineSpecializationPrompt(engineId: string): string {
 
     case 'omni':
       return `
-[ENGINE SPECIALIZATION: OMNI - GENERAL & ALL-PURPOSE INTELLIGENCE]
+[ENGINE SPECIALIZATION: Avanyx NEXUS - ADVANCED REASONING CONVERSATIONAL AI MODEL]
+- Identity & Description: Avanyx Nexus is Avanyx's advanced conversational AI model, designed for fast, intelligent, and natural interactions.
 - Optimization Focus: High-capacity frontier reasoning engine designed for deep reasoning, multi-turn strategic planning, large-context document analysis, complex code/architecture, and universal problem solving.
 - Universal Capabilities Active: Frontier capability across general knowledge, programming, debugging, technical architecture, business strategy, financial interpretation, planning, risk analysis, and structured outputs.
 - Delivery Style: Authoritative, comprehensive, beautifully structured, deeply analytical, and actionable.
 `;
 
-    case 'velcora-financial':
+    case 'avanyx-financial':
       return `
-[ENGINE SPECIALIZATION: VELCORA FINANCIAL]
+[ENGINE SPECIALIZATION: Avanyx FINANCIAL]
 - Optimization Focus: Deterministic financial ledger reconciliation, accounting mathematics, profit/margin audits, and tax/expense calculations.
 - Universal Capabilities Active: Full capability across programming, code debugging, software architecture, business logic, store telemetry, mathematical calculations, general knowledge, documents, strategy, and multimodal image analysis.
 - Delivery Style: Reconciled, mathematically exact, tabular, and rigorous.
 `;
 
-    case 'velcora-omni':
+    case 'avanyx-omni':
       return `
-[ENGINE SPECIALIZATION: VELCORA OMNI - FLAGSHIP GENERAL INTELLIGENCE SUPER ENGINE]
+[ENGINE SPECIALIZATION: Avanyx NEXUS - ADVANCED REASONING & GENERAL INTELLIGENCE]
+- Identity & Description: Avanyx Nexus is Avanyx's advanced conversational AI model, designed for fast, intelligent, and natural interactions.
 - Optimization Focus: Maximum overall general intelligence, flagship reasoning quality, multi-thousand-line codebase & document understanding, complex software architecture, multi-turn context retention, cross-domain synthesis, and advanced multimodal image/screenshot/receipt/diagram parsing.
 - Universal Capabilities Active: Unrestricted frontier capability across general knowledge work, programming, debugging, technical architecture, business strategy, financial interpretation, mathematical calculations, research-style synthesis, planning, risk analysis, and structured outputs.
 - Integration Core: Unifies Model Knowledge + User Context + Business Brain Telemetry + Second Brain Knowledge Base + Verified Ledger Calculations + Tool Execution into a single authoritative synthesis.
 - Delivery Style: Authoritative, comprehensive, beautifully structured, deeply analytical, and actionable. Zero filler.
 `;
 
-    case 'velcora-brain':
+    case 'avanyx-brain':
       return `
-[ENGINE SPECIALIZATION: VELCORA BUSINESS BRAIN]
+[ENGINE SPECIALIZATION: Avanyx BUSINESS BRAIN]
 - Optimization Focus: Deepest integration with live store ledger telemetry, Second Brain durable memory, executive health diagnostics, and enterprise growth strategy.
 - Universal Capabilities Active: Full capability across programming, code debugging, software architecture, business logic, store telemetry, mathematical calculations, general knowledge, documents, strategy, and multimodal image analysis.
 - Delivery Style: Strategic, diagnostic, data-grounded, and executive-ready.
 `;
 
-    case 'velcora-fashion-dealer':
+    case 'avanyx-fashion-dealer':
       return `
-[ENGINE SPECIALIZATION: VELCORA FASHION DEALER]
+[ENGINE SPECIALIZATION: AVANYX FASHION DEALER]
 - Optimization Focus: Specialized fashion & apparel market intelligence overlay, seasonal trend synthesis, and lifestyle merchandising strategies.
 - Universal Capabilities Active: Full capability across programming, code debugging, software architecture, business logic, store telemetry, mathematical calculations, general knowledge, documents, strategy, and multimodal image analysis.
 `;
 
     default:
       return `
-[ENGINE SPECIALIZATION: VELCORA AI]
+[ENGINE SPECIALIZATION: Avanyx AI]
 - Universal Capabilities Active: Full capability across programming, code debugging, software architecture, business logic, store telemetry, mathematical calculations, general knowledge, documents, strategy, and multimodal image analysis.
 `;
   }
 }
 
-function resolveServerEngine(engineIdOrModel?: string): VelcoraEngineConfig {
-  if (!engineIdOrModel) return VELCORA_SERVER_ENGINES['velcora-chat'];
+function resolveServerEngine(engineIdOrModel?: string): AvanyxEngineConfig {
+  if (!engineIdOrModel) return AVANYX_SERVER_ENGINES['avanyx-chat'];
   const normalized = engineIdOrModel.trim().toLowerCase();
 
-  if (VELCORA_SERVER_ENGINES[normalized]) {
-    return VELCORA_SERVER_ENGINES[normalized];
+  if (AVANYX_SERVER_ENGINES[normalized]) {
+    return AVANYX_SERVER_ENGINES[normalized];
   }
 
   if (normalized.includes('brain') || normalized.includes('business-brain')) {
-    return VELCORA_SERVER_ENGINES['velcora-brain'];
+    return AVANYX_SERVER_ENGINES['avanyx-brain'];
   }
   if (normalized.includes('fashion-dealer') || normalized.includes('fashiondealer')) {
-    return VELCORA_SERVER_ENGINES['velcora-fashion-dealer'];
+    return AVANYX_SERVER_ENGINES['avanyx-fashion-dealer'];
   }
   if (normalized.includes('chat')) {
-    return VELCORA_SERVER_ENGINES['velcora-chat'];
+    return AVANYX_SERVER_ENGINES['avanyx-chat'];
   }
   if (normalized.includes('axiom') || normalized.includes('axoum') || normalized.includes('deep-thinking') || normalized.includes('reasoning')) {
-    return VELCORA_SERVER_ENGINES['velcora-axiom'];
+    return AVANYX_SERVER_ENGINES['avanyx-axiom'];
   }
   if (normalized.includes('omni')) {
-    return VELCORA_SERVER_ENGINES['velcora-omni'];
+    return AVANYX_SERVER_ENGINES['avanyx-omni'];
   }
   if (normalized.includes('studio') || normalized.includes('creative')) {
-    return VELCORA_SERVER_ENGINES['velcora-omni'];
+    return AVANYX_SERVER_ENGINES['avanyx-omni'];
   }
   if (normalized.includes('financial') || normalized.includes('finance') || normalized.includes('quant')) {
-    return VELCORA_SERVER_ENGINES['velcora-financial'];
+    return AVANYX_SERVER_ENGINES['avanyx-financial'];
   }
-  if (normalized.includes('prism-pro')) return VELCORA_SERVER_ENGINES['velcora-prism-pro'];
-  if (normalized.includes('prism-lite')) return VELCORA_SERVER_ENGINES['velcora-prism-lite'];
-  if (normalized.includes('prism')) return VELCORA_SERVER_ENGINES['velcora-prism'];
-  if (normalized.includes('veyra-pro')) return VELCORA_SERVER_ENGINES['velcora-veyra-pro'];
-  if (normalized.includes('veyra-lite')) return VELCORA_SERVER_ENGINES['velcora-veyra-lite'];
-  if (normalized.includes('veyra')) return VELCORA_SERVER_ENGINES['velcora-veyra'];
+  if (normalized.includes('prism-pro')) return AVANYX_SERVER_ENGINES['avanyx-prism-pro'];
+  if (normalized.includes('prism-lite')) return AVANYX_SERVER_ENGINES['avanyx-prism-lite'];
+  if (normalized.includes('prism')) return AVANYX_SERVER_ENGINES['avanyx-prism'];
+  if (normalized.includes('veyra-pro')) return AVANYX_SERVER_ENGINES['avanyx-veyra-pro'];
+  if (normalized.includes('veyra-lite')) return AVANYX_SERVER_ENGINES['avanyx-veyra-lite'];
+  if (normalized.includes('veyra')) return AVANYX_SERVER_ENGINES['avanyx-veyra'];
 
-  return VELCORA_SERVER_ENGINES['velcora-axiom'];
+  return AVANYX_SERVER_ENGINES['avanyx-axiom'];
 }
 
 // Model Health Tracker for Multi-Model Continuous Failover
@@ -1809,7 +1867,7 @@ class ModelHealthTracker {
     // Deprioritize model for 45s if 2+ consecutive failures occur
     if (metrics.consecutiveFailures >= 2) {
       metrics.deprioritizedUntil = Date.now() + 45000;
-      console.warn(`[Velcora Health Tracker] Model '${model}' deprioritized for 45s due to ${metrics.consecutiveFailures} consecutive failures: ${errorReason}`);
+      console.warn(`[Avanyx Health Tracker] Model '${model}' deprioritized for 45s due to ${metrics.consecutiveFailures} consecutive failures: ${errorReason}`);
     }
   }
 
@@ -1866,8 +1924,8 @@ function isFailoverSafeError(err: any): boolean {
   return true; // Default to safe failover to guarantee user request never drops!
 }
 
-// Helper: Builds a strictly compliant, sanitized multi-turn conversation contents payload for the Gemini API
-function buildSanitizedConversationContents(history: any[], currentMessage?: string, attachment?: any): any[] {
+// Helper: Builds a strictly compliant, sanitized multi-turn conversation contents payload for the Gemini API / unified router
+function buildSanitizedConversationContents(history: any[], currentMessage?: string, attachment?: any, attachments?: any[]): any[] {
   const contents: any[] = [];
   const cleanCurrent = (currentMessage || '').trim();
 
@@ -1887,7 +1945,34 @@ function buildSanitizedConversationContents(history: any[], currentMessage?: str
     for (let i = 0; i < cleanHistory.length; i++) {
       const h = cleanHistory[i];
       const text = (h.content || (h.parts && h.parts[0]?.text) || h.text || '').trim();
-      if (!text) continue;
+      
+      const turnAttachments: any[] = [];
+      if (Array.isArray(h.attachments)) turnAttachments.push(...h.attachments);
+      else if (h.attachment) turnAttachments.push(h.attachment);
+
+      if (Array.isArray(h.attachmentsPreview)) {
+        h.attachmentsPreview.forEach((p: string, idx: number) => {
+          if (p && typeof p === 'string') {
+            turnAttachments.push({
+              mimeType: p.startsWith('data:') ? (p.split(';')[0].replace('data:', '') || 'image/jpeg') : 'image/jpeg',
+              base64: p,
+              name: `history_image_${idx + 1}`,
+            });
+          }
+        });
+      } else if (h.attachmentPreview && typeof h.attachmentPreview === 'string') {
+        turnAttachments.push({
+          mimeType: h.attachmentPreview.startsWith('data:') ? (h.attachmentPreview.split(';')[0].replace('data:', '') || 'image/jpeg') : 'image/jpeg',
+          base64: h.attachmentPreview,
+          name: 'history_image_1',
+        });
+      }
+
+      if (Array.isArray(h.images)) {
+        turnAttachments.push(...h.images);
+      }
+
+      if (!text && turnAttachments.length === 0) continue;
 
       const role = (h.role === 'assistant' || h.role === 'model' || h.sender === 'assistant') ? 'model' : 'user';
 
@@ -1896,29 +1981,69 @@ function buildSanitizedConversationContents(history: any[], currentMessage?: str
         continue;
       }
 
-      if (contents.length > 0 && contents[contents.length - 1].role === role) {
-        contents[contents.length - 1].parts[0].text += '\n\n' + text;
-      } else {
-        contents.push({
-          role,
-          parts: [{ text }],
-        });
+      const turnParts: any[] = [];
+      for (const att of turnAttachments) {
+        const rawData = att?.base64 || att?.data || '';
+        const rawMime = att?.mimeType || 'image/jpeg';
+        if (rawData) {
+          const cleanData = rawData.replace(/^data:.*?;base64,/, '').trim();
+          if (cleanData) {
+            turnParts.push({
+              inlineData: {
+                mimeType: rawMime,
+                data: cleanData,
+                name: att.name || 'image',
+              },
+            });
+          }
+        }
+      }
+      if (text) {
+        turnParts.push({ text });
+      } else if (turnParts.length > 0) {
+        turnParts.push({ text: 'Analyze this image.' });
+      }
+
+      if (turnParts.length > 0) {
+        if (contents.length > 0 && contents[contents.length - 1].role === role) {
+          contents[contents.length - 1].parts.push(...turnParts);
+        } else {
+          contents.push({
+            role,
+            parts: turnParts,
+          });
+        }
       }
     }
   }
 
   // 2. Append current user message
   const currentParts: any[] = [];
-  if (attachment && attachment.base64 && attachment.mimeType) {
-    const cleanData = attachment.base64.replace(/^data:.*?;base64,/, '');
-    currentParts.push({
-      inlineData: {
-        mimeType: attachment.mimeType,
-        data: cleanData,
-      },
-    });
+  const currentAttachments: any[] = [];
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    currentAttachments.push(...attachments);
+  } else if (attachment) {
+    currentAttachments.push(attachment);
   }
-  const mainText = cleanCurrent || (attachment ? 'Please analyze this receipt/invoice/document in detail and extract all key data (vendor, line items, totals, dates).' : 'Hello');
+
+  for (const att of currentAttachments) {
+    const rawData = att?.base64 || att?.data || '';
+    const rawMime = att?.mimeType || 'image/jpeg';
+    if (rawData) {
+      const cleanData = rawData.replace(/^data:.*?;base64,/, '').trim();
+      if (cleanData) {
+        currentParts.push({
+          inlineData: {
+            mimeType: rawMime,
+            data: cleanData,
+            name: att.name || 'image',
+          },
+        });
+      }
+    }
+  }
+
+  const mainText = cleanCurrent || (currentAttachments.length > 0 ? 'Please inspect and analyze the attached image(s) in detail.' : 'Hello');
   currentParts.push({ text: mainText });
 
   if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
@@ -1943,8 +2068,9 @@ async function generateWithFallback(
     thinkingConfig?: any;
     responseMimeType?: string;
     maxOutputTokens?: number;
+    images?: NormalizedImageAttachment[];
   },
-  extra?: { userId?: string; requestId?: string; businessId?: string }
+  extra?: { userId?: string; requestId?: string; businessId?: string; images?: NormalizedImageAttachment[] }
 ): Promise<{
   text: string;
   modelUsed: string;
@@ -1953,15 +2079,48 @@ async function generateWithFallback(
   attemptLogs: Array<{ model: string; durationMs: number; status: 'SUCCESS' | 'FAILED'; error?: string }>;
   latencyMs: number;
 }> {
-  // Convert to DeepSeek message format for the router
-  const deepSeekMessages: DeepSeekMessage[] = (generateParams.contents || []).map((c: any) => {
+  const extractedImages: NormalizedImageAttachment[] = [];
+  if (generateParams.images && Array.isArray(generateParams.images)) {
+    extractedImages.push(...generateParams.images);
+  }
+  if (extra?.images && Array.isArray(extra.images)) {
+    extractedImages.push(...extra.images);
+  }
+
+  // Convert to Router message format with per-turn image preservation
+  const routerMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string; images?: NormalizedImageAttachment[] }> = [];
+
+  for (const c of generateParams.contents || []) {
     if (c.role && c.parts) {
-      // Gemini-formatted content
-      return { role: c.role === 'model' ? 'assistant' : c.role, content: c.parts.map((p: any) => p.text || '').join('') };
+      const textParts: string[] = [];
+      const turnImages: NormalizedImageAttachment[] = [];
+      for (const p of c.parts) {
+        if (p.text) {
+          textParts.push(p.text);
+        }
+        if (p.inlineData && p.inlineData.data) {
+          const mimeType = p.inlineData.mimeType || 'image/jpeg';
+          const cleanData = p.inlineData.data.replace(/^data:.*?;base64,/, '').trim();
+          if (cleanData) {
+            const imgObj: NormalizedImageAttachment = {
+              mimeType,
+              data: cleanData,
+              name: p.inlineData.name || 'image',
+            };
+            turnImages.push(imgObj);
+            extractedImages.push(imgObj);
+          }
+        }
+      }
+      routerMessages.push({
+        role: c.role === 'model' ? 'assistant' : c.role,
+        content: textParts.join('\n') || (turnImages.length > 0 ? 'Analyze the attached image(s).' : ''),
+        images: turnImages.length > 0 ? turnImages : undefined,
+      });
+    } else {
+      routerMessages.push(c);
     }
-    // Already DeepSeek format
-    return c as DeepSeekMessage;
-  });
+  }
 
   const startTime = Date.now();
   const attemptLogs: Array<{ model: string; durationMs: number; status: 'SUCCESS' | 'FAILED'; error?: string }> = [];
@@ -1969,7 +2128,8 @@ async function generateWithFallback(
   try {
     const routerRequest: NormalizedRequest & { userId?: string; requestId?: string; businessId?: string } = {
       engineId: engineIdOrModel,
-      messages: deepSeekMessages,
+      messages: routerMessages,
+      images: extractedImages.length > 0 ? extractedImages : undefined,
       maxTokens: generateParams.maxOutputTokens || 4096,
       userId: extra?.userId,
       requestId: extra?.requestId,
@@ -2005,21 +2165,21 @@ async function generateWithFallback(
   }
 }
 
-// Resilient Offline/No-API-Key Fallback AI Engine simulating Velcora's premium engines
+// Resilient Offline/No-API-Key Fallback AI Engine simulating Avanyx's premium engines
 function generateSimulatedResponse(message: string, engineId: string, businessContext: any, history?: any[]): { text: string; modelUsed: string } {
   const msg = (message || '').toLowerCase();
   let text = '';
-  const modelUsed = 'Velcora Local Intel Engine (Resilient Offline Fallback)';
+  const modelUsed = 'Avanyx Local Intel Engine (Resilient Offline Fallback)';
 
-  const bizName = businessContext?.businessName || businessContext?.name || 'Velcora Partner Store';
+  const bizName = businessContext?.businessName || businessContext?.name || 'Avanyx Partner Store';
   const industry = businessContext?.industry || 'retail';
   const currency = businessContext?.currencySymbol || businessContext?.currency || '$';
   const revenue = businessContext?.revenue || 24500;
   const netProfit = businessContext?.netProfit || 4900;
   const margin = businessContext?.profitMargin || '20.0%';
 
-  if (engineId === 'velcora-fashion-dealer' || msg.includes('fashion') || msg.includes('style') || msg.includes('apparel') || msg.includes('clothing') || msg.includes('trend')) {
-    text = `### 🌟 Velcora FashionDealer™ Market Intelligence Report
+  if (engineId === 'avanyx-fashion-dealer' || msg.includes('fashion') || msg.includes('style') || msg.includes('apparel') || msg.includes('clothing') || msg.includes('trend')) {
+    text = `### 🌟 Avanyx FashionDealer™ Market Intelligence Report
 For **${bizName}** (${industry})
 
 #### 1. Real-Time Trend Analysis & Local Synthesized Signals
@@ -2046,7 +2206,7 @@ Based on your registered customer base:
 #### 3. Strategic Action Proposal
 We recommend creating a targeted promotional campaign and adjusting procurement:
 
-\`\`\`velcora-action
+\`\`\`avanyx-action
 {
   "actionType": "CREATE_GOAL",
   "label": "Linen & Tailored Capsule Launch",
@@ -2059,8 +2219,8 @@ We recommend creating a targeted promotional campaign and adjusting procurement:
 }
 \`\`\`
 `;
-  } else if (engineId === 'velcora-financial' || msg.includes('revenue') || msg.includes('profit') || msg.includes('margin') || msg.includes('ledger') || msg.includes('financial') || msg.includes('sale') || msg.includes('money') || msg.includes('audit')) {
-    text = `### 📊 Velcora Financial Axiom™ Store Audit Report
+  } else if (engineId === 'avanyx-financial' || msg.includes('revenue') || msg.includes('profit') || msg.includes('margin') || msg.includes('ledger') || msg.includes('financial') || msg.includes('sale') || msg.includes('money') || msg.includes('audit')) {
+    text = `### 📊 Avanyx Financial Axiom™ Store Audit Report
 Deterministic ledger verification for **${bizName}**
 
 #### 1. Store Financial Health Summary
@@ -2076,7 +2236,7 @@ We have compiled and reconciled your active store transactions:
 #### 3. Recommended Financial Goal
 Let's establish a financial goal to increase operational profit margins:
 
-\`\`\`velcora-action
+\`\`\`avanyx-action
 {
   "actionType": "CREATE_GOAL",
   "label": "Enhance Store Margin by 3.5%",
@@ -2090,7 +2250,7 @@ Let's establish a financial goal to increase operational profit margins:
 \`\`\`
 `;
   } else if (msg.includes('task') || msg.includes('todo') || msg.includes('reminder') || msg.includes('add task')) {
-    text = `### 📋 Velcora Action Agent™
+    text = `### 📋 Avanyx Action Agent™
 I can help you schedule and manage critical store operations.
 
 I've generated a task proposal to help keep your team organized:
@@ -2099,7 +2259,7 @@ I've generated a task proposal to help keep your team organized:
 
 Please confirm the action block below to add this task to your operational task list:
 
-\`\`\`velcora-action
+\`\`\`avanyx-action
 {
   "actionType": "CREATE_TASK",
   "label": "Audit high-velocity inventory stock levels",
@@ -2113,7 +2273,7 @@ Please confirm the action block below to add this task to your operational task 
 \`\`\`
 `;
   } else if (msg.includes('expense') || msg.includes('spending') || msg.includes('spent') || msg.includes('add expense') || msg.includes('bill')) {
-    text = `### 💸 Velcora Expense Manager™
+    text = `### 💸 Avanyx Expense Manager™
 Let's record this operational expense for your business.
 
 I have structured the expense detail below:
@@ -2123,7 +2283,7 @@ I have structured the expense detail below:
 
 Verify and click confirm on the action proposal below to post this transaction to your financial ledger:
 
-\`\`\`velcora-action
+\`\`\`avanyx-action
 {
   "actionType": "CREATE_EXPENSE",
   "label": "POS & Packaging Supplies Purchase",
@@ -2138,7 +2298,7 @@ Verify and click confirm on the action proposal below to post this transaction t
 \`\`\`
 `;
   } else if (msg.includes('stock') || msg.includes('inventory') || msg.includes('buy') || msg.includes('restock') || msg.includes('purchase order')) {
-    text = `### 📦 Velcora Intelligent Stock & Procurement Auditor
+    text = `### 📦 Avanyx Intelligent Stock & Procurement Auditor
 Inventory velocity report for **${bizName}**
 
 #### 1. Current Stock Analysis
@@ -2148,7 +2308,7 @@ Inventory velocity report for **${bizName}**
 #### 2. Procurement Recommendation
 We recommend preparing a replenishment purchase order for your primary supplier:
 
-\`\`\`velcora-action
+\`\`\`avanyx-action
 {
   "actionType": "CREATE_PURCHASE_ORDER",
   "label": "Weekend Inventory Replenishment",
@@ -2163,7 +2323,7 @@ We recommend preparing a replenishment purchase order for your primary supplier:
 \`\`\`
 `;
   } else {
-    text = `### 👋 Welcome to Ask Velcora AI
+    text = `### 👋 Welcome to Ask Avanyx AI
 I am your executive business brain and retail advisor. I can assist you with code development, financial strategy, inventory analysis, market trends, and team operations.
 
 #### 🌟 Recommended Topics to Explore:
@@ -2205,7 +2365,7 @@ function generateHighAestheticCommercialSvg(
   else if (aspectRatio === '4:3') { width = 1024; height = 768; }
   else if (aspectRatio === '3:4') { width = 768; height = 1024; }
 
-  const cleanBiz = escapeXml(businessName || 'VELCORA');
+  const cleanBiz = escapeXml(businessName || 'AVANYX');
   const cleanPrompt = escapeXml((prompt || 'Commercial Asset Showcase').slice(0, 85));
   const cleanStyle = escapeXml(style || 'Commercial Photorealistic');
 
@@ -2327,7 +2487,7 @@ function generateHighAestheticCommercialSvg(
   <g transform="translate(40, ${cardY})" filter="url(#shadowFilter)">
     <rect width="${width - 80}" height="95" rx="20" fill="url(#cardGrad)" stroke="${accent1}" stroke-width="1.5" />
 
-    <text x="30" y="32" fill="${badgeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="800" letter-spacing="2">VELCORA STUDIO CREATIVE PRODUCTION</text>
+    <text x="30" y="32" fill="${badgeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="800" letter-spacing="2">Avanyx STUDIO CREATIVE PRODUCTION</text>
     
     <text x="30" y="60" fill="#F8FAFC" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="800">
       ${cleanPrompt}
@@ -2341,49 +2501,49 @@ function generateHighAestheticCommercialSvg(
   return `data:image/svg+xml;base64,${base64}`;
 }
 
-// 2. Ask Velcora AI Endpoint (Ultra-Smart Multi-Turn with Resilient Cascade, Second Brain Grounding & Action Agent)
+// 2. Ask Avanyx AI Endpoint (Ultra-Smart Multi-Turn with Resilient Cascade, Second Brain Grounding & Action Agent)
 app.post('/api/ai/ask', async (req, res) => {
-  const { message, history, businessContext, modelId, attachment, tenantId: bodyTenantId, userId: bodyUserId, simulateQuotaExhaustion, sessionId, pendingMsgId } = req.body;
-  const tenantId = (req.headers['x-tenant-id'] as string) || bodyTenantId || 'velcora-default-store';
+  const { message, history, businessContext, modelId, attachment, attachments, tenantId: bodyTenantId, userId: bodyUserId, simulateQuotaExhaustion, sessionId, pendingMsgId } = req.body;
+  const tenantId = (req.headers['x-tenant-id'] as string) || bodyTenantId || 'avanyx-default-store';
   const userId = (req.headers['x-user-id'] as string) || bodyUserId || 'default-user';
   const requestId = `req-ask-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
   // Enforce administrative suspension check
   try {
-    const wallet = await VelcoraCreditSystem.getWallet(userId);
+    const wallet = await AvanyxCreditSystem.getWallet(userId);
     if (wallet && wallet.isSuspended) {
       return res.status(403).json({
         success: false,
         error: 'ACCOUNT_SUSPENDED',
-        message: 'Your Velcora account has been suspended by an administrator. Please contact support or your founder.'
+        message: 'Your Avanyx account has been suspended by an administrator. Please contact support or your founder.'
       });
     }
   } catch (err) {
     // Fail-safe to avoid blocking requests if credit system has a temporary glitch
   }
 
-  // Run Velcora AI Intent Router
+  // Run Avanyx AI Intent Router
   const { targetEngineConfig, intentCategory, snapshot, financialAudit } = routeUserQuery(message, modelId, businessContext);
   const requestedEngine = targetEngineConfig;
 
   // Independent backend model validation
-  const isLegitimateModel = !!VELCORA_SERVER_ENGINES[requestedEngine.id];
+  const isLegitimateModel = !!AVANYX_SERVER_ENGINES[requestedEngine.id];
   if (!isLegitimateModel) {
     return res.status(400).json({
       success: false,
       error: 'INVALID_MODEL',
-      message: 'The requested AI engine is not a valid Velcora model configuration.'
+      message: 'The requested AI engine is not a valid Avanyx model configuration.'
     });
   }
 
   // Enforce industry restriction for specialized models (like FashionDealer)
-  if (requestedEngine.id === 'velcora-fashion-dealer') {
+  if (requestedEngine.id === 'avanyx-fashion-dealer') {
     const isFashion = ['clothing', 'footwear', 'cosmetics', 'retail'].includes((businessContext?.industry || '').toLowerCase());
     if (!isFashion) {
       return res.status(400).json({
         success: false,
         error: 'MODEL_RESTRICTED',
-        message: 'The specialized Velcora FashionDealer engine is restricted exclusively to Fashion, Retail, and Apparel industries. Access denied.'
+        message: 'The specialized Avanyx FashionDealer engine is restricted exclusively to Fashion, Retail, and Apparel industries. Access denied.'
       });
     }
   }
@@ -2393,10 +2553,10 @@ app.post('/api/ai/ask', async (req, res) => {
 
   // Build Context Representation based on routing pathway
   let contextRepresentation = '';
-  if (requestedEngine.id === 'velcora-axiom' || intentCategory === 'POS_FAST_QUERY') {
+  if (requestedEngine.id === 'avanyx-axiom' || intentCategory === 'POS_FAST_QUERY') {
     contextRepresentation = `COMPACT BUSINESS CONTEXT SNAPSHOT (FAST POS LOOKUP):\n${JSON.stringify(snapshot || buildCompactBusinessSnapshot(businessContext), null, 2)}`;
-  } else if (requestedEngine.id === 'velcora-financial' || intentCategory === 'FINANCIAL_CALCULATION') {
-    contextRepresentation = financialAudit?.textReport || executeVelcoraFinancialEngine(message, businessContext).textReport;
+  } else if (requestedEngine.id === 'avanyx-financial' || intentCategory === 'FINANCIAL_CALCULATION') {
+    contextRepresentation = financialAudit?.textReport || executeAvanyxFinancialEngine(message, businessContext).textReport;
   } else {
     contextRepresentation = `FULL BUSINESS PROFILE & LIVE STORE LEDGER:\n${JSON.stringify(businessContext || {}, null, 2)}`;
   }
@@ -2404,14 +2564,14 @@ app.post('/api/ai/ask', async (req, res) => {
   // Fetch user wallet to get subscription tier
   let userTier: 'free' | 'pro' | 'pro_max' = 'free';
   try {
-    const wallet = await VelcoraCreditSystem.getWallet(userId);
+    const wallet = await AvanyxCreditSystem.getWallet(userId);
     userTier = (wallet?.subscriptionTier || 'free') as any;
   } catch (walletErr) {
-    console.warn('[Velcora Ask] Error fetching user wallet, defaulting to free tier:', walletErr);
+    console.warn('[Avanyx Ask] Error fetching user wallet, defaulting to free tier:', walletErr);
   }
 
   // Enforce tier-based authorization: Free users can only use Chat engine
-  if (userTier === 'free' && requestedEngine.id !== 'velcora-chat' && requestedEngine.id !== 'chat') {
+  if (userTier === 'free' && requestedEngine.id !== 'avanyx-chat' && requestedEngine.id !== 'chat') {
     return res.status(403).json({
       success: false,
       error: 'UPGRADE_REQUIRED',
@@ -2427,13 +2587,13 @@ app.post('/api/ai/ask', async (req, res) => {
     maxOutputTokens = 8192;
   }
 
-  // --- PATHWAY: UNIFIED VELCORA ENGINE CHAT (Atomically verified, reserved, and settled) ---
+  // --- PATHWAY: UNIFIED AVANYX ENGINE CHAT (Atomically verified, reserved, and settled) ---
   const estimatedMaxTokens = 6000;
-  const maxCost = VelcoraCreditSystem.calculateMaxCost(requestedEngine.id, estimatedMaxTokens, 0);
+  const maxCost = AvanyxCreditSystem.calculateMaxCost(requestedEngine.id, estimatedMaxTokens, 0);
 
   try {
     // 1. Credit balance validation, hourly rate limit, and atomic reservation
-    const reservation = await VelcoraCreditSystem.reserveCredits(userId, requestedEngine.id, maxCost, requestId);
+    const reservation = await AvanyxCreditSystem.reserveCredits(userId, requestedEngine.id, maxCost, requestId);
     if (!reservation.allowed) {
       return res.json({
         success: false,
@@ -2445,7 +2605,7 @@ app.post('/api/ai/ask', async (req, res) => {
     // 2. Handle simulated quota exhaustion trigger
     if (simulateQuotaExhaustion) {
       try {
-        await VelcoraCreditSystem.refundReservation(userId, requestId);
+        await AvanyxCreditSystem.refundReservation(userId, requestId);
       } catch (_) {}
       return res.json({
         success: true,
@@ -2539,7 +2699,7 @@ app.post('/api/ai/ask', async (req, res) => {
       fashionIntelligencePrompt = `
 5. FASHION MARKET INTELLIGENCE LAYER (INACTIVE):
    This business belongs to the "${businessContext?.industry || 'other'}" industry. Do NOT display or trigger fashion-specific trends, clothing visual assets, or style recommendations.
-   If the user asks fashion trend questions (e.g. "What fashion styles are trending?", "What should I stock this week?" with apparel terms), politely inform them that Velcora's Fashion Market Intelligence overlay is active exclusively for Fashion, Apparel, Footwear, and cosmetics retail businesses, but you can provide a high-fidelity inventory and velocity audit of their specific store assets instead.`;
+   If the user asks fashion trend questions (e.g. "What fashion styles are trending?", "What should I stock this week?" with apparel terms), politely inform them that Avanyx's Fashion Market Intelligence overlay is active exclusively for Fashion, Apparel, Footwear, and cosmetics retail businesses, but you can provide a high-fidelity inventory and velocity audit of their specific store assets instead.`;
     }
 
     // Financial deterministic reconciliation layer
@@ -2552,10 +2712,10 @@ app.post('/api/ai/ask', async (req, res) => {
       const netProfit = Number(businessContext.netProfit || 0);
       const margin = Number(businessContext.profitMargin || (revenue > 0 ? ((netProfit / revenue) * 100).toFixed(1) : 0));
       const currency = businessContext.currencySymbol || '$';
-      financialAnchorsText = `\n\n[DETERMINISTIC FINANCIAL LEDGER AUDIT - VELCORA FINANCIAL ENGINE]\n- Verified Gross Revenue: ${currency}${revenue.toLocaleString()}\n- Verified Net Operating Profit: ${currency}${netProfit.toLocaleString()}\n- Verified Profit Margin: ${margin}%\n- Base Currency: ${businessContext.currency || 'USD'}\nMANDATORY FINANCIAL RECONCILIATION: When discussing financial metrics, cite these exact verified figures. Do NOT hallucinate differing financial aggregates.`;
+      financialAnchorsText = `\n\n[DETERMINISTIC FINANCIAL LEDGER AUDIT - AVANYX FINANCIAL ENGINE]\n- Verified Gross Revenue: ${currency}${revenue.toLocaleString()}\n- Verified Net Operating Profit: ${currency}${netProfit.toLocaleString()}\n- Verified Profit Margin: ${margin}%\n- Base Currency: ${businessContext.currency || 'USD'}\nMANDATORY FINANCIAL RECONCILIATION: When discussing financial metrics, cite these exact verified figures. Do NOT hallucinate differing financial aggregates.`;
     }
 
-    const systemInstruction = `You are "Ask Velcora AI", the executive business brain, strategic advisor, code architect, and operational assistant embedded in the VELCORA Universal Business & POS Platform.
+    const systemInstruction = `You are "Ask Avanyx AI", the executive business brain, strategic advisor, code architect, and operational assistant embedded in the Avanyx Universal Business & POS Platform.
 You possess frontier analytical, mathematical, operational, creative, technical, and action-oriented intelligence.
 
 ${contextRepresentation}${secondBrainContextText}${financialAnchorsText}
@@ -2571,9 +2731,17 @@ CORE INTELLIGENCE & UNIVERSAL CAPABILITY DIRECTIVES:
      * MULTIMODAL & VISUAL UNDERSTANDING: Processing product photos, screenshots, UI mockups, charts, graphs, receipts, diagrams, and visual business assets.
    - Do NOT refuse or artificially restrict any coding, technical, general knowledge, or business query simply because of your engine name. All engines share universal capabilities; your engine name reflects your primary optimization and routing priority, NOT a restriction.
 
-2. MULTIMODAL & VISUAL UNDERSTANDING:
-   - When an image, photo, screenshot, receipt, invoice, diagram, chart, or document attachment is provided, analyze all visual elements and text thoroughly (extracting vendors, line items, totals, dates, UI components, code snippets, or graphical trends).
-   - Accurately describe and extract what is physically present in the attachment.
+2. MULTIMODAL VISION & IMAGE UNDERSTANDING (STATE-OF-THE-ART):
+   - You have state-of-the-art multimodal vision capabilities across all image, document, chart, receipt, invoice, handwritten, screenshot, and product formats.
+   - When an image or document is provided:
+     * ALWAYS directly answer the user's specific question or instruction regarding the image (e.g. if the user asks "What is this and what category should I put it in?", identify the product, describe its key attributes/materials/color, and give the recommended category, tags, and suggested pricing).
+     * PRODUCTS & MERCHANDISE: Identify the exact product type, brand, materials, color palette, style, purpose, and recommend optimal store categories, product names, SKUs, and pricing margins.
+     * OCR, RECEIPTS & INVOICES: Transcribe printed and handwritten text with high precision. Extract vendor name, dates, invoice numbers, line items with quantities and unit prices, subtotals, tax amounts, discounts, and final totals.
+     * SCREENSHOTS, UI & CODE: Read error messages, stack traces, visual bugs, UI layouts, form inputs, and system alerts. Provide root cause diagnoses and concrete step-by-step code solutions.
+     * CHARTS, GRAPHS & DIAGRAMS: Read axes, data points, legends, trends, spikes, anomalies, and deliver clear business conclusions.
+     * HANDWRITING & NOTES: Transcribe handwritten memos, order notes, or whiteboard sketches accurately and answer the user's inquiry.
+     * Never give generic evasive placeholders like "I see an image" unless a simple caption was asked for. Provide substantive, insightful, accurate visual analysis.
+     * Retain full conversational awareness of previously uploaded images during follow-up questions.
 
 3. GROUNDED TRUTH & HONEST DATA DISTINCTION:
    - Explicitly distinguish between:
@@ -2590,7 +2758,7 @@ CORE INTELLIGENCE & UNIVERSAL CAPABILITY DIRECTIVES:
 5. ACTION AGENT & WORKFLOW PROPOSALS:
    - When the user asks you to perform an action (e.g., create a task, set a business goal, draft a purchase order, record an expense, or adjust inventory), formulation must include the natural language explanation AND an executable action block at the very end of your response using this exact format:
 
-\`\`\`velcora-action
+\`\`\`avanyx-action
 {
   "actionType": "CREATE_TASK" | "CREATE_GOAL" | "CREATE_EXPENSE" | "CREATE_PURCHASE_ORDER" | "ADJUST_STOCK",
   "label": "Short Action Title",
@@ -2613,30 +2781,30 @@ CORE INTELLIGENCE & UNIVERSAL CAPABILITY DIRECTIVES:
 ${fashionIntelligencePrompt}
 ${engineSpecializedPrompt}`;
 
-    const deepSeekConfigured = isDeepSeekConfigured();
+    const isAnyAiConfigured = isDeepSeekConfigured() || isGeminiTextConfigured();
     let rawReply = '';
     let modelUsed = requestedEngine.name;
 
-    if (!deepSeekConfigured) {
-      console.info(`[Velcora Fallback AI] DEEPSEEK_API_KEY is not configured. Launching Velcora Local Intel Engine.`);
+    if (!isAnyAiConfigured) {
+      console.info(`[Avanyx Fallback AI] No AI provider configured (DeepSeek/Gemini). Launching Avanyx Local Intel Engine.`);
       const sim = generateSimulatedResponse(message, requestedEngine.id, businessContext, history);
       rawReply = sim.text;
       modelUsed = sim.modelUsed;
     } else {
       try {
-        // Build sanitized multi-turn conversation contents
-        const contents = buildSanitizedConversationContents(history, message, attachment);
+        // Build sanitized multi-turn conversation contents (with single or multiple attachments)
+        const contents = buildSanitizedConversationContents(history, message, attachment, attachments);
 
         const result = await generateWithFallback(requestedEngine.id, {
           contents,
           systemInstruction,
-          temperature: requestedEngine.id === 'velcora-financial' ? 0.2 : 0.7,
+          temperature: requestedEngine.id === 'avanyx-financial' ? 0.2 : 0.7,
           maxOutputTokens: maxOutputTokens,
         }, { userId, requestId, businessId: businessContext?.businessId || tenantId });
         rawReply = result.text || '';
         modelUsed = result.engineName || requestedEngine.name;
       } catch (genErr: any) {
-        console.info('[Velcora AI] Fallback triggered, seamlessly transitioning to Velcora Local Intel Engine.');
+        console.info('[Avanyx AI] Fallback triggered, seamlessly transitioning to Avanyx Local Intel Engine.');
         const sim = generateSimulatedResponse(message, requestedEngine.id, businessContext, history);
         rawReply = sim.text;
         modelUsed = sim.modelUsed;
@@ -2645,8 +2813,8 @@ ${engineSpecializedPrompt}`;
 
     let extractedActionProposal: any = null;
 
-    // Parse structured velcora-action code block if present
-    const actionBlockMatch = rawReply.match(/```(?:velcora-action|json)\s*\n([\s\S]*?)\n```/i);
+    // Parse structured avanyx-action code block if present
+    const actionBlockMatch = rawReply.match(/```(?:avanyx-action|json)\s*\n([\s\S]*?)\n```/i);
     if (actionBlockMatch) {
       try {
         const parsed = JSON.parse(actionBlockMatch[1]);
@@ -2661,7 +2829,7 @@ ${engineSpecializedPrompt}`;
             status: 'pending',
           };
           // Clean up action block from text for crisp UI rendering
-          rawReply = rawReply.replace(/```(?:velcora-action|json)\s*\n[\s\S]*?\n```/i, '').trim();
+          rawReply = rawReply.replace(/```(?:avanyx-action|json)\s*\n[\s\S]*?\n```/i, '').trim();
         }
       } catch (_) {}
     }
@@ -2670,9 +2838,9 @@ ${engineSpecializedPrompt}`;
     const promptCharCount = (message || '').length + JSON.stringify(history || {}).length;
     const replyCharCount = rawReply.length;
     const totalEstTokens = Math.ceil((promptCharCount + replyCharCount) / 4);
-    const actualCost = Math.min(maxCost, VelcoraCreditSystem.calculateMaxCost(requestedEngine.id, totalEstTokens, 0));
+    const actualCost = Math.min(maxCost, AvanyxCreditSystem.calculateMaxCost(requestedEngine.id, totalEstTokens, 0));
 
-    await VelcoraCreditSystem.settleCredits(userId, requestId, actualCost);
+    await AvanyxCreditSystem.settleCredits(userId, requestId, actualCost);
 
     // Save AI response to Firestore if session is provided (for background persistence)
     if (sessionId && pendingMsgId && adminDb) {
@@ -2697,10 +2865,10 @@ ${engineSpecializedPrompt}`;
             msgs.push(assistantMsg);
           }
           await docRef.set({ messages: msgs, updatedAt: new Date().toISOString() }, { merge: true });
-          console.log('[Velcora Ask] Background AI response saved to Firestore for session', sessionId);
+          console.log('[Avanyx Ask] Background AI response saved to Firestore for session', sessionId);
         }
       } catch (dbErr) {
-        console.error('[Velcora Ask] Failed to save background response to Firestore:', dbErr);
+        console.error('[Avanyx Ask] Failed to save background response to Firestore:', dbErr);
       }
     }
 
@@ -2712,11 +2880,11 @@ ${engineSpecializedPrompt}`;
       creditsUsed: actualCost,
     });
   } catch (error: any) {
-    console.error('[Velcora Engine Error]', error?.message || error);
+    console.error('[Avanyx Engine Error]', error?.message || error);
     
     // Release reservation/refund in case of failure
     try {
-      await VelcoraCreditSystem.refundReservation(userId, requestId);
+      await AvanyxCreditSystem.refundReservation(userId, requestId);
     } catch (refErr) {
       console.warn('Failed to auto-refund credit reservation:', refErr);
     }
@@ -2753,7 +2921,7 @@ app.post('/api/ai/recommend-pos', async (req, res) => {
       });
     }
 
-    const prompt = `You are the VELCORA Universal POS Architecture Engine.
+    const prompt = `You are the Avanyx Universal POS Architecture Engine.
 A business owner says: "${businessDescription}"
 
 Classify their business into one of the industry IDs:
@@ -2770,7 +2938,7 @@ Return STRICT JSON with keys:
   "rationale": "2-3 sentences explaining why these modules are recommended"
 }`;
 
-    const result = await generateWithFallback('velcora-neural-flash', {
+    const result = await generateWithFallback('avanyx-neural-flash', {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       responseMimeType: 'application/json',
     });
@@ -2791,9 +2959,80 @@ Return STRICT JSON with keys:
   }
 });
 
-// 3. VELCORA AI INTERNAL EVALUATION BENCHMARK SUITE
+  // 2b. Demand Forecaster Endpoint
+  app.post('/api/ai/forecast', async (req, res) => {
+    const { businessContext, tenantId, userId } = req.body;
+    const requestId = `req-fcst-${Date.now()}`;
+    
+    try {
+      const wallet = await AvanyxCreditSystem.getWallet(userId);
+      if (wallet && wallet.isSuspended) {
+        return res.status(403).json({ success: false, error: 'ACCOUNT_SUSPENDED' });
+      }
+    } catch (err) {}
+  
+    const prompt = `You are the Avanyx AI Demand Forecaster.
+  Analyze the provided business context, specifically "salesHistory" and "products".
+  
+  CRITICAL RULES:
+  1. NO FAKE DATA. Do not invent fake "rush hours", peak times, or sales numbers if the salesHistory does not support it.
+  2. If the salesHistory is empty or contains too few transactions to confidently predict a weekly forecast (e.g. less than 3 real sales), you MUST set "hasEnoughData": false and provide a reason.
+  3. If there is sufficient data, calculate realistic projections based strictly on the provided ledger.
+  4. Stockout Risks: Calculate daysRemaining based on actual item sales velocity.
+  5. Output STRICT JSON only. No markdown formatting.
+  
+  Format:
+  {
+    "hasEnoughData": boolean,
+    "reason": "If false, explain why (e.g. 'Not enough sales data to generate a forecast yet.')",
+    "forecastDays": [
+      { "day": "Monday", "expectedRevenue": 150, "confidence": 85 }
+    ],
+    "hourlyRush": [
+      { "time": "08:00 - 11:59", "label": "Morning", "probability": 20 },
+      { "time": "12:00 - 14:59", "label": "Lunch", "probability": 40 },
+      { "time": "15:00 - 17:59", "label": "Afternoon", "probability": 15 },
+      { "time": "18:00 - 22:00", "label": "Evening", "probability": 25 }
+    ],
+    "projectedOutcome": {
+      "projectedRev": 4500,
+      "projectedMargin": 35
+    },
+    "stockoutRisks": [
+      { "id": "sku-id", "name": "Product Name", "stock": 10, "daysRemaining": 5 } 
+    ]
+  }
+  
+  BUSINESS CONTEXT:
+  ${JSON.stringify({ ...businessContext, salesHistory: (businessContext.salesHistory || []).slice(-100) }).slice(0, 8000)}`;
+  
+    const routerRequest: NormalizedRequest & { userId: string; requestId: string } = {
+      engineId: 'avanyx-brain',
+      messages: [{ role: 'user' as const, content: prompt }],
+      temperature: 0.1,
+      maxTokens: 3000,
+      userId: userId || 'default-user',
+      requestId,
+    };
+  
+    try {
+      const result = await routeAIRequest(routerRequest);
+      let parsed;
+      try {
+        const text = result.content.replace(/```json/gi, '').replace(/```/g, '').trim();
+        parsed = JSON.parse(text);
+      } catch (e) {
+        parsed = { hasEnoughData: false, reason: "AI failed to parse ledger data." };
+      }
+      return res.json({ success: true, ...parsed });
+    } catch (error: any) {
+      return res.json({ success: false, error: error.message });
+    }
+  });
+
+  // 3. AVANYX AI INTERNAL EVALUATION BENCHMARK SUITE
 app.get('/api/ai/benchmark', async (req, res) => {
-  const engineId = (req.query.engine as string) || 'velcora-omni';
+  const engineId = (req.query.engine as string) || 'avanyx-omni';
   const categories = [
     { id: 'complex_reasoning', name: 'Complex Reasoning', prompt: 'Perform a multi-step trade-off analysis comparing organic inventory growth vs debt-financed wholesale expansion for a retail store.' },
     { id: 'coding', name: 'Coding', prompt: 'Write a TypeScript generic LRU Cache class with ttl expiration and O(1) time complexity.' },
@@ -2805,7 +3044,7 @@ app.get('/api/ai/benchmark', async (req, res) => {
     { id: 'multimodal_image', name: 'Multimodal Image Understanding', prompt: 'Describe key visual components expected in an audited retail invoice image.' },
     { id: 'screenshot_analysis', name: 'Screenshot Analysis', prompt: 'Identify UI layout defects and contrast issues in a mobile checkout interface screenshot.' },
     { id: 'long_multiturn', name: 'Long Multi-turn Context', prompt: 'Referencing previous discussion on inventory holding cost, calculate holding cost as 18% of $120,000 average inventory.' },
-    { id: 'tool_selection', name: 'Tool Selection', prompt: 'Formulate a velcora-action payload to adjust stock for product SKU-9942 down by 15 units due to damage.' },
+    { id: 'tool_selection', name: 'Tool Selection', prompt: 'Formulate a avanyx-action payload to adjust stock for product SKU-9942 down by 15 units due to damage.' },
     { id: 'planning', name: 'Planning', prompt: 'Create a 5-step operational rollout plan for introducing batch serial tracking in a hardware store.' },
     { id: 'data_analysis', name: 'Data Analysis', prompt: 'Given monthly sales data [120, 145, 130, 180, 210, 195], calculate moving average and growth trend.' },
     { id: 'instruction_following', name: 'Instruction Following', prompt: 'Respond in strictly 3 numbered bullet points, starting each bullet with the word "VERIFIED".' }
@@ -2823,8 +3062,8 @@ app.get('/api/ai/benchmark', async (req, res) => {
         totalCategoriesSupported: categories.length,
         sampledCategory: testCategory,
         result: {
-          modelUsed: 'Velcora Local Intel Engine (Bypassed)',
-          text: `[BENCHMARK VERIFICATION SUCCESS]\n\nSimulated benchmark execution completed successfully for category: "${testCategory.name}".\n\nPrompt: "${testCategory.prompt}"\n\nVerification: All cognitive pathways, safety thresholds, response schemas, and latency targets are fully compliant with Velcora SaaS Standards.`,
+          modelUsed: 'Avanyx Local Intel Engine (Bypassed)',
+          text: `[BENCHMARK VERIFICATION SUCCESS]\n\nSimulated benchmark execution completed successfully for category: "${testCategory.name}".\n\nPrompt: "${testCategory.prompt}"\n\nVerification: All cognitive pathways, safety thresholds, response schemas, and latency targets are fully compliant with Avanyx SaaS Standards.`,
           latencyMs: 120 + Math.floor(Math.random() * 80),
           accuracyScore: 0.99
         }
@@ -2864,12 +3103,12 @@ app.get('/api/ai/benchmark', async (req, res) => {
   }
 });
 
-// 4. VELCORA AI MULTI-MODEL HEALTH & FAILOVER DIAGNOSTICS ENDPOINT
+// 4. AVANYX AI MULTI-MODEL HEALTH & FAILOVER DIAGNOSTICS ENDPOINT
 app.get('/api/ai/health', (req, res) => {
   const healthSnapshot = modelHealthTracker.getSnapshot();
   const engineMap: Record<string, { id: string; name: string; candidateModels: string[] }> = {};
 
-  for (const [key, engine] of Object.entries(VELCORA_SERVER_ENGINES)) {
+  for (const [key, engine] of Object.entries(AVANYX_SERVER_ENGINES)) {
     engineMap[key] = {
       id: engine.id,
       name: engine.name,
@@ -2905,7 +3144,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`VELCORA Server running on http://localhost:${PORT}`);
+    console.log(`Avanyx Server running on http://localhost:${PORT}`);
   });
 }
 

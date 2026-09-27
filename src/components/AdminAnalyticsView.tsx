@@ -60,9 +60,6 @@ export interface AdminAnalyticsViewProps {
     customerName?: string;
   }>;
   activities?: SystemActivityEvent[];
-  referralPromoters?: any[];
-  referralPayouts?: any[];
-  referralLeads?: any[];
   telemetry?: any;
   onInspectUser?: (userId: string) => void;
 }
@@ -73,9 +70,6 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
   users = [],
   sales = [],
   activities = [],
-  referralPromoters = [],
-  referralPayouts = [],
-  referralLeads = [],
   telemetry,
   onInspectUser,
 }) => {
@@ -237,7 +231,6 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
       customers: 0,
       financial_reports: 0,
       online_store: 0,
-      referrals: 0,
     };
 
     activities.forEach((a) => {
@@ -250,7 +243,6 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
         else if (a.action.includes('CUSTOMER')) counts.customers++;
         else if (a.action.includes('REPORT') || a.action.includes('FINANCE')) counts.financial_reports++;
         else if (a.action.includes('STORE')) counts.online_store++;
-        else if (a.action.includes('REFERRAL') || a.action.includes('PROMOTER')) counts.referrals++;
       }
     });
 
@@ -268,9 +260,7 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
           ? 'Customer Loyalty & Passes'
           : key === 'financial_reports'
           ? 'Financial P&L & Tax Reports'
-          : key === 'online_store'
-          ? 'Online Store Beta Portal'
-          : 'Referral & Partner Network',
+          : 'Online Store Beta Portal',
       count,
       percentage: Math.round((count / maxVal) * 100),
     }));
@@ -396,7 +386,7 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', 'velcora_admin_analytics_' + new Date().toISOString().slice(0, 10) + '.csv');
+    link.setAttribute('download', 'avanyx_admin_analytics_' + new Date().toISOString().slice(0, 10) + '.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -428,14 +418,14 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
     const link = document.createElement('a');
     link.setAttribute('href', dataStr);
-    link.setAttribute('download', 'velcora_analytics_telemetry_' + new Date().toISOString().slice(0, 10) + '.json');
+    link.setAttribute('download', 'avanyx_analytics_telemetry_' + new Date().toISOString().slice(0, 10) + '.json');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div id="velcora-admin-analytics-system" className="space-y-6">
+    <div id="avanyx-admin-analytics-system" className="space-y-6">
       {/* Top Filter & Control Bar */}
       <div className="bg-white dark:bg-[#0F1424] rounded-3xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -796,7 +786,6 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
               <option value="AUTH">Authentication</option>
               <option value="FEATURE_USAGE">Feature Usage</option>
               <option value="TRANSACTION">Transactions</option>
-              <option value="REFERRAL">Referrals</option>
               <option value="SYSTEM_ERROR">System Errors</option>
             </select>
           </div>
@@ -804,7 +793,7 @@ export const AdminAnalyticsView: React.FC<AdminAnalyticsViewProps> = ({
 
         {filteredActivities.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs font-bold">
-            No live events match current filters. As users interact with Velcora POS, live telemetry logs will stream here.
+            No live events match current filters. As users interact with Avanyx POS, live telemetry logs will stream here.
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800/60 max-h-80 overflow-y-auto">

@@ -25,17 +25,17 @@ for (const file of files) {
   // Change tStr to t
   content = content.replace(/tStr/g, 't');
 
-  // If useVelcora had t extracted, we need to extract t from useTranslation instead.
+  // If useAvanyx had t extracted, we need to extract t from useTranslation instead.
   // Wait, the easiest way is to add const { t, locale, setLocale } = useTranslation();
-  // and remove them from useVelcora();
+  // and remove them from useAvanyx();
   
-  if (content.includes('useVelcora()') && content.includes(', t } = useVelcora()')) {
-    content = content.replace(/,\s*t\s*\}\s*=\s*useVelcora\(\)/g, '} = useVelcora()');
-  } else if (content.includes('useVelcora()') && content.includes('{ t } = useVelcora()')) {
-    content = content.replace(/\{\s*t\s*\}\s*=\s*useVelcora\(\)/g, '{} = useVelcora()');
+  if (content.includes('useAvanyx()') && content.includes(', t } = useAvanyx()')) {
+    content = content.replace(/,\s*t\s*\}\s*=\s*useAvanyx\(\)/g, '} = useAvanyx()');
+  } else if (content.includes('useAvanyx()') && content.includes('{ t } = useAvanyx()')) {
+    content = content.replace(/\{\s*t\s*\}\s*=\s*useAvanyx\(\)/g, '{} = useAvanyx()');
   }
 
-  // Remove locale, setLocale from useVelcora()
+  // Remove locale, setLocale from useAvanyx()
   content = content.replace(/,\s*locale/g, '');
   content = content.replace(/locale\s*,/g, '');
   content = content.replace(/,\s*setLocale/g, '');
@@ -55,20 +55,20 @@ for (const file of files) {
       }
       
       // Inject const { t, locale, setLocale } = useTranslation();
-      // Right after useVelcora()
-      content = content.replace(/const\s+\{([^}]*)\}\s*=\s*useVelcora\(\);/g, `const {$1} = useVelcora();\n  const { t, locale, setLocale } = useTranslation();`);
+      // Right after useAvanyx()
+      content = content.replace(/const\s+\{([^}]*)\}\s*=\s*useAvanyx\(\);/g, `const {$1} = useAvanyx();\n  const { t, locale, setLocale } = useTranslation();`);
     }
   }
 
-  // Check if there's any useVelcora without t, but t is used
+  // Check if there's any useAvanyx without t, but t is used
   // e.g. floating assistant where we changed tStr to t.
   
   // App.tsx
   if (file.endsWith('App.tsx')) {
     if (!content.includes('TranslationProvider')) {
-       content = content.replace(/import \{ VelcoraProvider/, `import { TranslationProvider } from './context/TranslationContext';\nimport { VelcoraProvider`);
-       content = content.replace(/<VelcoraProvider>/, `<TranslationProvider>\n    <VelcoraProvider>`);
-       content = content.replace(/<\/VelcoraProvider>/, `</VelcoraProvider>\n    </TranslationProvider>`);
+       content = content.replace(/import \{ AvanyxProvider/, `import { TranslationProvider } from './context/TranslationContext';\nimport { AvanyxProvider`);
+       content = content.replace(/<AvanyxProvider>/, `<TranslationProvider>\n    <AvanyxProvider>`);
+       content = content.replace(/<\/AvanyxProvider>/, `</AvanyxProvider>\n    </TranslationProvider>`);
     }
   }
 

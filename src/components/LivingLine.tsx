@@ -32,7 +32,7 @@ export const LivingLine: React.FC<LivingLineProps> = ({
       className={`relative flex flex-col items-center justify-center select-none overflow-hidden max-w-full ${className}`}
       style={{ width }}
       role="status"
-      aria-label={label || `Velcora ${mode} active signal`}
+      aria-label={label || `Avanyx ${mode} active signal`}
     >
       {/* Optional text header for processing states */}
       {(label || sublabel) && (
@@ -59,7 +59,7 @@ export const LivingLine: React.FC<LivingLineProps> = ({
         >
           <defs>
             {/* Ambient / Thinking Indigo-Violet-Cyan Flowing Gradient */}
-            <linearGradient id="velcora-living-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <linearGradient id="avanyx-living-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#6D5DFB" stopOpacity="0.2" />
               <stop offset="30%" stopColor="#6D5DFB" stopOpacity="0.8" />
               <stop offset="50%" stopColor="#8B5CF6" stopOpacity="1" />
@@ -68,14 +68,14 @@ export const LivingLine: React.FC<LivingLineProps> = ({
             </linearGradient>
 
             {/* Error Gradient */}
-            <linearGradient id="velcora-error-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <linearGradient id="avanyx-error-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#EF4444" stopOpacity="0.3" />
               <stop offset="50%" stopColor="#DC2626" stopOpacity="1" />
               <stop offset="100%" stopColor="#EF4444" stopOpacity="0.3" />
             </linearGradient>
 
             {/* Soft Luminous Glow Filter */}
-            <filter id="velcora-line-glow" x="-20%" y="-100%" width="140%" height="300%">
+            <filter id="avanyx-line-glow" x="-20%" y="-100%" width="140%" height="300%">
               <feGaussianBlur stdDeviation="1.5" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
@@ -97,20 +97,20 @@ export const LivingLine: React.FC<LivingLineProps> = ({
           <path
             d="M 0 8 Q 60 8 100 8 T 150 4 T 190 12 T 230 4 T 270 8 L 400 8"
             fill="none"
-            stroke={isError ? 'url(#velcora-error-gradient)' : 'url(#velcora-living-gradient)'}
+            stroke={isError ? 'url(#avanyx-error-gradient)' : 'url(#avanyx-living-gradient)'}
             strokeWidth={isGenerating || isThinking ? '2' : '1.5'}
             strokeLinecap="round"
-            filter="url(#velcora-line-glow)"
+            filter="url(#avanyx-line-glow)"
             className={`transition-all duration-300 ${
               isError
                 ? 'opacity-90'
                 : isGenerating
-                ? 'velcora-living-wave-fast'
+                ? 'avanyx-living-wave-fast'
                 : isThinking
-                ? 'velcora-living-wave-medium'
+                ? 'avanyx-living-wave-medium'
                 : isRouting
-                ? 'velcora-living-wave-routing'
-                : 'velcora-living-wave-ambient'
+                ? 'avanyx-living-wave-routing'
+                : 'avanyx-living-wave-ambient'
             }`}
           />
 
@@ -119,13 +119,13 @@ export const LivingLine: React.FC<LivingLineProps> = ({
             <circle
               r="2.5"
               fill="#22D3EE"
-              filter="url(#velcora-line-glow)"
+              filter="url(#avanyx-line-glow)"
               className={`opacity-90 ${
                 isGenerating
-                  ? 'velcora-living-particle-fast'
+                  ? 'avanyx-living-particle-fast'
                   : isThinking || isRouting
-                  ? 'velcora-living-particle-medium'
-                  : 'velcora-living-particle-ambient'
+                  ? 'avanyx-living-particle-medium'
+                  : 'avanyx-living-particle-ambient'
               }`}
             >
               <animateMotion

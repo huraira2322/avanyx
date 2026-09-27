@@ -1,6 +1,6 @@
 import { CartItem, LoyaltyRuleConfig, LoyaltyTier } from '../types';
 
-export class VelcoraLoyaltyEngine {
+export class AvanyxLoyaltyEngine {
   /**
    * Calculates points earned for any transaction without any hardcoded fixed ratios.
    * Completely configurable by business owner rules.

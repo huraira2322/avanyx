@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import { useTranslation } from '../context/TranslationContext';
 import {
   Bell, AlertTriangle, CheckCircle, Package,
   DollarSign, Shield, Sparkles, CheckCheck, Trash2, ArrowRight
 } from 'lucide-react';
-import { VelcoraNotificationsEngine, SystemNotification } from '../utils/notificationsEngine';
+import { AvanyxNotificationsEngine, SystemNotification } from '../utils/notificationsEngine';
 
 export const NotificationsCenter: React.FC = () => {
   const {
@@ -17,14 +17,14 @@ export const NotificationsCenter: React.FC = () => {
     purchaseOrders,
     brainMetrics,
     currency
-  } = useVelcora();
+  } = useAvanyx();
   const { t, locale, setLocale } = useTranslation();
   const [activeCategory, setActiveCategory] = useState<'all' | 'stock' | 'sale' | 'security' | 'ai'>('all');
   const [readTick, setReadTick] = useState<number>(0);
 
   // Dynamically compute real system notifications
   const notifications: SystemNotification[] = useMemo(() => {
-    return VelcoraNotificationsEngine.generateRealNotifications({
+    return AvanyxNotificationsEngine.generateRealNotifications({
       products,
       sales,
       expenses,
@@ -38,17 +38,17 @@ export const NotificationsCenter: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const markAllAsRead = () => {
-    VelcoraNotificationsEngine.markAllAsRead(notifications.map(n => n.id));
+    AvanyxNotificationsEngine.markAllAsRead(notifications.map(n => n.id));
     setReadTick(prev => prev + 1);
   };
 
   const clearAll = () => {
-    VelcoraNotificationsEngine.clearAll();
+    AvanyxNotificationsEngine.clearAll();
     setReadTick(prev => prev + 1);
   };
 
   const handleMarkSingleRead = (id: string) => {
-    VelcoraNotificationsEngine.markAsRead(id);
+    AvanyxNotificationsEngine.markAsRead(id);
     setReadTick(prev => prev + 1);
   };
 
@@ -75,7 +75,7 @@ export const NotificationsCenter: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Banner */}
-      <div className="velcora-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="avanyx-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -97,7 +97,7 @@ export const NotificationsCenter: React.FC = () => {
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
-              className="velcora-btn-secondary text-xs flex items-center gap-1.5"
+              className="avanyx-btn-secondary text-xs flex items-center gap-1.5"
             >
               <CheckCheck className="w-3.5 h-3.5" />
               <span>Mark all read</span>
@@ -114,7 +114,7 @@ export const NotificationsCenter: React.FC = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="velcora-card p-2.5 flex items-center gap-2 overflow-x-auto">
+      <div className="avanyx-card p-2.5 flex items-center gap-2 overflow-x-auto">
         {(['all', 'stock', 'sale', 'security', 'ai'] as const).map(cat => (
           <button
             key={cat}
@@ -159,7 +159,7 @@ export const NotificationsCenter: React.FC = () => {
         {filteredNotifs.map((notif) => (
           <div
             key={notif.id}
-            className={`velcora-card p-4 transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+            className={`avanyx-card p-4 transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
               !notif.isRead
                 ? 'border-purple-300 dark:border-purple-800 bg-purple-50/20 dark:bg-purple-950/20'
                 : 'opacity-85'
@@ -207,7 +207,7 @@ export const NotificationsCenter: React.FC = () => {
         ))}
 
         {filteredNotifs.length === 0 && (
-          <div className="velcora-card p-12 text-center text-slate-400">
+          <div className="avanyx-card p-12 text-center text-slate-400">
             <CheckCircle className="w-10 h-10 mx-auto mb-2 text-emerald-500" />
             <p className="font-semibold text-slate-700 dark:text-slate-300">All caught up!</p>
             <p className="text-xs text-slate-500">No active notifications in this category.</p>

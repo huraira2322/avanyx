@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VelcoraLoyaltyEngine } from '../src/utils/pricingEngine';
+import { AvanyxLoyaltyEngine } from '../src/utils/pricingEngine';
 import { LoyaltyRuleConfig, CartItem } from '../src/types';
 
 export function runLoyaltyPromotionsTests(): { suite: string; total: number; passed: number; failed: number; errors: string[] } {
@@ -43,7 +43,7 @@ export function runLoyaltyPromotionsTests(): { suite: string; total: number; pas
   // 1. Point Earning Model Calculations (400 tests across varying spend totals and tier levels)
   for (let spend = 10; spend <= 1000; spend += 10) {
     for (const tier of ['Bronze', 'Silver', 'Gold', 'Platinum']) {
-      const earned = VelcoraLoyaltyEngine.calculatePointsEarned(spend, sampleItems, baseConfig, tier);
+      const earned = AvanyxLoyaltyEngine.calculatePointsEarned(spend, sampleItems, baseConfig, tier);
       
       const expectedBase = Math.floor(spend / 10) * 2;
       const tierMult = tier === 'Silver' ? 1.25 : tier === 'Gold' ? 1.5 : tier === 'Platinum' ? 2.0 : 1.0;
@@ -61,14 +61,14 @@ export function runLoyaltyPromotionsTests(): { suite: string; total: number; pas
   };
 
   for (let spend = 10; spend <= 1000; spend += 10) {
-    const earned = VelcoraLoyaltyEngine.calculatePointsEarned(spend, sampleItems, flatConfig);
+    const earned = AvanyxLoyaltyEngine.calculatePointsEarned(spend, sampleItems, flatConfig);
     assert(earned === 25, `Flat earning model must grant exact pointsPerOrder`);
   }
 
   // 3. Point Redemption Evaluation (500 tests)
   for (let pts = 0; pts <= 250; pts += 5) {
     for (let grandTotal = 20; grandTotal <= 200; grandTotal += 20) {
-      const redeemEval = VelcoraLoyaltyEngine.evaluatePointRedemption(pts, grandTotal, baseConfig);
+      const redeemEval = AvanyxLoyaltyEngine.evaluatePointRedemption(pts, grandTotal, baseConfig);
 
       if (pts < baseConfig.minPointsForRedemption) {
         assert(redeemEval.valid === false, `Points under minimum threshold (${baseConfig.minPointsForRedemption}) must be rejected`);
@@ -82,7 +82,7 @@ export function runLoyaltyPromotionsTests(): { suite: string; total: number; pas
 
   // 4. Loyalty Tier Auto-Determination (200 tests)
   for (let lifetimeSpend = 0; lifetimeSpend <= 2000; lifetimeSpend += 10) {
-    const tier = VelcoraLoyaltyEngine.determineTier(lifetimeSpend, baseConfig);
+    const tier = AvanyxLoyaltyEngine.determineTier(lifetimeSpend, baseConfig);
     if (lifetimeSpend >= 1500) {
       assert(tier.name === 'Platinum', `Spend $${lifetimeSpend} should be Platinum`);
     } else if (lifetimeSpend >= 600) {

@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('Velcora Workspace ErrorBoundary caught an error:', error, errorInfo);
+    console.error('Avanyx Workspace ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
     logSystemError(error, errorInfo?.componentStack || 'React Error Boundary');
   }

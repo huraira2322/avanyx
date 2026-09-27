@@ -1,5 +1,5 @@
-﻿# VELCORA PROJECT BACKUP MANIFEST
-**Preserved Location:** `Desktop/GitHub/VELCORA`  
+﻿# AVANYX PROJECT BACKUP MANIFEST
+**Preserved Location:** `Desktop/GitHub/AVANYX`  
 **Total Source Files Preserved:** 196+ files across 68+ directories  
 **Exclusions:** Transient artifacts (`node_modules`, `dist`, `.firebase`)
 
@@ -20,8 +20,8 @@
 * `FounderAdminPanel.tsx` — Enterprise Founder Admin Control Center.
 * `AdminAnalyticsView.tsx` — SuperAdmin Telemetry Suite and analytics engine.
 * `BusinessBrainView.tsx` — Business intelligence dashboard, live orders table, sales charts.
-* `AskVelcoraChat.tsx` — Multi-modal conversational AI assistant.
-* `VelcoraVoiceHudModal.tsx` — Voice-activated heads-up navigation modal.
+* `AskAvanyxChat.tsx` — Multi-modal conversational AI assistant.
+* `AvanyxVoiceHudModal.tsx` — Voice-activated heads-up navigation modal.
 * `AiDemandForecaster.tsx` — Predictive inventory stocking forecaster.
 * `AiRouterView.tsx` — Multi-provider AI model router.
 * `DigitalReceiptView.tsx` — Cryptographic receipt renderer and printable invoice.

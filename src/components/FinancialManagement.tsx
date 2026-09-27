@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   DollarSign, TrendingUp, TrendingDown, Plus, PieChart,
   Calendar, Layers, Check, X, AlertCircle, Edit2, Trash2, AlertTriangle,
@@ -7,10 +7,14 @@ import {
   ArrowUpRight, ArrowDownLeft, Landmark, ShoppingBag
 } from 'lucide-react';
 import { Expense, OtherIncome, Budget, Loan, CustomerCredit, SupplierPayable } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 import { useTranslation } from '../context/TranslationContext';
 
-export const FinancialManagement: React.FC = () => {
+export interface FinancialManagementProps {
+  initialTab?: 'overview' | 'cashflow' | 'expenses' | 'income' | 'budgets' | 'debts' | 'credits';
+}
+
+export const FinancialManagement: React.FC<FinancialManagementProps> = ({ initialTab = 'overview' }) => {
   const {
     expenses,
     addExpense,
@@ -43,11 +47,18 @@ export const FinancialManagement: React.FC = () => {
     currency,
     activeBusiness,
     activeUser
-  } = useVelcora();
+  } = useAvanyx();
   const { t, locale, setLocale } = useTranslation();
   const currencySymbol = currency || activeBusiness.currencySymbol || '$';
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'cashflow' | 'expenses' | 'income' | 'budgets' | 'debts' | 'credits'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'cashflow' | 'expenses' | 'income' | 'budgets' | 'debts' | 'credits'>(initialTab);
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
   // Modals state
@@ -603,7 +614,7 @@ export const FinancialManagement: React.FC = () => {
   };
 
   return (
-    <div id="velcora-financial-mgmt" className="space-y-6 text-slate-800 dark:text-[#F8FAFC]">
+    <div id="avanyx-financial-mgmt" className="space-y-6 text-slate-800 dark:text-[#F8FAFC]">
       {permissionError && (
         <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 p-4 rounded-2xl flex items-start gap-3 text-rose-800 dark:text-rose-300 text-xs font-semibold shadow-xs animate-in slide-in-from-top-4">
           <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
@@ -619,7 +630,7 @@ export const FinancialManagement: React.FC = () => {
       {/* HEADER BANNER */}
       <div className="bg-white dark:bg-[#111C30] p-6 rounded-3xl border border-slate-200 dark:border-[#1F2E4D] shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-900 dark:text-[#F8FAFC]">Velcora Unified Financial Console</h2>
+          <h2 className="text-xl font-extrabold text-slate-900 dark:text-[#F8FAFC]">Avanyx Unified Financial Console</h2>
           <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium mt-1">
             Live money tracking, liquidity monitoring, debt mapping & strict cash-flow analysis for <span className="font-bold text-[#2563EB] dark:text-[#3B82F6]">{activeBusiness.name}</span>
           </p>
@@ -649,7 +660,7 @@ export const FinancialManagement: React.FC = () => {
             {!totals.hasRecordedTransactions ? (
               <span className="text-lg font-bold text-slate-400 dark:text-slate-500">No data</span>
             ) : (
-              VelcoraPricingEngine.formatCurrency(totals.actualCashOnHand, currency)
+              AvanyxPricingEngine.formatCurrency(totals.actualCashOnHand, currency)
             )}
           </div>
           <p className="text-[10px] text-slate-400 dark:text-[#94A3B8]/70 font-semibold leading-relaxed">
@@ -663,10 +674,10 @@ export const FinancialManagement: React.FC = () => {
             <TrendingUp className="w-4 h-4 text-[#2563EB]" />
           </div>
           <div className="text-2xl font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-            {VelcoraPricingEngine.formatCurrency(totals.totalSalesAccrual, currency)}
+            {AvanyxPricingEngine.formatCurrency(totals.totalSalesAccrual, currency)}
           </div>
           <p className="text-[10px] text-slate-400 dark:text-[#94A3B8]/70 font-semibold leading-relaxed">
-            Includes {VelcoraPricingEngine.formatCurrency(totals.totalUnpaidCreditExtended, currency)} extended on customer credit term
+            Includes {AvanyxPricingEngine.formatCurrency(totals.totalUnpaidCreditExtended, currency)} extended on customer credit term
           </p>
         </div>
 
@@ -676,7 +687,7 @@ export const FinancialManagement: React.FC = () => {
             <TrendingDown className="w-4 h-4 text-rose-500" />
           </div>
           <div className="text-2xl font-extrabold text-rose-600 dark:text-rose-400">
-            {VelcoraPricingEngine.formatCurrency(totals.totalOpEx, currency)}
+            {AvanyxPricingEngine.formatCurrency(totals.totalOpEx, currency)}
           </div>
           <p className="text-[10px] text-slate-400 dark:text-[#94A3B8]/70 font-semibold leading-relaxed">
             OpEx cost categories paid from cash reserves
@@ -689,7 +700,7 @@ export const FinancialManagement: React.FC = () => {
             <PieChart className="w-4 h-4 text-[#8B5CF6]" />
           </div>
           <div className="text-2xl font-extrabold text-[#8B5CF6] dark:text-[#A78BFA]">
-            {VelcoraPricingEngine.formatCurrency(totals.realizedNetProfit, currency)}
+            {AvanyxPricingEngine.formatCurrency(totals.realizedNetProfit, currency)}
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-400 dark:text-[#94A3B8]/70 font-semibold">Excludes loans borrowed</span>
@@ -850,7 +861,7 @@ export const FinancialManagement: React.FC = () => {
                   <div>
                     <span className="text-[10px] font-bold text-slate-400">Customer Receivables</span>
                     <p className="text-base font-extrabold text-violet-600 dark:text-violet-400">
-                      {VelcoraPricingEngine.formatCurrency(totals.totalUnpaidCreditExtended, currency)}
+                      {AvanyxPricingEngine.formatCurrency(totals.totalUnpaidCreditExtended, currency)}
                     </p>
                     <p className="text-[9px] text-slate-400 font-medium">Awaiting collection</p>
                   </div>
@@ -863,7 +874,7 @@ export const FinancialManagement: React.FC = () => {
                   <div>
                     <span className="text-[10px] font-bold text-slate-400">Supplier Payables</span>
                     <p className="text-base font-extrabold text-amber-600 dark:text-amber-500">
-                      {VelcoraPricingEngine.formatCurrency(totals.netSupplierOwed, currency)}
+                      {AvanyxPricingEngine.formatCurrency(totals.netSupplierOwed, currency)}
                     </p>
                     <p className="text-[9px] text-slate-400 font-medium">Aged balances owed</p>
                   </div>
@@ -876,7 +887,7 @@ export const FinancialManagement: React.FC = () => {
                   <div>
                     <span className="text-[10px] font-bold text-slate-400">Loans Receivable (Lent Out)</span>
                     <p className="text-base font-extrabold text-sky-600 dark:text-sky-400">
-                      {VelcoraPricingEngine.formatCurrency(totals.netLentOutstanding, currency)}
+                      {AvanyxPricingEngine.formatCurrency(totals.netLentOutstanding, currency)}
                     </p>
                     <p className="text-[9px] text-slate-400 font-medium">Principal due from partners</p>
                   </div>
@@ -889,7 +900,7 @@ export const FinancialManagement: React.FC = () => {
                   <div>
                     <span className="text-[10px] font-bold text-slate-400">Loans Payable (Borrowed Debt)</span>
                     <p className="text-base font-extrabold text-rose-600 dark:text-rose-400">
-                      {VelcoraPricingEngine.formatCurrency(totals.netBorrowedOutstanding, currency)}
+                      {AvanyxPricingEngine.formatCurrency(totals.netBorrowedOutstanding, currency)}
                     </p>
                     <p className="text-[9px] text-slate-400 font-medium">Outstanding business debt</p>
                   </div>
@@ -899,7 +910,7 @@ export const FinancialManagement: React.FC = () => {
 
             {/* Quick Insights */}
             <div className="bg-white dark:bg-[#111C30] p-6 rounded-3xl border border-slate-200 dark:border-[#1F2E4D] shadow-2xs space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">Velcora Financial Insights Engine</h3>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">Avanyx Financial Insights Engine</h3>
               <div className="space-y-3.5">
                 {totals.actualCashOnHand < totals.netSupplierOwed + totals.netBorrowedOutstanding ? (
                   <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 flex gap-3 text-xs text-amber-800 dark:text-amber-300">
@@ -907,7 +918,7 @@ export const FinancialManagement: React.FC = () => {
                     <div>
                       <p className="font-extrabold">Liquidity Warning (High Leverage)</p>
                       <p className="text-[11px] text-slate-500 dark:text-[#94A3B8] mt-1">
-                        Outstanding debts and supplier payables ({VelcoraPricingEngine.formatCurrency(totals.netSupplierOwed + totals.netBorrowedOutstanding, currency)}) exceed actual cash reserves on hand. Prioritize customer credit collections to improve operational cash.
+                        Outstanding debts and supplier payables ({AvanyxPricingEngine.formatCurrency(totals.netSupplierOwed + totals.netBorrowedOutstanding, currency)}) exceed actual cash reserves on hand. Prioritize customer credit collections to improve operational cash.
                       </p>
                     </div>
                   </div>
@@ -929,7 +940,7 @@ export const FinancialManagement: React.FC = () => {
                     <div>
                       <p className="font-extrabold">Accrual vs. Cash Flow Gap</p>
                       <p className="text-[11px] text-slate-500 dark:text-[#94A3B8] mt-1">
-                        {VelcoraPricingEngine.formatCurrency(totals.totalUnpaidCreditExtended, currency)} of sales revenue is currently tied up in outstanding customer credits. Velcora recommends initiating automatic billing triggers on high-tier customers.
+                        {AvanyxPricingEngine.formatCurrency(totals.totalUnpaidCreditExtended, currency)} of sales revenue is currently tied up in outstanding customer credits. Avanyx recommends initiating automatic billing triggers on high-tier customers.
                       </p>
                     </div>
                   </div>
@@ -1013,7 +1024,7 @@ export const FinancialManagement: React.FC = () => {
                   <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                     <span className="font-bold text-slate-600 dark:text-slate-400">Opening Cash Reserve</span>
                     <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                      +{VelcoraPricingEngine.formatCurrency(totals.openingCash, currency)}
+                      +{AvanyxPricingEngine.formatCurrency(totals.openingCash, currency)}
                     </span>
                   </div>
                 )}
@@ -1021,42 +1032,42 @@ export const FinancialManagement: React.FC = () => {
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Cash POS Sales (Direct Tender)</span>
                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                    +{VelcoraPricingEngine.formatCurrency(totals.totalSalesCashReceived, currency)}
+                    +{AvanyxPricingEngine.formatCurrency(totals.totalSalesCashReceived, currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Customer Credit Payments Collected</span>
                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                    +{VelcoraPricingEngine.formatCurrency(totals.totalCustomerCreditPaymentsReceived, currency)}
+                    +{AvanyxPricingEngine.formatCurrency(totals.totalCustomerCreditPaymentsReceived, currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">New Loans Borrowed (Principal)</span>
                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                    +{VelcoraPricingEngine.formatCurrency(loans.filter(l => l.type === 'borrowed').reduce((sum, l) => sum + (l.amount || 0), 0), currency)}
+                    +{AvanyxPricingEngine.formatCurrency(loans.filter(l => l.type === 'borrowed').reduce((sum, l) => sum + (l.amount || 0), 0), currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Lent Principal Repayments Received</span>
                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                    +{VelcoraPricingEngine.formatCurrency(loans.filter(l => l.type === 'lent').reduce((sum, l) => sum + (l.amountPaid || 0), 0), currency)}
+                    +{AvanyxPricingEngine.formatCurrency(loans.filter(l => l.type === 'lent').reduce((sum, l) => sum + (l.amountPaid || 0), 0), currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Other Non-POS Operating Incomes</span>
                   <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                    +{VelcoraPricingEngine.formatCurrency(totals.totalOtherIncome, currency)}
+                    +{AvanyxPricingEngine.formatCurrency(totals.totalOtherIncome, currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-sm">
                   <span className="font-extrabold text-emerald-800 dark:text-emerald-300">Total Cash Receipts (Inflow)</span>
                   <span className="font-extrabold text-emerald-700 dark:text-emerald-400">
-                    {VelcoraPricingEngine.formatCurrency(totals.cashInflows, currency)}
+                    {AvanyxPricingEngine.formatCurrency(totals.cashInflows, currency)}
                   </span>
                 </div>
               </div>
@@ -1073,14 +1084,14 @@ export const FinancialManagement: React.FC = () => {
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Operating Expenses Paid (OpEx)</span>
                   <span className="font-extrabold text-rose-600 dark:text-rose-400">
-                    -{VelcoraPricingEngine.formatCurrency(totals.totalOpEx, currency)}
+                    -{AvanyxPricingEngine.formatCurrency(totals.totalOpEx, currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Payments for Purchases & Suppliers</span>
                   <span className="font-extrabold text-rose-600 dark:text-rose-400">
-                    -{VelcoraPricingEngine.formatCurrency(totals.totalSupplierPayablePaymentsMade, currency)}
+                    -{AvanyxPricingEngine.formatCurrency(totals.totalSupplierPayablePaymentsMade, currency)}
                   </span>
                 </div>
 
@@ -1088,7 +1099,7 @@ export const FinancialManagement: React.FC = () => {
                   <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                     <span className="font-bold text-slate-600 dark:text-slate-400">Customer Cash Returns & Refunds</span>
                     <span className="font-extrabold text-rose-600 dark:text-rose-400">
-                      -{VelcoraPricingEngine.formatCurrency(totals.totalCashRefunds, currency)}
+                      -{AvanyxPricingEngine.formatCurrency(totals.totalCashRefunds, currency)}
                     </span>
                   </div>
                 )}
@@ -1096,21 +1107,21 @@ export const FinancialManagement: React.FC = () => {
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Borrowed Debt Repayments Made</span>
                   <span className="font-extrabold text-rose-600 dark:text-rose-400">
-                    -{VelcoraPricingEngine.formatCurrency(loans.filter(l => l.type === 'borrowed').reduce((sum, l) => sum + (l.amountPaid || 0), 0), currency)}
+                    -{AvanyxPricingEngine.formatCurrency(loans.filter(l => l.type === 'borrowed').reduce((sum, l) => sum + (l.amountPaid || 0), 0), currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-slate-50 dark:bg-[#0B1220] rounded-xl">
                   <span className="font-bold text-slate-600 dark:text-slate-400">Lent Principal Disbursed Out</span>
                   <span className="font-extrabold text-rose-600 dark:text-rose-400">
-                    -{VelcoraPricingEngine.formatCurrency(loans.filter(l => l.type === 'lent').reduce((sum, l) => sum + (l.amount || 0), 0), currency)}
+                    -{AvanyxPricingEngine.formatCurrency(loans.filter(l => l.type === 'lent').reduce((sum, l) => sum + (l.amount || 0), 0), currency)}
                   </span>
                 </div>
 
                 <div className="flex justify-between p-3 bg-rose-50 dark:bg-rose-950/20 rounded-xl border border-rose-100 dark:border-rose-900/40 text-sm">
                   <span className="font-extrabold text-rose-800 dark:text-rose-300">Total Cash Payments (Outflow)</span>
                   <span className="font-extrabold text-rose-700 dark:text-rose-400">
-                    {VelcoraPricingEngine.formatCurrency(totals.cashOutflows, currency)}
+                    {AvanyxPricingEngine.formatCurrency(totals.cashOutflows, currency)}
                   </span>
                 </div>
               </div>
@@ -1124,7 +1135,7 @@ export const FinancialManagement: React.FC = () => {
               <span className="font-bold text-slate-700 dark:text-slate-300">Net Calculated Cash in Hand:</span>
             </div>
             <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-              {!totals.hasRecordedTransactions ? 'No data' : VelcoraPricingEngine.formatCurrency(totals.actualCashOnHand, currency)}
+              {!totals.hasRecordedTransactions ? 'No data' : AvanyxPricingEngine.formatCurrency(totals.actualCashOnHand, currency)}
             </div>
           </div>
         </div>
@@ -1165,7 +1176,7 @@ export const FinancialManagement: React.FC = () => {
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-right font-extrabold text-rose-600 dark:text-rose-400">
-                        -{VelcoraPricingEngine.formatCurrency(exp.amount, currency)}
+                        -{AvanyxPricingEngine.formatCurrency(exp.amount, currency)}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -1248,7 +1259,7 @@ export const FinancialManagement: React.FC = () => {
                       <td className="py-3.5 px-4 font-semibold text-slate-500">{inc.category}</td>
                       <td className="py-3.5 px-4 text-slate-500 dark:text-[#94A3B8]">{inc.notes || '-'}</td>
                       <td className="py-3.5 px-4 text-right font-extrabold text-emerald-600 dark:text-emerald-400">
-                        +{VelcoraPricingEngine.formatCurrency(inc.amount, currency)}
+                        +{AvanyxPricingEngine.formatCurrency(inc.amount, currency)}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button
@@ -1295,7 +1306,7 @@ export const FinancialManagement: React.FC = () => {
                     <div className="flex justify-between text-xs font-semibold">
                       <span className="text-slate-400">Income Target</span>
                       <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
-                        {incomeProgress}% ({VelcoraPricingEngine.formatCurrency(totals.totalSalesAccrual, currency)} / {VelcoraPricingEngine.formatCurrency(b.incomeTarget, currency)})
+                        {incomeProgress}% ({AvanyxPricingEngine.formatCurrency(totals.totalSalesAccrual, currency)} / {AvanyxPricingEngine.formatCurrency(b.incomeTarget, currency)})
                       </span>
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-[#0B1220] h-2 rounded-full overflow-hidden border border-slate-200 dark:border-[#1F2E4D]">
@@ -1311,7 +1322,7 @@ export const FinancialManagement: React.FC = () => {
                     <div className="flex justify-between text-xs font-semibold">
                       <span className="text-slate-400">Expense Cap</span>
                       <span className={`font-extrabold ${isOverExpense ? 'text-rose-500 dark:text-rose-400' : 'text-blue-600 dark:text-blue-400'}`}>
-                        {expenseProgress}% ({VelcoraPricingEngine.formatCurrency(totals.totalOpEx, currency)} / {VelcoraPricingEngine.formatCurrency(b.expenseLimit, currency)})
+                        {expenseProgress}% ({AvanyxPricingEngine.formatCurrency(totals.totalOpEx, currency)} / {AvanyxPricingEngine.formatCurrency(b.expenseLimit, currency)})
                       </span>
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-[#0B1220] h-2 rounded-full overflow-hidden border border-slate-200 dark:border-[#1F2E4D]">
@@ -1323,7 +1334,7 @@ export const FinancialManagement: React.FC = () => {
                   </div>
 
                   <div className="flex justify-between items-center text-[11px] font-bold pt-2 border-t border-slate-100 dark:border-[#1E2E4A]/30">
-                    <span className="text-slate-400">Savings Target: {VelcoraPricingEngine.formatCurrency(b.savingsTarget, currency)}</span>
+                    <span className="text-slate-400">Savings Target: {AvanyxPricingEngine.formatCurrency(b.savingsTarget, currency)}</span>
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => handleOpenEditBudget(b)}
@@ -1385,10 +1396,10 @@ export const FinancialManagement: React.FC = () => {
                             </span>
                           </td>
                           <td className="py-3.5 px-4 text-slate-900 dark:text-[#F8FAFC] font-extrabold">{l.partner}</td>
-                          <td className="py-3.5 px-4 text-slate-800 dark:text-[#F8FAFC] font-bold">{VelcoraPricingEngine.formatCurrency(l.amount, currency)}</td>
+                          <td className="py-3.5 px-4 text-slate-800 dark:text-[#F8FAFC] font-bold">{AvanyxPricingEngine.formatCurrency(l.amount, currency)}</td>
                           <td className="py-3.5 px-4 font-bold text-slate-500">{l.interestRate}% ({l.repaymentSchedule})</td>
-                          <td className="py-3.5 px-4 text-slate-500">{VelcoraPricingEngine.formatCurrency(l.amountPaid, currency)}</td>
-                          <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-[#F8FAFC]">{VelcoraPricingEngine.formatCurrency(remain, currency)}</td>
+                          <td className="py-3.5 px-4 text-slate-500">{AvanyxPricingEngine.formatCurrency(l.amountPaid, currency)}</td>
+                          <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-[#F8FAFC]">{AvanyxPricingEngine.formatCurrency(remain, currency)}</td>
                           <td className="py-3.5 px-4">
                             <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
                               l.status === 'Paid'
@@ -1455,7 +1466,7 @@ export const FinancialManagement: React.FC = () => {
 
                 <div className="space-y-3.5 text-xs">
                   <p className="text-slate-500 leading-relaxed font-medium">
-                    Register repayment to/from <span className="font-extrabold text-slate-800 dark:text-white">{selectedLoanForPayment.partner}</span>. Outstanding principal remaining is {VelcoraPricingEngine.formatCurrency(selectedLoanForPayment.amount - selectedLoanForPayment.amountPaid, currency)}.
+                    Register repayment to/from <span className="font-extrabold text-slate-800 dark:text-white">{selectedLoanForPayment.partner}</span>. Outstanding principal remaining is {AvanyxPricingEngine.formatCurrency(selectedLoanForPayment.amount - selectedLoanForPayment.amountPaid, currency)}.
                   </p>
 
                   <div>
@@ -1533,9 +1544,9 @@ export const FinancialManagement: React.FC = () => {
                         <td className="py-3.5 px-4 text-slate-900 dark:text-[#F8FAFC] font-extrabold">{cc.invoiceId || 'N/A'}</td>
                         <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-white">{cc.customerName}</td>
                         <td className="py-3.5 px-4 text-rose-500 dark:text-rose-400">{cc.dueDate}</td>
-                        <td className="py-3.5 px-4 text-right font-extrabold">{VelcoraPricingEngine.formatCurrency(cc.totalAmount, currency)}</td>
-                        <td className="py-3.5 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold">{VelcoraPricingEngine.formatCurrency(cc.amountPaid, currency)}</td>
-                        <td className="py-3.5 px-4 text-right text-violet-600 font-extrabold">{VelcoraPricingEngine.formatCurrency(cc.remainingBalance, currency)}</td>
+                        <td className="py-3.5 px-4 text-right font-extrabold">{AvanyxPricingEngine.formatCurrency(cc.totalAmount, currency)}</td>
+                        <td className="py-3.5 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold">{AvanyxPricingEngine.formatCurrency(cc.amountPaid, currency)}</td>
+                        <td className="py-3.5 px-4 text-right text-violet-600 font-extrabold">{AvanyxPricingEngine.formatCurrency(cc.remainingBalance, currency)}</td>
                         <td className="py-3.5 px-4 text-right">
                           {cc.remainingBalance > 0 && (
                             <button
@@ -1584,9 +1595,9 @@ export const FinancialManagement: React.FC = () => {
                         <td className="py-3.5 px-4 text-slate-900 dark:text-[#F8FAFC] font-extrabold">{sp.purchaseId || 'N/A'}</td>
                         <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-white">{sp.supplierName}</td>
                         <td className="py-3.5 px-4 text-rose-500 dark:text-rose-400">{sp.dueDate}</td>
-                        <td className="py-3.5 px-4 text-right font-extrabold">{VelcoraPricingEngine.formatCurrency(sp.totalAmount, currency)}</td>
-                        <td className="py-3.5 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold">{VelcoraPricingEngine.formatCurrency(sp.amountPaid, currency)}</td>
-                        <td className="py-3.5 px-4 text-right text-amber-600 font-extrabold">{VelcoraPricingEngine.formatCurrency(sp.remainingBalance, currency)}</td>
+                        <td className="py-3.5 px-4 text-right font-extrabold">{AvanyxPricingEngine.formatCurrency(sp.totalAmount, currency)}</td>
+                        <td className="py-3.5 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold">{AvanyxPricingEngine.formatCurrency(sp.amountPaid, currency)}</td>
+                        <td className="py-3.5 px-4 text-right text-amber-600 font-extrabold">{AvanyxPricingEngine.formatCurrency(sp.remainingBalance, currency)}</td>
                         <td className="py-3.5 px-4 text-right">
                           {sp.remainingBalance > 0 && (
                             <button
@@ -1624,7 +1635,7 @@ export const FinancialManagement: React.FC = () => {
 
                 <div className="space-y-3.5 text-xs">
                   <p className="text-slate-500 leading-relaxed font-medium">
-                    Log cash or card payment collected from <span className="font-extrabold text-slate-800 dark:text-white">{selectedCreditForPayment.customerName}</span> for outstanding invoice. Remaining credit outstanding is {VelcoraPricingEngine.formatCurrency(selectedCreditForPayment.remainingBalance, currency)}.
+                    Log cash or card payment collected from <span className="font-extrabold text-slate-800 dark:text-white">{selectedCreditForPayment.customerName}</span> for outstanding invoice. Remaining credit outstanding is {AvanyxPricingEngine.formatCurrency(selectedCreditForPayment.remainingBalance, currency)}.
                   </p>
 
                   <div>
@@ -1688,7 +1699,7 @@ export const FinancialManagement: React.FC = () => {
 
                 <div className="space-y-3.5 text-xs">
                   <p className="text-slate-500 leading-relaxed font-medium">
-                    Settle outstanding purchase liability with <span className="font-extrabold text-slate-800 dark:text-white">{selectedPayableForPayment.supplierName}</span>. Total remaining liability is {VelcoraPricingEngine.formatCurrency(selectedPayableForPayment.remainingBalance, currency)}.
+                    Settle outstanding purchase liability with <span className="font-extrabold text-slate-800 dark:text-white">{selectedPayableForPayment.supplierName}</span>. Total remaining liability is {AvanyxPricingEngine.formatCurrency(selectedPayableForPayment.remainingBalance, currency)}.
                   </p>
 
                   <div>

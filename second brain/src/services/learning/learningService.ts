@@ -80,8 +80,86 @@ export class LearningService {
     const lower = text.toLowerCase();
     const clean = text.trim();
 
-    // 1. User Projects & Ventures
-    // e.g. "I'm building Velcora as my main software project", "My software project is Velcora", "Working on Project Apollo"
+    // 1. Business Identity, Name & Business Type (e.g. "My business is a gold jewelry store called ABC Jewellers", "My business is a dental clinic")
+    if (
+      lower.includes('my business is') ||
+      lower.includes('my store is') ||
+      lower.includes('my shop is') ||
+      lower.includes('we are a ') ||
+      lower.includes('we operate a ') ||
+      lower.includes('i run a ') ||
+      lower.includes('i own a ') ||
+      lower.includes('business called') ||
+      lower.includes('store called') ||
+      lower.includes('store name is') ||
+      lower.includes('business name is')
+    ) {
+      const isUpdate = lower.includes('changed to') || lower.includes('now called') || lower.includes('rebranded') || lower.includes('new business');
+      return {
+        classification: 'knowledge',
+        tier: 'permanent',
+        topicKey: 'business_identity',
+        tags: ['business_identity', 'store_type', 'identity', 'business_context'],
+        entities: ['Business Identity'],
+        summary: `Business Identity: ${clean.slice(0, 100)}`,
+        isUpdate,
+        confidence: 0.99,
+      };
+    }
+
+    // 2. Catalog & Product Line Profile (e.g. "I mainly sell 22K gold jewelry", "We sell running shoes", "We specialize in organic silk scarves")
+    if (
+      lower.includes('i mainly sell') ||
+      lower.includes('we mainly sell') ||
+      lower.includes('mainly sell') ||
+      lower.includes('our main product') ||
+      lower.includes('our primary product') ||
+      lower.includes('we sell ') ||
+      lower.includes('we offer ') ||
+      lower.includes('we specialize in') ||
+      lower.includes('store specializes in') ||
+      lower.includes('our catalog consists of')
+    ) {
+      const isUpdate = lower.includes('changed') || lower.includes('now selling') || lower.includes('switched to');
+      return {
+        classification: 'knowledge',
+        tier: 'permanent',
+        topicKey: 'catalog_profile',
+        tags: ['catalog_profile', 'products', 'inventory', 'business_context'],
+        entities: ['Catalog Profile'],
+        summary: `Catalog & Products: ${clean.slice(0, 100)}`,
+        isUpdate,
+        confidence: 0.98,
+      };
+    }
+
+    // 3. Operational Facts, Staff & Capacity (e.g. "I have 5 staff members", "We now have 12 staff", "We operate 2 branches in Lahore")
+    if (
+      lower.includes('staff member') ||
+      lower.includes('staff members') ||
+      lower.includes('staff account') ||
+      lower.includes('employees') ||
+      lower.includes('have 5 staff') ||
+      lower.includes('have 12 staff') ||
+      /\b(?:have|has|employ|with|now have)\s+\d+\s+(?:staff|employees|workers|cashiers|subusers|team members)\b/i.test(clean) ||
+      /\b(?:operate|have|running)\s+\d+\s+(?:branches|stores|locations|warehouses|outlets)\b/i.test(clean) ||
+      /\b\d+\s+(?:workstations|pos registers|terminals|checkout lanes)\b/i.test(clean)
+    ) {
+      const isUpdate = lower.includes('now have') || lower.includes('increased to') || lower.includes('reduced to') || lower.includes('changed to') || lower.includes('updated');
+      return {
+        classification: 'knowledge',
+        tier: 'permanent',
+        topicKey: 'operational_capacity',
+        tags: ['operational_capacity', 'staff', 'capacity', 'infrastructure', 'business_context'],
+        entities: ['Operational Capacity'],
+        summary: `Operational Capacity: ${clean.slice(0, 100)}`,
+        isUpdate,
+        confidence: 0.98,
+      };
+    }
+
+    // 4. User Projects & Ventures
+    // e.g. "I'm building Avanyx as my main software project", "My software project is Avanyx", "Working on Project Apollo"
     const projectMatch = clean.match(/(?:i'm building|i am building|my project is|working on|developing)\s+([A-Za-z0-9_\-\s]{2,40}?)(?:\s+as\s+my|\s+for\s+my|\.|$|,)/i);
     if (
       lower.includes("i'm building") ||
@@ -105,7 +183,7 @@ export class LearningService {
       };
     }
 
-    // 2. User Goals & Business Objectives
+    // 5. User Goals & Business Objectives
     // e.g. "My goal is $50,000 monthly revenue", "My goal has changed to $80,000", "Our target is to expand to 3 locations"
     if (
       lower.includes('my goal is') ||
@@ -130,8 +208,8 @@ export class LearningService {
       };
     }
 
-    // 3. User Preferences & Working Style / Identity
-    // e.g. "I prefer concise bullet points", "Call me Alex", "My name is...", "Never offer discounts above 10%", "My timezone is EST"
+    // 6. User Preferences & Working Style / Identity
+    // e.g. "I prefer concise bullet points", "Call me Alex", "My name is...", "Never offer discounts above 10%", "My timezone is EST", "I prefer simple Apple-style UI"
     if (
       lower.includes('i prefer') ||
       lower.includes('call me') ||
@@ -141,7 +219,9 @@ export class LearningService {
       lower.includes('never use') ||
       lower.includes('my timezone is') ||
       lower.includes('keep your answers') ||
-      lower.includes('i like concise')
+      lower.includes('i like concise') ||
+      lower.includes('apple-style ui') ||
+      lower.includes('apple style')
     ) {
       const isUpdate = lower.includes('changed') || lower.includes('from now on') || lower.includes('instead');
       return {
@@ -156,31 +236,36 @@ export class LearningService {
       };
     }
 
-    // 4. Business Decisions & Operational Policies
-    // e.g. "We decided to set free shipping to $75", "Return policy is 30 days", "Discount will be 15%"
+    // 7. Business Decisions & Operational Policies
+    // e.g. "Our store policy is 14-day exchange only", "We decided to set free shipping to $75", "Return policy is 30 days", "Our secret supplier discount is 35%"
     if (
       lower.includes('we decided') ||
       lower.includes('decision:') ||
       lower.includes('agreed to') ||
       lower.includes('going forward, we will') ||
       lower.includes('policy:') ||
+      lower.includes('store policy') ||
+      lower.includes('our policy') ||
+      lower.includes('exchange only') ||
+      lower.includes('supplier discount') ||
+      lower.includes('discount is') ||
       lower.includes('rule:') ||
       lower.includes('free shipping') ||
       lower.includes('return policy') ||
       lower.includes('discount will be') ||
       lower.includes('pricing strategy')
     ) {
-      let subTopic = 'general_policy';
+      let subTopic = 'business_policy';
       if (lower.includes('shipping')) subTopic = 'policy_shipping';
-      else if (lower.includes('return')) subTopic = 'policy_returns';
-      else if (lower.includes('discount') || lower.includes('pricing')) subTopic = 'policy_pricing';
+      else if (lower.includes('return') || lower.includes('exchange')) subTopic = 'policy_returns';
+      else if (lower.includes('discount') || lower.includes('pricing') || lower.includes('supplier')) subTopic = 'policy_pricing';
 
       const isUpdate = lower.includes('updated') || lower.includes('changed') || lower.includes('revised') || lower.includes('new policy');
       return {
         classification: 'decision',
         tier: 'permanent',
         topicKey: subTopic,
-        tags: ['policy', 'decision', 'operations', 'business_rules'],
+        tags: ['policy', 'business_policy', 'decision', 'operations', 'business_rules'],
         entities: ['Store Policy'],
         summary: `Store Policy: ${clean.slice(0, 100)}`,
         isUpdate,
@@ -188,11 +273,51 @@ export class LearningService {
       };
     }
 
-    // 5. Durable Store Facts & Knowledge
+    // 8. System & Architecture Decisions (e.g. "User decided to use Gemini as fallback", "User wants inventory alerts when stock is low")
+    if (
+      lower.includes('gemini as fallback') ||
+      lower.includes('fallback provider') ||
+      lower.includes('inventory alerts') ||
+      lower.includes('alert when stock is low') ||
+      lower.includes('low stock alert')
+    ) {
+      return {
+        classification: 'decision',
+        tier: 'permanent',
+        topicKey: 'system_decision',
+        tags: ['system_decision', 'architecture', 'configuration'],
+        entities: ['System Decision'],
+        summary: `System Decision: ${clean.slice(0, 100)}`,
+        isUpdate: lower.includes('changed') || lower.includes('switch'),
+        confidence: 0.96,
+      };
+    }
+
+    // 9. Explicit Directives (e.g. "Remember that our primary supplier is Acme", "Keep in mind that...")
+    if (
+      lower.startsWith('remember that') ||
+      lower.startsWith('remember this') ||
+      lower.startsWith('remember:') ||
+      lower.startsWith('note that') ||
+      lower.startsWith('keep in mind that') ||
+      lower.startsWith('note down that')
+    ) {
+      return {
+        classification: 'knowledge',
+        tier: 'permanent',
+        topicKey: 'explicit_note',
+        tags: ['explicit_note', 'instruction', 'durable_fact'],
+        entities: ['User Directive'],
+        summary: `Note: ${clean.slice(0, 100)}`,
+        isUpdate: false,
+        confidence: 0.97,
+      };
+    }
+
+    // 10. Durable Store Facts & Knowledge
     // e.g. "Our store specializes in organic silk scarves", "Our primary supplier is Acme Fabrics", "Store hours are Monday to Saturday"
     if (
       lower.includes('our store specializes') ||
-      lower.includes('we specialize in') ||
       lower.includes('supplier is') ||
       lower.includes('lead time is') ||
       lower.includes('store hours are') ||
@@ -212,7 +337,7 @@ export class LearningService {
       };
     }
 
-    // 6. Ongoing Tasks / Plans
+    // 11. Ongoing Tasks / Plans
     // e.g. "We are launching the summer collection next week", "Currently preparing for Black Friday audit"
     if (
       lower.includes('currently preparing') ||
@@ -232,8 +357,7 @@ export class LearningService {
       };
     }
 
-    // 7. Creative & Studio Preferences (Image & Video styles, Aspect Ratios, Brand design constraints)
-    // e.g. "For my images, I prefer cinematic lighting", "Use 16:9 aspect ratio for ads", "prefer photorealistic render style"
+    // 12. Creative & Studio Preferences (Image & Video styles, Aspect Ratios, Brand design constraints)
     if (
       lower.includes('aspect ratio') ||
       lower.includes('cinematic') ||
@@ -244,8 +368,7 @@ export class LearningService {
       lower.includes('visual style') ||
       lower.includes('image preference') ||
       lower.includes('video preference') ||
-      lower.includes('preferred style') ||
-      lower.includes('brand voice')
+      lower.includes('preferred style')
     ) {
       return {
         classification: 'insight',

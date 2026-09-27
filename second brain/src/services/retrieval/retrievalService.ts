@@ -36,8 +36,8 @@ export class RetrievalService {
       }
     }
 
-    // 1. Query structured Memories
-    const memories = memoryService.query({
+    // 1. Query structured Memories + Core Profile Memories (Cross-session business identity, capacity, policies, preferences)
+    const queriedMemories = memoryService.query({
       query: effectiveQuery,
       tenantId,
       userId,
@@ -45,6 +45,13 @@ export class RetrievalService {
       minConfidence,
       includeStale: false,
     });
+
+    const coreMemories = memoryService.getCoreProfileMemories(tenantId, userId);
+
+    const uniqueMemoriesMap = new Map<string, MemoryItem>();
+    coreMemories.forEach(m => uniqueMemoriesMap.set(m.id, m));
+    queriedMemories.forEach(m => uniqueMemoriesMap.set(m.id, m));
+    const memories = Array.from(uniqueMemoriesMap.values());
 
     // 2. Query Wiki Documents (Entities, Concepts, Topics, Decisions, Insights)
     const wikiEntities = wikiService.search(effectiveQuery, tenantId, 'entities', 4);

@@ -5,7 +5,7 @@ const files = [
   'src/components/CustomerAndLoyalty.tsx',
   'src/components/FloatingAiAssistant.tsx',
   'src/components/HelpSupportView.tsx',
-  'src/components/VelcoraStudio.tsx'
+  'src/components/AvanyxStudio.tsx'
 ];
 
 for (const file of files) {
@@ -23,7 +23,7 @@ for (const file of files) {
   }
 
   if (!content.includes('const { t } = useTranslation();') && !content.includes('const { t, locale, setLocale } = useTranslation();')) {
-    content = content.replace(/const\s+\{([^}]*)\}\s*=\s*useVelcora\(\);/g, `const {$1} = useVelcora();\n  const { t } = useTranslation();`);
+    content = content.replace(/const\s+\{([^}]*)\}\s*=\s*useAvanyx\(\);/g, `const {$1} = useAvanyx();\n  const { t } = useTranslation();`);
   }
 
   if (content !== originalContent) {

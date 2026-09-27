@@ -11,7 +11,7 @@ aliases: []
 authority: USER_PROVIDED
 confidence: 1
 status: active
-source: Velcora Brain Ingestion
+source: Avanyx Brain Ingestion
 provenance: Second Brain Wiki Engine
 createdAt: '2026-08-28T16:22:35.532Z'
 updatedAt: '2026-08-28T16:22:35.532Z'

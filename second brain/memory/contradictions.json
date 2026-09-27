@@ -15,5 +15,22 @@
     "newSource": "Executive Directive B",
     "status": "unresolved",
     "detectedAt": "2026-09-08T14:24:48.675Z"
+  },
+  {
+    "id": "a4dea1d4-cc6b-4dc5-af65-078912a94049",
+    "tenantId": "tenant-gold-jewelers",
+    "topic": "operational_capacity",
+    "oldClaim": "We currently have 5 staff members working across shifts.",
+    "newClaim": "We recently hired more staff so we now have 12 staff members total.",
+    "oldTimestamp": "2026-09-22T06:32:56.773Z",
+    "newTimestamp": "2026-09-22T06:32:56.779Z",
+    "oldAuthority": "USER_PROVIDED",
+    "newAuthority": "USER_PROVIDED",
+    "oldConfidence": 0.98,
+    "newConfidence": 0.98,
+    "oldSource": "LearningEngine [user]",
+    "newSource": "LearningEngine [user]",
+    "status": "unresolved",
+    "detectedAt": "2026-09-22T06:32:56.779Z"
   }
 ]

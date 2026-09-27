@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Truck, Plus, Search, CheckCircle, PackageCheck,
   Building2, Phone, Mail, DollarSign, X, ArrowRight, Edit2, Trash2, AlertTriangle
 } from 'lucide-react';
 import { Supplier, PurchaseOrder } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 
-export const PurchasesAndSuppliers: React.FC = () => {
+interface PurchasesAndSuppliersProps {
+  initialTab?: 'orders' | 'suppliers';
+}
+
+export const PurchasesAndSuppliers: React.FC<PurchasesAndSuppliersProps> = ({ initialTab = 'orders' }) => {
   const {
     suppliers,
     addSupplier,
@@ -19,9 +23,13 @@ export const PurchasesAndSuppliers: React.FC = () => {
     products,
     currency,
     activeBusiness,
-    activeUser} = useVelcora();
+    activeUser} = useAvanyx();
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'suppliers'>(initialTab);
+
+  React.useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
   const [search, setSearch] = useState('');
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
   const [showNewPoModal, setShowNewPoModal] = useState(false);
@@ -132,7 +140,7 @@ export const PurchasesAndSuppliers: React.FC = () => {
   };
 
   return (
-    <div id="velcora-purchasing-view" className="space-y-4">
+    <div id="avanyx-purchasing-view" className="space-y-4">
       {permissionError && (
         <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 p-4 rounded-2xl flex items-start gap-3 text-rose-800 dark:text-rose-300 text-xs font-semibold shadow-xs">
           <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
@@ -230,7 +238,7 @@ export const PurchasesAndSuppliers: React.FC = () => {
                       {po.items.map(i => `${i.quantityOrdered}x ${i.name}`).join(', ')}
                     </td>
                     <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                      {VelcoraPricingEngine.formatCurrency(po.totalAmount, currency)}
+                      {AvanyxPricingEngine.formatCurrency(po.totalAmount, currency)}
                     </td>
                     <td className="py-3.5 px-4">
                       <span
@@ -328,7 +336,7 @@ export const PurchasesAndSuppliers: React.FC = () => {
               </div>
               <div className="pt-3 border-t border-slate-200 dark:border-[#1F2E4D] flex justify-between text-xs font-bold">
                 <span className="text-slate-500 dark:text-[#94A3B8] font-medium">Balance Owed:</span>
-                <span className="text-slate-900 dark:text-[#F8FAFC] font-extrabold">{VelcoraPricingEngine.formatCurrency(sup.balanceOwed || 0, currency)}</span>
+                <span className="text-slate-900 dark:text-[#F8FAFC] font-extrabold">{AvanyxPricingEngine.formatCurrency(sup.balanceOwed || 0, currency)}</span>
               </div>
             </div>
           ))}

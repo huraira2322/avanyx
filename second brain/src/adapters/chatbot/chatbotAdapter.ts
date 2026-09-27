@@ -30,7 +30,7 @@ export class ChatbotAdapter {
 
     const groundingContext = reasoningEngine.buildContext({
       query: userMessage,
-      tenantId: tenantId || 'velcora-default-store',
+      tenantId: tenantId || 'avanyx-default-store',
       userId,
       limit: 6,
     });
@@ -55,7 +55,7 @@ export class ChatbotAdapter {
     // 1. Evaluate User message for new directives or decisions
     if (!learningService.isTrivial(userMessage)) {
       learningService.evaluateAndLearn({
-        tenantId: tenantId || 'velcora-default-store',
+        tenantId: tenantId || 'avanyx-default-store',
         userId,
         text: userMessage,
         speakerRole: 'user',
@@ -69,7 +69,7 @@ export class ChatbotAdapter {
       const decisionMatch = assistantReply.match(/(?:decision|recommendation|strategy|policy):\s*([^\n\.]+)/i);
       if (decisionMatch) {
         learningService.evaluateAndLearn({
-          tenantId: tenantId || 'velcora-default-store',
+          tenantId: tenantId || 'avanyx-default-store',
           userId,
           text: decisionMatch[1].trim(),
           speakerRole: 'assistant',

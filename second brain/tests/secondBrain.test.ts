@@ -7,7 +7,7 @@ import { healthLintService } from '../src/services/lint/healthLintService';
 import { reasoningEngine } from '../src/services/reasoning/reasoningEngine';
 import { relationshipGraphService } from '../src/services/relationships/relationshipGraph';
 
-describe('Velcora Second Brain Core Subsystems', () => {
+describe('Avanyx Second Brain Core Subsystems', () => {
   const testTenant = 'test-tenant-99';
   const otherTenant = 'test-tenant-100';
 
@@ -62,8 +62,8 @@ describe('Velcora Second Brain Core Subsystems', () => {
   it('Wiki Service: handles [[wikilinks]], markdown frontmatter, and backlinks', () => {
     const docA = wikiService.saveDocument(
       'entities',
-      'Velcora Silk Scarf',
-      'The [[Velcora Silk Scarf]] is paired with the [[Leather Tote Bag]] for spring promotions.',
+      'Avanyx Silk Scarf',
+      'The [[Avanyx Silk Scarf]] is paired with the [[Leather Tote Bag]] for spring promotions.',
       { tenantId: testTenant, tags: ['product', 'spring'] }
     );
 
@@ -78,7 +78,7 @@ describe('Velcora Second Brain Core Subsystems', () => {
     wikiService.reloadAll();
 
     const backlinks = wikiService.getBacklinks('Leather Tote Bag', testTenant);
-    expect(backlinks.some(b => b.title === 'Velcora Silk Scarf')).toBe(true);
+    expect(backlinks.some(b => b.title === 'Avanyx Silk Scarf')).toBe(true);
   });
 
   it('Contradiction Service: preserves conflicting claims without silent overwrite', () => {

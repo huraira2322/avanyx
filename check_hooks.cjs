@@ -31,7 +31,7 @@ for (const file of files) {
        currentFunc = funcMatch[1];
     }
     
-    if (line.includes('useTranslation()') || line.includes('useVelcora()') || line.includes('useState(')) {
+    if (line.includes('useTranslation()') || line.includes('useAvanyx()') || line.includes('useState(')) {
        if (currentFunc) {
          if (!currentFunc.startsWith('use') && !/^[A-Z]/.test(currentFunc)) {
            console.log(`Potential invalid hook call in ${file}:${i+1} inside function ${currentFunc}`);

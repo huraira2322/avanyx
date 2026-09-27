@@ -1,5 +1,5 @@
-// Futuristic Web Audio Synthesizer for Velcora UI Feedback
-class VelcoraAudioEngine {
+// Futuristic Web Audio Synthesizer for Avanyx UI Feedback
+class AvanyxAudioEngine {
   private ctx: AudioContext | null = null;
 
   private getContext(): AudioContext | null {
@@ -104,4 +104,4 @@ class VelcoraAudioEngine {
   }
 }
 
-export const soundEffects = new VelcoraAudioEngine();
+export const soundEffects = new AvanyxAudioEngine();

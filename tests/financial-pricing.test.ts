@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VelcoraPricingEngine } from '../src/utils/pricingEngine';
+import { AvanyxPricingEngine } from '../src/utils/pricingEngine';
 import { CartItem, LoyaltyRuleConfig } from '../src/types';
 
 export function runFinancialPricingTests(): { suite: string; total: number; passed: number; failed: number; errors: string[] } {
@@ -23,7 +23,7 @@ export function runFinancialPricingTests(): { suite: string; total: number; pass
         const discount = Math.min(price * qty * 0.15, 8);
 
         // Exclusive Tax Test
-        const excl = VelcoraPricingEngine.calculateLineItem(price, qty, discount, taxRate, false);
+        const excl = AvanyxPricingEngine.calculateLineItem(price, qty, discount, taxRate, false);
         const expectedNet = Number((price * qty - discount).toFixed(2));
         const expectedTax = Number((expectedNet * taxRate).toFixed(2));
         const expectedGross = Number((expectedNet + expectedTax).toFixed(2));
@@ -33,7 +33,7 @@ export function runFinancialPricingTests(): { suite: string; total: number; pass
         assert(Math.abs(excl.lineGross - expectedGross) <= 0.02, `Excl Gross mismatch for P:${price} Q:${qty}: got ${excl.lineGross}, exp ${expectedGross}`);
 
         // Inclusive Tax Test
-        const incl = VelcoraPricingEngine.calculateLineItem(price, qty, discount, taxRate, true);
+        const incl = AvanyxPricingEngine.calculateLineItem(price, qty, discount, taxRate, true);
         const expectedInclGross = Number((price * qty - discount).toFixed(2));
         const expectedInclNet = Number((expectedInclGross / (1 + taxRate)).toFixed(2));
         const expectedInclTax = Number((expectedInclGross - expectedInclNet).toFixed(2));
@@ -95,7 +95,7 @@ export function runFinancialPricingTests(): { suite: string; total: number; pass
     const globalDiscount = c % 3 === 0 ? 10 : 0;
     const loyaltyPoints = c % 4 === 0 ? 50 : 0;
 
-    const cartResult = VelcoraPricingEngine.evaluateCart(items, globalDiscount, loyaltyPoints, baseLoyaltyConfig);
+    const cartResult = AvanyxPricingEngine.evaluateCart(items, globalDiscount, loyaltyPoints, baseLoyaltyConfig);
 
     const manualSubtotal = Number((items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)).toFixed(2));
     const manualCost = Number((items.reduce((s, i) => s + i.costPrice * i.quantity, 0)).toFixed(2));
@@ -137,7 +137,7 @@ export function runFinancialPricingTests(): { suite: string; total: number; pass
   const currencies = ['USD', 'PKR', 'EUR', 'GBP', 'AED', 'SAR', 'INR', 'CAD', 'AUD', 'JPY', 'CNY'];
   currencies.forEach(cur => {
     for (let amt of [0, 10.5, 999.99, 125000.5, 1000000]) {
-      const formatted = VelcoraPricingEngine.formatCurrency(amt, cur);
+      const formatted = AvanyxPricingEngine.formatCurrency(amt, cur);
       assert(typeof formatted === 'string' && formatted.length > 0, `Currency formatting failed for ${cur} amount ${amt}`);
       assert(!formatted.includes('NaN'), `Formatted currency cannot contain NaN for ${cur}`);
     }

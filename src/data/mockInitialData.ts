@@ -3,7 +3,7 @@ import { BusinessProfile, Product, Customer, Supplier, SaleTransaction, Expense,
 // ============================================================================
 // DEMO / DEVELOPMENT ENVIRONMENT BOUNDARY
 // ============================================================================
-export const IS_DEMO_MODE_FLAG = 'velcora_is_demo_session';
+export const IS_DEMO_MODE_FLAG = 'avanyx_is_demo_session';
 
 /**
  * Checks if the active client session is running in an explicit Demo mode.
@@ -30,17 +30,17 @@ export function setDemoSessionActive(active: boolean): void {
 }
 
 export const DEFAULT_AI_MODELS: AIModelDefinition[] = [
-  { id: 'chat', name: 'Chat (Gemini 2.5 Flash Lite)', provider: 'Velcora AI', category: 'Fast & Direct', latencyMs: 90, costPer1kTokens: 0, contextWindow: '1,000,000', status: 'active' },
-  { id: 'flash', name: 'Flash (Gemini 3.5 Flash Lite)', provider: 'Velcora AI', category: 'Fast & Direct', latencyMs: 70, costPer1kTokens: 0.00015, contextWindow: '1,000,000', status: 'active' },
-  { id: 'axiom', name: 'Axiom Financial (Gemini 3.5 Flash)', provider: 'Velcora AI', category: 'Code & Math', latencyMs: 120, costPer1kTokens: 0.0005, contextWindow: '512,000', status: 'active' },
-  { id: 'omni', name: 'Omni (Gemini 3.6)', provider: 'Velcora AI', category: 'Reasoning', latencyMs: 190, costPer1kTokens: 0.0008, contextWindow: '2,000,000', status: 'active' },
+  { id: 'chat', name: 'Chat (Gemini 2.5 Flash Lite)', provider: 'Avanyx AI', category: 'Fast & Direct', latencyMs: 90, costPer1kTokens: 0, contextWindow: '1,000,000', status: 'active' },
+  { id: 'flash', name: 'Flash (Gemini 3.5 Flash Lite)', provider: 'Avanyx AI', category: 'Fast & Direct', latencyMs: 70, costPer1kTokens: 0.00015, contextWindow: '1,000,000', status: 'active' },
+  { id: 'axiom', name: 'Axiom Financial (Gemini 3.5 Flash)', provider: 'Avanyx AI', category: 'Code & Math', latencyMs: 120, costPer1kTokens: 0.0005, contextWindow: '512,000', status: 'active' },
+  { id: 'omni', name: 'Avanyx Nexus (Gemini 3.6)', provider: 'Avanyx AI', category: 'Reasoning', latencyMs: 190, costPer1kTokens: 0.0008, contextWindow: '2,000,000', status: 'active' },
 ];
 
 export const INITIAL_BUSINESSES: BusinessProfile[] = [
   {
     id: 'biz-clothing-01',
-    name: 'Velcora Retail & Apparel',
-    legalName: 'Velcora Global Inc.',
+    name: 'Avanyx Retail & Apparel',
+    legalName: 'Avanyx Global Inc.',
     industry: 'clothing',
     primaryColor: '#5B5CE2',
     country: 'United States',
@@ -51,10 +51,10 @@ export const INITIAL_BUSINESSES: BusinessProfile[] = [
     taxInclusive: false,
     taxNumber: '',
     phone: '+1 (555) 892-4100',
-    email: 'contact@velcora.com',
-    address: '100 Velcora Way, Suite 400, San Francisco, CA 94107',
-    receiptHeader: 'VELCORA STORE\nSimple. Smart. Powerful. Thank you for shopping with us!',
-    receiptFooter: 'Exchange or return within 30 days with original receipt.\nwww.velcora.com • support@velcora.com',
+    email: 'contact@avanyx.ai',
+    address: '100 Avanyx Way, Suite 400, San Francisco, CA 94107',
+    receiptHeader: 'Avanyx STORE\nSimple. Smart. Powerful. Thank you for shopping with us!',
+    receiptFooter: 'Exchange or return within 30 days with original receipt.\nwww.avanyx.ai • support@avanyx.ai',
     enabledModules: ['pos', 'products', 'inventory', 'customers', 'loyalty', 'online_store', 'barcodes', 'financial_reports', 'business_brain', 'promotions', 'payments', 'taxes'],
     customFields: [
       { id: 'cf-1', entity: 'product', name: 'Size', key: 'size', type: 'select', options: ['XS', 'S', 'M', 'L', 'XL'], isRequired: false },
@@ -66,11 +66,11 @@ export const INITIAL_BUSINESSES: BusinessProfile[] = [
 ];
 
 export const INITIAL_PRODUCTS: Product[] = [
-  // Velcora Flagship Line (Matches Reference Image)
+  // Avanyx Flagship Line (Matches Reference Image)
   {
-    id: 'prod-velcora-hoodie',
+    id: 'prod-avanyx-hoodie',
     businessId: 'biz-clothing-01',
-    name: 'Velcora Hoodie',
+    name: 'Avanyx Hoodie',
     sku: 'VEL-HD-01',
     barcode: '8901234001',
     category: 'Clothing',
@@ -98,12 +98,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     customFieldValues: { size: 'M', color: 'Onyx Black', material: '80% Heavyweight Organic Cotton, 20% Fleece' },
     status: 'active',
     onlineStoreActive: true,
-    description: 'Premium Velcora embroidered pullover fleece hoodie with tailored double-lined hood and kangaroo pouch.',
+    description: 'Premium Avanyx embroidered pullover fleece hoodie with tailored double-lined hood and kangaroo pouch.',
   },
   {
-    id: 'prod-velcora-bottle',
+    id: 'prod-avanyx-bottle',
     businessId: 'biz-clothing-01',
-    name: 'Velcora Bottle',
+    name: 'Avanyx Bottle',
     sku: 'VEL-BOT-02',
     barcode: '8901234002',
     category: 'Bottles',
@@ -133,9 +133,9 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: 'Vacuum-insulated stainless steel hydration flask keeping drinks icy cold for 24h or steaming hot for 12h.',
   },
   {
-    id: 'prod-velcora-cap',
+    id: 'prod-avanyx-cap',
     businessId: 'biz-clothing-01',
-    name: 'Velcora Cap',
+    name: 'Avanyx Cap',
     sku: 'VEL-CAP-03',
     barcode: '8901234003',
     category: 'Accessories',
@@ -159,12 +159,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     customFieldValues: { size: 'Adjustable Snapback', color: 'Deep Navy', material: '100% Breathable Cotton Twill' },
     status: 'active',
     onlineStoreActive: true,
-    description: 'Structured 6-panel unstructured dad cap with 3D raised Velcora logo embroidery and brass buckle closure.',
+    description: 'Structured 6-panel unstructured dad cap with 3D raised Avanyx logo embroidery and brass buckle closure.',
   },
   {
-    id: 'prod-velcora-bag',
+    id: 'prod-avanyx-bag',
     businessId: 'biz-clothing-01',
-    name: 'Velcora Bag',
+    name: 'Avanyx Bag',
     sku: 'VEL-BAG-04',
     barcode: '8901234004',
     category: 'Bags',
@@ -485,7 +485,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     ordersCount: 14,
     outstandingBalance: 0,
     customFields: {},
-    notes: 'Regular customer. Prefers Velcora Hoodie in Onyx Black.',
+    notes: 'Regular customer. Prefers Avanyx Hoodie in Onyx Black.',
     lastPurchaseDate: '2026-05-15T14:20:00Z',
   },
   {
@@ -523,7 +523,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     ordersCount: 6,
     outstandingBalance: 0,
     customFields: {},
-    notes: 'Prefers Velcora Bottle in Emerald and Velcora Cap.',
+    notes: 'Prefers Avanyx Bottle in Emerald and Avanyx Cap.',
     lastPurchaseDate: '2026-05-14T16:45:00Z',
   },
   {
@@ -596,9 +596,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Sophia Montgomery',
     items: [
       {
-        productId: 'prod-velcora-hoodie',
+        productId: 'prod-avanyx-hoodie',
         variantId: 'var-hd-m',
-        name: 'Velcora Hoodie (Size: M, Color: Onyx Black)',
+        name: 'Avanyx Hoodie (Size: M, Color: Onyx Black)',
         sku: 'VEL-HD-01-M',
         unitPrice: 45.0,
         costPrice: 20.0,
@@ -609,8 +609,8 @@ export const INITIAL_SALES: SaleTransaction[] = [
         taxAmount: 7.2,
       },
       {
-        productId: 'prod-velcora-cap',
-        name: 'Velcora Cap',
+        productId: 'prod-avanyx-cap',
+        name: 'Avanyx Cap',
         sku: 'VEL-CAP-03',
         unitPrice: 20.0,
         costPrice: 8.0,
@@ -646,9 +646,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Marcus Vance',
     items: [
       {
-        productId: 'prod-velcora-bottle',
+        productId: 'prod-avanyx-bottle',
         variantId: 'var-bot-blk',
-        name: 'Velcora Bottle (Color: Matte Black)',
+        name: 'Avanyx Bottle (Color: Matte Black)',
         sku: 'VEL-BOT-02-BLK',
         unitPrice: 25.0,
         costPrice: 10.0,
@@ -684,9 +684,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Amara Chen',
     items: [
       {
-        productId: 'prod-velcora-hoodie',
+        productId: 'prod-avanyx-hoodie',
         variantId: 'var-hd-l',
-        name: 'Velcora Hoodie (Size: L, Color: Onyx Black)',
+        name: 'Avanyx Hoodie (Size: L, Color: Onyx Black)',
         sku: 'VEL-HD-01-L',
         unitPrice: 45.0,
         costPrice: 20.0,
@@ -722,9 +722,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Walk-in Customer',
     items: [
       {
-        productId: 'prod-velcora-bottle',
+        productId: 'prod-avanyx-bottle',
         variantId: 'var-bot-emr',
-        name: 'Velcora Bottle (Color: Emerald Green)',
+        name: 'Avanyx Bottle (Color: Emerald Green)',
         sku: 'VEL-BOT-02-EMR',
         unitPrice: 25.0,
         costPrice: 10.0,
@@ -760,9 +760,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Liam Harrison',
     items: [
       {
-        productId: 'prod-velcora-hoodie',
+        productId: 'prod-avanyx-hoodie',
         variantId: 'var-hd-s',
-        name: 'Velcora Hoodie (Size: S, Color: Onyx Black)',
+        name: 'Avanyx Hoodie (Size: S, Color: Onyx Black)',
         sku: 'VEL-HD-01-S',
         unitPrice: 45.0,
         costPrice: 20.0,
@@ -798,8 +798,8 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Walk-in Customer',
     items: [
       {
-        productId: 'prod-velcora-cap',
-        name: 'Velcora Cap',
+        productId: 'prod-avanyx-cap',
+        name: 'Avanyx Cap',
         sku: 'VEL-CAP-03',
         unitPrice: 20.0,
         costPrice: 8.0,
@@ -835,9 +835,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Sophia Montgomery',
     items: [
       {
-        productId: 'prod-velcora-hoodie',
+        productId: 'prod-avanyx-hoodie',
         variantId: 'var-hd-m',
-        name: 'Velcora Hoodie (Size: M, Color: Onyx Black)',
+        name: 'Avanyx Hoodie (Size: M, Color: Onyx Black)',
         sku: 'VEL-HD-01-M',
         unitPrice: 45.0,
         costPrice: 20.0,
@@ -848,9 +848,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
         taxAmount: 3.6,
       },
       {
-        productId: 'prod-velcora-bottle',
+        productId: 'prod-avanyx-bottle',
         variantId: 'var-bot-blk',
-        name: 'Velcora Bottle (Color: Matte Black)',
+        name: 'Avanyx Bottle (Color: Matte Black)',
         sku: 'VEL-BOT-02-BLK',
         unitPrice: 25.0,
         costPrice: 10.0,
@@ -886,9 +886,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Marcus Vance',
     items: [
       {
-        productId: 'prod-velcora-bottle',
+        productId: 'prod-avanyx-bottle',
         variantId: 'var-bot-emr',
-        name: 'Velcora Bottle (Color: Emerald Green)',
+        name: 'Avanyx Bottle (Color: Emerald Green)',
         sku: 'VEL-BOT-02-EMR',
         unitPrice: 25.0,
         costPrice: 10.0,
@@ -924,9 +924,9 @@ export const INITIAL_SALES: SaleTransaction[] = [
     customerName: 'Walk-in Customer',
     items: [
       {
-        productId: 'prod-velcora-hoodie',
+        productId: 'prod-avanyx-hoodie',
         variantId: 'var-hd-l',
-        name: 'Velcora Hoodie (Size: L, Color: Onyx Black)',
+        name: 'Avanyx Hoodie (Size: L, Color: Onyx Black)',
         sku: 'VEL-HD-01-L',
         unitPrice: 45.0,
         costPrice: 20.0,
@@ -995,7 +995,7 @@ export const DEFAULT_LOYALTY_CONFIG: LoyaltyRuleConfig = {
 };
 
 export const DEFAULT_SUBUSERS: SubUser[] = [
-  { id: 'user-owner', businessId: 'biz-clothing-01', staffId: 'OWN-001', name: 'Ali (Store Owner)', email: 'ali@velcora.com', roleId: 'role-owner', roleName: 'Master Admin', pinCode: '1234', status: 'active', isActive: true, createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'user-owner', businessId: 'biz-clothing-01', staffId: 'OWN-001', name: 'Ali (Store Owner)', email: 'ali@avanyx.ai', roleId: 'role-owner', roleName: 'Master Admin', pinCode: '1234', status: 'active', isActive: true, createdAt: '2026-01-01T00:00:00Z' },
 ];
 
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
@@ -1025,7 +1025,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // AI & Administration
   { key: 'customers:manage', label: 'Customer CRM & Loyalty Points', category: 'AI & System Administration', description: 'View customer purchase history, edit profiles, and adjust loyalty points.' },
-  { key: 'ai:access_brain', label: 'Access Velcora Business Brain AI', category: 'AI & System Administration', description: 'Interact with Ask Velcora AI, health diagnostics, and AI recommendations.' },
+  { key: 'ai:access_brain', label: 'Access Avanyx Business Brain AI', category: 'AI & System Administration', description: 'Interact with Ask Avanyx AI, health diagnostics, and AI recommendations.' },
   { key: 'store:manage', label: 'Online Store Beta Management', category: 'AI & System Administration', description: 'Configure storefront catalog, manage web orders, and branding.' },
   { key: 'employees:manage', label: 'Manage Staff & Roles', category: 'AI & System Administration', description: 'Create subusers, assign roles, change PINs, and adjust permissions.' },
   { key: 'settings:manage', label: 'Manage Cloud & Business Settings', category: 'AI & System Administration', description: 'Edit store legal details, tax rules, invoice headers, and multi-device topology.' },

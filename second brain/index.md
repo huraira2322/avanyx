@@ -1,6 +1,6 @@
-# Velcora Second Brain Index
+# Avanyx Second Brain Index
 
-Welcome to the **Velcora Second Brain Knowledge Graph**.
+Welcome to the **Avanyx Second Brain Knowledge Graph**.
 
 ## Primary Wiki Catalogs
 - [[entities]]: Core business entities including products, suppliers, customers, and brands.

@@ -22,7 +22,7 @@ export interface BusinessBrainAugmentResult {
 
 export class BusinessBrainAdapter {
   public augmentBusinessBrain(payload: BusinessBrainAugmentPayload): BusinessBrainAugmentResult {
-    const tenantId = payload.tenantId || 'velcora-default-store';
+    const tenantId = payload.tenantId || 'avanyx-default-store';
 
     // 1. Retrieve Historical Decisions and Insights
     const allMemories = memoryService.getAllForTenant(tenantId);

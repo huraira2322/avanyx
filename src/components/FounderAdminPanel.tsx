@@ -55,9 +55,19 @@ import {
   BarChart3,
   Sliders,
 } from 'lucide-react';
-import { useVelcora } from '../context/VelcoraContext';
-import { 
-  collection, doc, onSnapshot, getDocs, getDoc, setDoc, updateDoc, addDoc, query, orderBy, limit 
+import { useAvanyx } from '../context/AvanyxContext';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
+  addDoc,
+  query,
+  orderBy,
+  limit,
 } from 'firebase/firestore';
 import { auth, db, signInWithGoogle } from '../lib/firebase';
 import { getApiUrl } from '../lib/apiConfig';
@@ -71,13 +81,10 @@ import {
   PayoutRequest,
   SuperAdminConfig,
   SuperAdminAuditLog,
-  ReferralPartner,
-  CommissionRecord,
-  ReferralPartnerStatus,
-  CommissionStatus,
   PlanFeatureAccess,
   PlanResourceLimits,
 } from '../types';
+import { PlanDetailsModal } from './PlanDetailsModal';
 import {
   ALL_PLAN_FEATURES,
   ALL_PLAN_LIMITS,
@@ -155,7 +162,14 @@ interface GlobalAuditLog {
   metadata?: any;
 }
 
-type AdminTab = 'overview' | 'analytics' | 'users' | 'subscriptions' | 'packages' | 'referrals' | 'payments' | 'security' | 'audit_logs';
+type AdminTab =
+  | 'overview'
+  | 'analytics'
+  | 'users'
+  | 'subscriptions'
+  | 'payments'
+  | 'security'
+  | 'audit_logs';
 
 export interface FounderAdminPanelProps {
   isStandalone?: boolean;
@@ -163,12 +177,12 @@ export interface FounderAdminPanelProps {
 }
 
 export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalone = false, onBackToStore }) => {
-  const { activeUser } = useVelcora();
+  const { activeUser } = useAvanyx();
 
   // Navigation & Authentication State
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [adminToken, setAdminToken] = useState<string>(() => {
-    return localStorage.getItem('velcora_admin_jwt') || '';
+    return localStorage.getItem('avanyx_admin_jwt') || '';
   });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isVerifyingAuth, setIsVerifyingAuth] = useState<boolean>(true);
@@ -213,7 +227,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const [subscriptionsList, setSubscriptionsList] = useState<any[]>([]);
   const [plansList, setPlansList] = useState<SubscriptionPlanConfig[]>(() => {
     try {
-      const cached = localStorage.getItem('velcora_plans_cache');
+      const cached = localStorage.getItem('avanyx_plans_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) return parsed;
@@ -224,6 +238,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const [subsLoading, setSubsLoading] = useState<boolean>(false);
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlanConfig | null>(null);
   const [editingPlanLoading, setEditingPlanLoading] = useState<boolean>(false);
+  const [editingPlanFeaturesText, setEditingPlanFeaturesText] = useState<string>('');
+  const [newPlanDetailInput, setNewPlanDetailInput] = useState<string>('');
+  const [previewingPlan, setPreviewingPlan] = useState<SubscriptionPlanConfig | null>(null);
 
   // Plan Feature & Limit Matrix State
   const [planMatrixSubTab, setPlanMatrixSubTab] = useState<'matrix' | 'limits' | 'cards' | 'security_test'>('matrix');
@@ -234,7 +251,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   // Token Packages State
   const [packagesList, setPackagesList] = useState<TokenPackageConfig[]>(() => {
     try {
-      const cached = localStorage.getItem('velcora_packages_cache');
+      const cached = localStorage.getItem('avanyx_packages_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) return parsed;
@@ -245,28 +262,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const [packagesLoading, setPackagesLoading] = useState<boolean>(false);
   const [editingPackage, setEditingPackage] = useState<TokenPackageConfig | null>(null);
   const [editingPackageLoading, setEditingPackageLoading] = useState<boolean>(false);
-
-  // Referrals & Promoters State (Real-Time Firestore Sync)
-  const [livePromoters, setLivePromoters] = useState<any[]>([]);
-  const [livePayoutRequests, setLivePayoutRequests] = useState<any[]>([]);
-  const [liveReferralCodes, setLiveReferralCodes] = useState<any[]>([]);
-  const [liveReferralLeads, setLiveReferralLeads] = useState<any[]>([]);
-  const [liveReferralConfig, setLiveReferralConfig] = useState<any>({ defaultRatePercent: 20, minPayoutAmount: 50, currency: 'USD' });
-  const [promoterSearch, setPromoterSearch] = useState<string>('');
-  const [promoterStatusFilter, setPromoterStatusFilter] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED'>('ALL');
-  const [payoutFilter, setPayoutFilter] = useState<string>('ALL');
-  const [editingCommissionPromoter, setEditingCommissionPromoter] = useState<any | null>(null);
-  const [newCommissionRate, setNewCommissionRate] = useState<number>(20);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [referralSubTab, setReferralSubTab] = useState<'promoters' | 'payouts' | 'codes' | 'config'>('promoters');
-
-  const [referralsData, setReferralsData] = useState<{
-    partners: ReferralPartner[];
-    commissions: CommissionRecord[];
-    payoutRequests: PayoutRequest[];
-    stats: any;
-  } | null>(null);
-  const [referralsLoading, setReferralsLoading] = useState<boolean>(false);
 
   // Payments State
   const [paymentsData, setPaymentsData] = useState<{
@@ -279,7 +274,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('ALL');
 
   // Security Matrix & Config State
-  const [adminConfig, setAdminConfig] = useState<SuperAdminConfig | null>(null);
+  const [adminConfig, setAdminConfig] = useState<SuperAdminConfig | null>(() => {
+    try {
+      const cached = localStorage.getItem('avanyx_system_config');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return null;
+  });
   const [securityMatrixReport, setSecurityMatrixReport] = useState<any | null>(null);
   const [isRunningSecurityMatrix, setIsRunningSecurityMatrix] = useState<boolean>(false);
   const [killSwitchLoading, setKillSwitchLoading] = useState<boolean>(false);
@@ -302,20 +303,21 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
 
   // Get Auth Bearer header
   const getAuthHeader = useCallback(async (): Promise<{ [key: string]: string }> => {
-    // 1. Check if we have an active admin JWT
-    if (adminToken) {
+    // 1. Prefer stored founder admin JWT if available
+    const localToken = adminToken || localStorage.getItem('avanyx_admin_jwt');
+    if (localToken && (localToken.startsWith('founder_jwt_') || localToken.length > 20)) {
       return {
-        'Authorization': `Bearer ${adminToken}`,
+        Authorization: `Bearer ${localToken}`,
         'Content-Type': 'application/json',
       };
     }
     // 2. Check if Firebase currentUser has ID token
-    if (auth?.currentUser) {
+    if (auth?.currentUser && auth.currentUser.email?.toLowerCase() === 'hurairahussain667@gmail.com') {
       try {
         const idToken = await auth.currentUser.getIdToken();
         if (idToken) {
           return {
-            'Authorization': `Bearer ${idToken}`,
+            Authorization: `Bearer ${idToken}`,
             'Content-Type': 'application/json',
           };
         }
@@ -333,12 +335,17 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     try {
       // 1. Direct check: Is Firebase currentUser the Super Admin?
       if (auth?.currentUser && auth.currentUser.email?.toLowerCase() === 'hurairahussain667@gmail.com') {
+        const founderToken = `founder_jwt_google_${auth.currentUser.uid}`;
+        if (!localStorage.getItem('avanyx_admin_jwt')) {
+          localStorage.setItem('avanyx_admin_jwt', founderToken);
+        }
+        setAdminToken(localStorage.getItem('avanyx_admin_jwt') || founderToken);
         setIsAuthenticated(true);
         setIsVerifyingAuth(false);
         return;
       }
       // 2. Direct check: Is there a stored valid founder admin JWT?
-      const localToken = localStorage.getItem('velcora_admin_jwt');
+      const localToken = localStorage.getItem('avanyx_admin_jwt');
       if (localToken && (localToken.startsWith('founder_jwt_') || localToken.length > 20)) {
         setIsAuthenticated(true);
         setIsVerifyingAuth(false);
@@ -382,12 +389,14 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         console.warn('Native Google popup notice, using verified founder session fallback:', e);
       }
       if (user && user.email && user.email.toLowerCase() !== 'hurairahussain667@gmail.com') {
-        setAuthError(`Access Denied: '${user.email}' is not authorized as Super Admin. Please use hurairahussain667@gmail.com.`);
+        setAuthError(
+          `Access Denied: '${user.email}' is not authorized as Super Admin. Please use hurairahussain667@gmail.com.`
+        );
         setIsAuthenticated(false);
         return;
       }
       const token = `founder_jwt_google_huraira_${Date.now()}`;
-      localStorage.setItem('velcora_admin_jwt', token);
+      localStorage.setItem('avanyx_admin_jwt', token);
       setAdminToken(token);
       setIsAuthenticated(true);
     } catch (err: any) {
@@ -408,10 +417,10 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     try {
       if (
         loginEmail.trim().toLowerCase() === 'hurairahussain667@gmail.com' &&
-        (loginPassword === 'huraira4455667788' || loginPassword === 'VelcoraAdminPass2026!')
+        (loginPassword === 'huraira4455667788' || loginPassword === 'AvanyxAdminPass2026!')
       ) {
         const token = `founder_jwt_direct_${Date.now()}`;
-        localStorage.setItem('velcora_admin_jwt', token);
+        localStorage.setItem('avanyx_admin_jwt', token);
         setAdminToken(token);
         setIsAuthenticated(true);
         setLoginPassword('');
@@ -427,7 +436,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       if (res && res.ok) {
         const data = await res.json().catch(() => null);
         if (data?.success && data?.token) {
-          localStorage.setItem('velcora_admin_jwt', data.token);
+          localStorage.setItem('avanyx_admin_jwt', data.token);
           setAdminToken(data.token);
           setIsAuthenticated(true);
           setLoginPassword('');
@@ -443,7 +452,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   };
 
   const handleAdminLogout = () => {
-    localStorage.removeItem('velcora_admin_jwt');
+    localStorage.removeItem('avanyx_admin_jwt');
     setAdminToken('');
     setIsAuthenticated(false);
     setUsers([]);
@@ -456,205 +465,186 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     if (!isAuthenticated) return;
 
     // 1. Live Users listener
-    const usersUnsub = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const liveUsers: AdminUserSummary[] = [];
-      snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        liveUsers.push({
-          userId: docSnap.id,
-          email: d.email || '',
-          displayName: d.displayName || '',
-          availableCredits: d.availableCredits ?? d.aiTokensBalance ?? (d.includedCredits || 500) + (d.purchasedCredits || 0) - (d.usedCredits || 0),
-          includedCredits: d.includedCredits ?? 500,
-          purchasedCredits: d.purchasedCredits ?? 0,
-          usedCredits: d.usedCredits ?? 0,
-          subscriptionTier: (d.subscriptionTier || 'free').toUpperCase(),
-          subscriptionStatus: (d.subscriptionStatus || 'ACTIVE').toUpperCase(),
-          updatedAt: d.updatedAt || d.createdAt || new Date().toISOString(),
-          createdAt: d.createdAt || d.updatedAt || new Date().toISOString(),
-          lastActiveAt: d.lastActiveAt || d.updatedAt || d.createdAt,
-          isSuspended: Boolean(d.isSuspended),
-          platform: d.platform || d.deviceInfo?.platform,
-          browser: d.browser || d.deviceInfo?.browser,
-          deviceInfo: d.deviceInfo,
-          activeSubscription: d.activeSubscription || null,
-        } as any);
-      });
-      setUsers(liveUsers);
-      setUsersLoading(false);
-    }, (err) => {
-      console.warn('Real-time users snapshot note:', err);
-    });
+    const usersUnsub = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        const liveUsers: AdminUserSummary[] = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          liveUsers.push({
+            userId: docSnap.id,
+            email: d.email || '',
+            displayName: d.displayName || '',
+            availableCredits:
+              d.availableCredits ??
+              d.aiTokensBalance ??
+              (d.includedCredits || 0) + (d.purchasedCredits || 0) - (d.usedCredits || 0),
+            includedCredits: d.includedCredits ?? 0,
+            purchasedCredits: d.purchasedCredits ?? 0,
+            usedCredits: d.usedCredits ?? 0,
+            subscriptionTier: (d.subscriptionTier || 'free').toUpperCase(),
+            subscriptionStatus: (d.subscriptionStatus || 'ACTIVE').toUpperCase(),
+            updatedAt: d.updatedAt || d.createdAt || new Date().toISOString(),
+            createdAt: d.createdAt || d.updatedAt || new Date().toISOString(),
+            lastActiveAt: d.lastActiveAt || d.updatedAt || d.createdAt,
+            isSuspended: Boolean(d.isSuspended),
+            platform: d.platform || d.deviceInfo?.platform,
+            browser: d.browser || d.deviceInfo?.browser,
+            deviceInfo: d.deviceInfo,
+            activeSubscription: d.activeSubscription || null,
+          } as any);
+        });
+        setUsers(liveUsers);
+        setUsersLoading(false);
+      },
+      (err) => {
+        console.warn('Real-time users snapshot note:', err);
+      }
+    );
 
     // 2. Live Audit Logs listener
-    const logsUnsub = onSnapshot(collection(db, 'audit_logs'), (snapshot) => {
-      const liveLogs: GlobalAuditLog[] = [];
-      snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        liveLogs.push({
-          id: docSnap.id,
-          timestamp: d.timestamp || new Date().toISOString(),
-          adminId: d.adminId || 'admin',
-          adminEmail: d.adminEmail || 'hurairahussain667@gmail.com',
-          action: d.action || 'SYSTEM_EVENT',
-          targetCategory: d.targetCategory || 'SYSTEM',
-          targetId: d.targetId || '',
-          details: d.details || '',
-          metadata: d.metadata || {},
+    const logsUnsub = onSnapshot(
+      collection(db, 'audit_logs'),
+      (snapshot) => {
+        const liveLogs: GlobalAuditLog[] = [];
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          liveLogs.push({
+            id: docSnap.id,
+            timestamp: d.timestamp || new Date().toISOString(),
+            adminId: d.adminId || 'admin',
+            adminEmail: d.adminEmail || 'hurairahussain667@gmail.com',
+            action: d.action || 'SYSTEM_EVENT',
+            targetCategory: d.targetCategory || 'SYSTEM',
+            targetId: d.targetId || '',
+            details: d.details || '',
+            metadata: d.metadata || {},
+          });
         });
-      });
-      liveLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      if (liveLogs.length > 0) {
-        setAuditLogs(liveLogs);
+        liveLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        if (liveLogs.length > 0) {
+          setAuditLogs(liveLogs);
+        }
+      },
+      (err) => {
+        console.warn('Real-time audit logs snapshot note:', err);
       }
-    }, (err) => {
-      console.warn('Real-time audit logs snapshot note:', err);
-    });
+    );
 
     // 3. Live System Config listener
-    const configUnsub = onSnapshot(doc(db, 'system', 'config'), (docSnap) => {
-      if (docSnap.exists()) {
-        const d = docSnap.data() as SuperAdminConfig;
-        setAdminConfig(d);
+    const configUnsub = onSnapshot(
+      doc(db, 'system', 'config'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const d = docSnap.data() as SuperAdminConfig;
+          setAdminConfig(d);
+          try {
+            localStorage.setItem('avanyx_system_config', JSON.stringify(d));
+          } catch {}
+        }
+      },
+      (err) => {
+        console.warn('Real-time config snapshot note:', err);
       }
-    }, (err) => {
-      console.warn('Real-time config snapshot note:', err);
-    });
+    );
 
     // 4. Live Businesses count & telemetry listener
-    const bizUnsub = onSnapshot(collection(db, 'businesses'), (snapshot) => {
-      const bizCount = snapshot.size;
-      setTelemetry((prev: any) => ({
-        ...prev,
-        totalBusinesses: bizCount,
-        activeBusinesses: bizCount,
-        lastHeartbeat: new Date().toISOString(),
-        systemHealth: 'HEALTHY',
-        databaseEngine: 'Cloud Firestore (Real-Time)',
-      }));
-    }, (err) => {
-      console.warn('Real-time businesses snapshot note:', err);
-    });
-
-    // 5. Live Promoters listener (from referral_promoters collection)
-    const promotersUnsub = onSnapshot(collection(db, 'referral_promoters'), (snapshot) => {
-      const promoters: any[] = [];
-      snapshot.forEach(docSnap => {
-        promoters.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      promoters.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-      setLivePromoters(promoters);
-    }, (err) => {
-      console.warn('Real-time promoters snapshot note:', err);
-    });
-
-    // 6. Live Payouts listener (from referral_payouts collection)
-    const payoutsUnsub = onSnapshot(collection(db, 'referral_payouts'), (snapshot) => {
-      const payouts: any[] = [];
-      snapshot.forEach(docSnap => {
-        payouts.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      payouts.sort((a, b) => new Date(b.requestedAt || b.createdAt || 0).getTime() - new Date(a.requestedAt || a.createdAt || 0).getTime());
-      setLivePayoutRequests(payouts);
-    }, (err) => {
-      console.warn('Real-time payouts snapshot note:', err);
-    });
-
-    // 7. Live Referral Codes listener
-    const codesUnsub = onSnapshot(collection(db, 'referral_codes'), (snapshot) => {
-      const codes: any[] = [];
-      snapshot.forEach(docSnap => {
-        codes.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setLiveReferralCodes(codes);
-    }, (err) => {
-      console.warn('Real-time referral codes snapshot note:', err);
-    });
-
-    // 8. Live Referral Leads listener
-    const leadsUnsub = onSnapshot(collection(db, 'referral_leads'), (snapshot) => {
-      const leads: any[] = [];
-      snapshot.forEach(docSnap => {
-        leads.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setLiveReferralLeads(leads);
-    }, (err) => {
-      console.warn('Real-time referral leads snapshot note:', err);
-    });
-
-    // 9. Live Referral Config listener
-    const referralConfigUnsub = onSnapshot(doc(db, 'referral_config', 'global'), (docSnap) => {
-      if (docSnap.exists()) {
-        setLiveReferralConfig(docSnap.data());
+    const bizUnsub = onSnapshot(
+      collection(db, 'businesses'),
+      (snapshot) => {
+        const bizCount = snapshot.size;
+        setTelemetry((prev: any) => ({
+          ...prev,
+          overview: {
+            ...prev?.overview,
+            totalBusinessesCount: bizCount,
+          },
+        }));
+      },
+      (err) => {
+        console.warn('Real-time businesses snapshot note:', err);
       }
-    }, (err) => {
-      console.warn('Real-time referral config snapshot note:', err);
-    });
+    );
 
-    // 10. Live Subscription Plans listener from system/plans
-    const plansUnsub = onSnapshot(doc(db, 'system', 'plans'), (docSnap) => {
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        if (d && Array.isArray(d.plans)) {
-          setPlansList(d.plans);
-          try { localStorage.setItem('velcora_plans_cache', JSON.stringify(d.plans)); } catch {}
+    // 5. Live Subscription Plans listener from system/plans
+    const plansUnsub = onSnapshot(
+      doc(db, 'system', 'plans'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          if (d && Array.isArray(d.plans)) {
+            setPlansList(d.plans);
+            try {
+              localStorage.setItem('avanyx_plans_cache', JSON.stringify(d.plans));
+            } catch {}
+          }
         }
+        setSubsLoading(false);
+      },
+      (err) => {
+        console.warn('Real-time plans snapshot note:', err);
+        setSubsLoading(false);
       }
-      setSubsLoading(false);
-    }, (err) => {
-      console.warn('Real-time plans snapshot note:', err);
-      setSubsLoading(false);
-    });
+    );
 
     // 11. Live Token Packages listener from system/token_packages
-    const packagesUnsub = onSnapshot(doc(db, 'system', 'token_packages'), (docSnap) => {
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        if (d && Array.isArray(d.packages)) {
-          setPackagesList(d.packages);
-          try { localStorage.setItem('velcora_packages_cache', JSON.stringify(d.packages)); } catch {}
+    const packagesUnsub = onSnapshot(
+      doc(db, 'system', 'token_packages'),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          if (d && Array.isArray(d.packages)) {
+            setPackagesList(d.packages);
+            try {
+              localStorage.setItem('avanyx_packages_cache', JSON.stringify(d.packages));
+            } catch {}
+          }
         }
+        setPackagesLoading(false);
+      },
+      (err) => {
+        console.warn('Real-time packages snapshot note:', err);
+        setPackagesLoading(false);
       }
-      setPackagesLoading(false);
-    }, (err) => {
-      console.warn('Real-time packages snapshot note:', err);
-      setPackagesLoading(false);
-    });
+    );
 
     // 12. Live System Activity listener from system_activity
     const activityQuery = query(collection(db, 'system_activity'), orderBy('timestamp', 'desc'), limit(150));
-    const activityUnsub = onSnapshot(activityQuery, (snapshot) => {
-      const acts: SystemActivityEvent[] = [];
-      snapshot.forEach(docSnap => {
-        acts.push({ id: docSnap.id, ...docSnap.data() } as SystemActivityEvent);
-      });
-      setLiveActivities(acts);
-    }, (err) => {
-      console.warn('Real-time system_activity snapshot note:', err);
-    });
+    const activityUnsub = onSnapshot(
+      activityQuery,
+      (snapshot) => {
+        const acts: SystemActivityEvent[] = [];
+        snapshot.forEach((docSnap) => {
+          acts.push({ id: docSnap.id, ...docSnap.data() } as SystemActivityEvent);
+        });
+        setLiveActivities(acts);
+      },
+      (err) => {
+        console.warn('Real-time system_activity snapshot note:', err);
+      }
+    );
 
     // 13. Live Sales & Orders listener from sales collection
     const salesQuery = query(collection(db, 'sales'), orderBy('createdAt', 'desc'), limit(200));
-    const salesUnsub = onSnapshot(salesQuery, (snapshot) => {
-      const liveOrders: any[] = [];
-      snapshot.forEach(docSnap => {
-        liveOrders.push({ id: docSnap.id, ...docSnap.data() });
-      });
-      setLiveSales(liveOrders);
-    }, (err) => {
-      console.warn('Real-time sales snapshot note:', err);
-    });
+    const salesUnsub = onSnapshot(
+      salesQuery,
+      (snapshot) => {
+        const liveOrders: any[] = [];
+        snapshot.forEach((docSnap) => {
+          liveOrders.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setLiveSales(liveOrders);
+      },
+      (err) => {
+        console.warn('Real-time sales snapshot note:', err);
+      }
+    );
 
     return () => {
       usersUnsub();
       logsUnsub();
       configUnsub();
       bizUnsub();
-      promotersUnsub();
-      payoutsUnsub();
-      codesUnsub();
-      leadsUnsub();
-      referralConfigUnsub();
       plansUnsub();
       packagesUnsub();
       activityUnsub();
@@ -686,18 +676,37 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const fetchUsers = useCallback(async () => {
     if (!isAuthenticated) return;
     setUsersLoading(true);
-    setUsersError(null);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl('/api/admin/users'), { headers });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setUsers(data.users || []);
-      } else {
-        setUsersError(data.error || 'Failed to load user directories from server.');
+      const res = await fetch(getApiUrl('/api/admin/users'), { headers }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.success && Array.isArray(data.users)) {
+          setUsers((prevUsers) => {
+            const combined = [...prevUsers];
+            for (const apiUser of data.users) {
+              const idx = combined.findIndex((u) => u.userId === apiUser.userId);
+              if (idx >= 0) {
+                combined[idx] = { ...combined[idx], ...apiUser };
+              } else {
+                combined.push(apiUser);
+              }
+            }
+            return combined;
+          });
+          setUsersError(null);
+        }
+      } else if (res && !res.ok) {
+        const data = await res.json().catch(() => null);
+        setUsers((current) => {
+          if (current.length === 0) {
+            setUsersError(data?.error || `Server responded with status ${res.status}`);
+          }
+          return current;
+        });
       }
     } catch (err: any) {
-      setUsersError(err?.message || 'Network error fetching admin users.');
+      console.warn('Notice fetching admin users from REST endpoint:', err);
     } finally {
       setUsersLoading(false);
     }
@@ -709,9 +718,26 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     setSubsLoading(true);
     try {
       const headers = await getAuthHeader();
-      const subsRes = await fetch(getApiUrl('/api/admin/subscriptions'), { headers });
-      const subsData = await subsRes.json();
-      if (subsData.success) setSubscriptionsList(subsData.subscriptions || []);
+      const subsRes = await fetch(getApiUrl('/api/admin/subscriptions'), { headers }).catch(() => null);
+      if (subsRes && subsRes.ok) {
+        const subsData = await subsRes.json().catch(() => null);
+        if (subsData?.success && Array.isArray(subsData.subscriptions)) {
+          setSubscriptionsList(subsData.subscriptions);
+        }
+      }
+
+      // Also ensure live plans from backend REST API are synchronized
+      const plansRes = await fetch(getApiUrl('/api/admin/plans'), { headers }).catch(() => null);
+      if (plansRes && plansRes.ok) {
+        const plansData = await plansRes.json().catch(() => null);
+        if (plansData?.success && Array.isArray(plansData.plans) && plansData.plans.length > 0) {
+          const sanitized = plansData.plans.map((p: any) => sanitizePlanConfig(p));
+          setPlansList(sanitized);
+          try {
+            localStorage.setItem('avanyx_plans_cache', JSON.stringify(sanitized));
+          } catch {}
+        }
+      }
     } catch (err) {
       console.warn('Failed to load subscriptions:', err);
     } finally {
@@ -725,36 +751,14 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     setPackagesLoading(true);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl('/api/admin/packages'), { headers });
-      const data = await res.json();
-      /* Packages list is managed by real-time Firestore onSnapshot */
+      const res = await fetch(getApiUrl('/api/admin/packages'), { headers }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+      }
     } catch (err) {
       console.warn('Failed to load packages:', err);
     } finally {
       setPackagesLoading(false);
-    }
-  }, [isAuthenticated, getAuthHeader]);
-
-  // Fetch Referrals
-  const fetchReferrals = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setReferralsLoading(true);
-    try {
-      const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl('/api/admin/referrals'), { headers });
-      const data = await res.json();
-      if (data.success) {
-        setReferralsData({
-          partners: data.partners || [],
-          commissions: data.commissions || [],
-          payoutRequests: data.payoutRequests || [],
-          stats: data.stats || {},
-        });
-      }
-    } catch (err) {
-      console.warn('Failed to load referrals:', err);
-    } finally {
-      setReferralsLoading(false);
     }
   }, [isAuthenticated, getAuthHeader]);
 
@@ -764,14 +768,16 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     setPaymentsLoading(true);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl('/api/admin/payments'), { headers });
-      const data = await res.json();
-      if (data.success) {
-        setPaymentsData({
-          transactions: data.transactions || [],
-          summary: data.summary || {},
-          payoutRequests: data.payoutRequests || [],
-        });
+      const res = await fetch(getApiUrl('/api/admin/payments'), { headers }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.success) {
+          setPaymentsData({
+            transactions: data.transactions || [],
+            summary: data.summary || {},
+            payoutRequests: data.payoutRequests || [],
+          });
+        }
       }
     } catch (err) {
       console.warn('Failed to load payments:', err);
@@ -785,10 +791,12 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     if (!isAuthenticated) return;
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl('/api/admin/overview'), { headers });
-      const data = await res.json();
-      if (data.success && data.telemetry?.config) {
-        setAdminConfig(data.telemetry.config);
+      const res = await fetch(getApiUrl('/api/admin/overview'), { headers }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.success && data.telemetry?.config) {
+          setAdminConfig(data.telemetry.config);
+        }
       }
     } catch (err) {
       console.warn('Failed to load config:', err);
@@ -802,15 +810,16 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     setLogsError(null);
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl('/api/admin/audit-logs'), { headers });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setAuditLogs(data.auditLogs || []);
-      } else {
-        setLogsError(data.error || 'Failed to load global admin audit logs.');
+      const res = await fetch(getApiUrl('/api/admin/audit-logs'), { headers }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.success && Array.isArray(data.auditLogs)) {
+          setAuditLogs(data.auditLogs);
+          setLogsError(null);
+        }
       }
     } catch (err: any) {
-      setLogsError(err?.message || 'Network error fetching global audit logs.');
+      console.warn('Notice fetching global audit logs:', err);
     } finally {
       setLogsLoading(false);
     }
@@ -823,7 +832,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       else if (activeTab === 'users') fetchUsers();
       else if (activeTab === 'subscriptions') fetchSubscriptions();
       else if (activeTab === 'packages') fetchPackages();
-      else if (activeTab === 'referrals') fetchReferrals();
       else if (activeTab === 'payments') fetchPayments();
       else if (activeTab === 'security') fetchSecurityAndConfig();
       else if (activeTab === 'audit_logs') fetchAuditLogs();
@@ -835,7 +843,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     fetchUsers,
     fetchSubscriptions,
     fetchPackages,
-    fetchReferrals,
     fetchPayments,
     fetchSecurityAndConfig,
     fetchAuditLogs,
@@ -873,9 +880,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       try {
         await updateDoc(doc(db, 'users', userId), {
           isSuspended: targetSuspendedState,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         }).catch(async () => {
-          await setDoc(doc(db, 'users', userId), { isSuspended: targetSuspendedState, updatedAt: new Date().toISOString() }, { merge: true });
+          await setDoc(
+            doc(db, 'users', userId),
+            { isSuspended: targetSuspendedState, updatedAt: new Date().toISOString() },
+            { merge: true }
+          );
         });
         await addDoc(collection(db, 'audit_logs'), {
           timestamp: new Date().toISOString(),
@@ -903,7 +914,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         message: `User '${userId}' suspension status updated to ${targetSuspendedState ? 'SUSPENDED' : 'ACTIVE'}.`,
       });
       if (selectedUser && selectedUser.userId === userId) {
-        setSelectedUser(prev => prev ? { ...prev, isSuspended: targetSuspendedState } : null);
+        setSelectedUser((prev) => (prev ? { ...prev, isSuspended: targetSuspendedState } : null));
       }
     } catch (err: any) {
       setActionNotice({
@@ -932,16 +943,29 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       // 1. Direct Cloud Firestore Update
       try {
         const userDocRef = doc(db, 'users', adjustTargetUser.userId);
-        const newIncluded = adjustType === 'included' ? Math.max(0, (adjustTargetUser.includedCredits || 0) + Number(adjustAmount)) : adjustTargetUser.includedCredits;
-        const newPurchased = adjustType === 'purchased' ? Math.max(0, (adjustTargetUser.purchasedCredits || 0) + Number(adjustAmount)) : adjustTargetUser.purchasedCredits;
-        const newAvailable = Math.max(0, (newIncluded || 0) + (newPurchased || 0) - (adjustTargetUser.usedCredits || 0));
+        const newIncluded =
+          adjustType === 'included'
+            ? Math.max(0, (adjustTargetUser.includedCredits || 0) + Number(adjustAmount))
+            : adjustTargetUser.includedCredits;
+        const newPurchased =
+          adjustType === 'purchased'
+            ? Math.max(0, (adjustTargetUser.purchasedCredits || 0) + Number(adjustAmount))
+            : adjustTargetUser.purchasedCredits;
+        const newAvailable = Math.max(
+          0,
+          (newIncluded || 0) + (newPurchased || 0) - (adjustTargetUser.usedCredits || 0)
+        );
 
-        await setDoc(userDocRef, {
-          includedCredits: newIncluded,
-          purchasedCredits: newPurchased,
-          availableCredits: newAvailable,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+        await setDoc(
+          userDocRef,
+          {
+            includedCredits: newIncluded,
+            purchasedCredits: newPurchased,
+            availableCredits: newAvailable,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
 
         await addDoc(collection(db, 'audit_logs'), {
           timestamp: new Date().toISOString(),
@@ -993,7 +1017,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         headers,
         body: JSON.stringify({
           cancelImmediately,
-          reason: 'Founder requested subscription cancellation'
+          reason: 'Founder requested subscription cancellation',
         }),
       });
       const data = await res.json();
@@ -1002,193 +1026,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         fetchSubscriptions();
       } else {
         setActionNotice({ type: 'error', message: data.error || 'Failed to cancel subscription.' });
-      }
-    } catch (err: any) {
-      setActionNotice({ type: 'error', message: err?.message || 'Network error.' });
-    }
-  };
-
-  // Real-Time Firestore: Toggle Promoter Status (ACTIVE / SUSPENDED)
-  const handleToggleLivePromoterStatus = async (promoterId: string, currentStatus: string, referralCode?: string) => {
-    const targetStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    try {
-      await setDoc(doc(db, 'referral_promoters', promoterId), {
-        status: targetStatus,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      if (referralCode) {
-        await setDoc(doc(db, 'referral_codes', referralCode.toUpperCase()), {
-          status: targetStatus,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
-
-      await addDoc(collection(db, 'audit_logs'), {
-        timestamp: new Date().toISOString(),
-        adminId: auth.currentUser?.uid || 'founder-huraira',
-        adminEmail: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-        action: targetStatus === 'ACTIVE' ? 'PROMOTER_ACTIVATED' : 'PROMOTER_SUSPENDED',
-        targetCategory: 'REFERRAL_SYSTEM',
-        targetId: promoterId,
-        details: `Super Admin set status of promoter '${promoterId}' (${referralCode || ''}) to ${targetStatus}`,
-      }).catch(() => {});
-
-      setActionNotice({
-        type: 'success',
-        message: `Promoter status updated to ${targetStatus} in real-time.`,
-      });
-    } catch (err: any) {
-      setActionNotice({
-        type: 'error',
-        message: err?.message || 'Failed to update promoter status in Firestore.',
-      });
-    }
-  };
-
-  // Real-Time Firestore: Update Promoter Commission Rate %
-  const handleUpdateLivePromoterCommission = async (promoterId: string, newRate: number) => {
-    try {
-      await setDoc(doc(db, 'referral_promoters', promoterId), {
-        customCommissionRate: Number(newRate),
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      await addDoc(collection(db, 'audit_logs'), {
-        timestamp: new Date().toISOString(),
-        adminId: auth.currentUser?.uid || 'founder-huraira',
-        adminEmail: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-        action: 'PROMOTER_COMMISSION_UPDATED',
-        targetCategory: 'REFERRAL_SYSTEM',
-        targetId: promoterId,
-        details: `Super Admin set commission rate of promoter '${promoterId}' to ${newRate}%`,
-      }).catch(() => {});
-
-      setActionNotice({
-        type: 'success',
-        message: `Commission rate updated to ${newRate}% for promoter.`,
-      });
-      setEditingCommissionPromoter(null);
-    } catch (err: any) {
-      setActionNotice({
-        type: 'error',
-        message: err?.message || 'Failed to update commission rate in Firestore.',
-      });
-    }
-  };
-
-  // Real-Time Firestore: Update Payout Request Status
-  const handleUpdateLivePayoutStatus = async (
-    payoutId: string,
-    promoterId: string,
-    promoterName: string,
-    amount: number,
-    newStatus: 'APPROVED' | 'PAID' | 'REJECTED'
-  ) => {
-    try {
-      await setDoc(doc(db, 'referral_payouts', payoutId), {
-        status: newStatus,
-        processedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      await addDoc(collection(db, 'audit_logs'), {
-        timestamp: new Date().toISOString(),
-        adminId: auth.currentUser?.uid || 'founder-huraira',
-        adminEmail: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-        action: `PAYOUT_${newStatus}`,
-        targetCategory: 'REFERRAL_SYSTEM',
-        targetId: payoutId,
-        details: `Super Admin marked payout '${payoutId}' ($${amount}) for '${promoterName}' as ${newStatus}`,
-      }).catch(() => {});
-
-      setActionNotice({
-        type: 'success',
-        message: `Payout request marked as ${newStatus} in real-time.`,
-      });
-    } catch (err: any) {
-      setActionNotice({
-        type: 'error',
-        message: err?.message || 'Failed to update payout status.',
-      });
-    }
-  };
-
-  // Real-Time Firestore: Update Global Referral Config
-  const handleSaveGlobalReferralConfig = async (defaultRate: number, minPayout: number) => {
-    try {
-      await setDoc(doc(db, 'referral_config', 'global'), {
-        defaultRatePercent: Number(defaultRate),
-        minPayoutAmount: Number(minPayout),
-        currency: 'USD',
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-
-      await addDoc(collection(db, 'audit_logs'), {
-        timestamp: new Date().toISOString(),
-        adminId: auth.currentUser?.uid || 'founder-huraira',
-        adminEmail: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-        action: 'GLOBAL_REFERRAL_CONFIG_UPDATED',
-        targetCategory: 'REFERRAL_SYSTEM',
-        targetId: 'global',
-        details: `Super Admin updated global referral config: Rate=${defaultRate}%, MinPayout=$${minPayout}`,
-      }).catch(() => {});
-
-      setActionNotice({
-        type: 'success',
-        message: 'Global referral configuration saved to Cloud Firestore.',
-      });
-    } catch (err: any) {
-      setActionNotice({
-        type: 'error',
-        message: err?.message || 'Failed to update referral configuration.',
-      });
-    }
-  };
-
-  // Open Promoter Portal in Chrome
-  const handleOpenPromoterPortal = () => {
-    if (typeof window !== 'undefined') {
-      window.open('https://admin-3666e.web.app/?referral=true', '_blank');
-    }
-  };
-
-  // Update Partner Status: POST /api/admin/referrals/partners/:id/status
-  const handlePartnerStatusUpdate = async (partnerId: string, status: ReferralPartnerStatus) => {
-    try {
-      const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl(`/api/admin/referrals/partners/${encodeURIComponent(partnerId)}/status`), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ status }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setActionNotice({ type: 'success', message: data.message || `Partner status updated to ${status}.` });
-        fetchReferrals();
-      } else {
-        setActionNotice({ type: 'error', message: data.error || 'Failed to update partner status.' });
-      }
-    } catch (err: any) {
-      setActionNotice({ type: 'error', message: err?.message || 'Network error.' });
-    }
-  };
-
-  // Update Commission Status: POST /api/admin/referrals/commissions/:id/status
-  const handleCommissionStatusUpdate = async (commissionId: string, targetStatus: CommissionStatus) => {
-    try {
-      const headers = await getAuthHeader();
-      const res = await fetch(getApiUrl(`/api/admin/referrals/commissions/${encodeURIComponent(commissionId)}/status`), {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ targetStatus }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setActionNotice({ type: 'success', message: data.message || `Commission updated to ${targetStatus}.` });
-        fetchReferrals();
-      } else {
-        setActionNotice({ type: 'error', message: data.error || 'Failed to update commission.' });
       }
     } catch (err: any) {
       setActionNotice({ type: 'error', message: err?.message || 'Network error.' });
@@ -1237,7 +1074,10 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       const data = await res.json();
       setSecurityMatrixReport(data);
       if (data.success && data.allPassed) {
-        setActionNotice({ type: 'success', message: `All ${data.passCount} security matrix scenarios PASSED flawlessly!` });
+        setActionNotice({
+          type: 'success',
+          message: `All ${data.passCount} security matrix scenarios PASSED flawlessly!`,
+        });
       }
     } catch (err: any) {
       setActionNotice({ type: 'error', message: err?.message || 'Error executing security matrix.' });
@@ -1247,39 +1087,110 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   };
 
   // Subscription Plan Persistence: Cloud Firestore (system/plans)
+  const isTargetPlan = (p: SubscriptionPlanConfig, targetTierOrId: string) => {
+    if (targetTierOrId === 'tier_pro_max' || targetTierOrId === 'pro_max') {
+      return p.id === 'tier_pro_max' || p.tier === 'pro_max';
+    }
+    if (targetTierOrId === 'tier_pro' || targetTierOrId === 'pro') {
+      return (p.id === 'tier_pro' || p.tier === 'pro') && p.id !== 'tier_pro_max' && p.tier !== 'pro_max';
+    }
+    if (targetTierOrId === 'tier_free' || targetTierOrId === 'free') {
+      return p.id === 'tier_free' || p.tier === 'free';
+    }
+    return p.id === targetTierOrId || p.tier === targetTierOrId;
+  };
+
   const handleSavePlan = async (updatedPlan: SubscriptionPlanConfig) => {
     setEditingPlanLoading(true);
     try {
-      // Fetch latest plans from Firestore to prevent stale state issues
-      const docSnap = await getDoc(doc(db, 'system', 'plans'));
-      let currentPlans = plansList;
-      if (docSnap.exists() && docSnap.data()?.plans) {
-        currentPlans = docSnap.data().plans;
+      // 1. Process details/features: prioritize editingPlanFeaturesText if edited, or updatedPlan.features
+      let parsedFeatures: string[] = [];
+      if (editingPlanFeaturesText !== undefined && editingPlanFeaturesText !== null) {
+        parsedFeatures = editingPlanFeaturesText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      if (parsedFeatures.length === 0 && Array.isArray(updatedPlan.features)) {
+        parsedFeatures = updatedPlan.features;
       }
 
-      const exists = currentPlans.some(p => p.id === updatedPlan.id || p.tier === updatedPlan.tier);
+      // 2. Synchronize top-level limits and resourceLimits
+      const maxProds = Number(updatedPlan.maxProducts) || 500;
+      const maxUsers = Number(updatedPlan.maxSubusers) || 2;
+      const maxStns = Number(updatedPlan.maxWorkstations) || 1;
+      const monthlyTokens = Number(updatedPlan.tokensIncludedMonthly) || 0;
+
+      const mergedPlanConfig: SubscriptionPlanConfig = {
+        ...updatedPlan,
+        features: parsedFeatures,
+        maxProducts: maxProds,
+        maxSubusers: maxUsers,
+        maxWorkstations: maxStns,
+        tokensIncludedMonthly: monthlyTokens,
+        resourceLimits: {
+          ...(updatedPlan.resourceLimits || {}),
+          maxProducts: maxProds,
+          maxStaff: maxUsers,
+          maxWorkstations: maxStns,
+          monthlyAiCredits: monthlyTokens,
+        },
+      };
+
+      const sanitizedPlan = sanitizePlanConfig(mergedPlanConfig);
+
+      // 3. Resolve existing plans
+      let currentPlans = [...plansList];
+      try {
+        const docSnap = await getDoc(doc(db, 'system', 'plans'));
+        if (docSnap.exists() && Array.isArray(docSnap.data()?.plans) && docSnap.data().plans.length > 0) {
+          currentPlans = docSnap.data().plans;
+        }
+      } catch (e) {
+        console.warn('Using local plans list:', e);
+      }
+
+      const isMatchingPlan = (p: SubscriptionPlanConfig) => {
+        if (sanitizedPlan.id && p.id === sanitizedPlan.id) return true;
+        return isTargetPlan(p, sanitizedPlan.id || sanitizedPlan.tier);
+      };
+
+      const exists = currentPlans.some(isMatchingPlan);
       const newPlans = exists
-        ? currentPlans.map(p => (p.id === updatedPlan.id || p.tier === updatedPlan.tier) ? updatedPlan : p)
-        : [...currentPlans, updatedPlan];
+        ? currentPlans.map((p) => (isMatchingPlan(p) ? sanitizedPlan : sanitizePlanConfig(p)))
+        : [...currentPlans.map((p) => sanitizePlanConfig(p)), sanitizedPlan];
 
+      // Update state and local storage immediately
       setPlansList(newPlans);
-      try { localStorage.setItem('velcora_plans_cache', JSON.stringify(newPlans)); } catch {}
+      try {
+        localStorage.setItem('avanyx_plans_cache', JSON.stringify(newPlans));
+      } catch {}
       setEditingPlan(null);
+      setEditingPlanFeaturesText('');
+      setNewPlanDetailInput('');
 
-      await setDoc(doc(db, 'system', 'plans'), {
-        plans: newPlans,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      // Persist to Firestore system/plans
+      await setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans: newPlans,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      );
 
+      // Persist to Backend REST API
       try {
         const headers = await getAuthHeader();
         await fetch(getApiUrl('/api/admin/plans/update'), {
           method: 'POST',
           headers,
-          body: JSON.stringify({ plans: newPlans })
+          body: JSON.stringify({ plans: newPlans }),
         });
-      } catch (e) { console.warn('Backend sync note', e); }
+      } catch (e) {
+        console.warn('Backend sync note', e);
+      }
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1287,15 +1198,16 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         adminEmail: auth.currentUser?.email || 'hurairahussain667@gmail.com',
         action: exists ? 'UPDATE_SUBSCRIPTION_PLAN' : 'CREATE_SUBSCRIPTION_PLAN',
         targetCategory: 'SUBSCRIPTION',
-        targetId: updatedPlan.id || updatedPlan.tier,
-        details: `${exists ? 'Updated' : 'Created new'} plan "${updatedPlan.name}": $${updatedPlan.monthlyPriceUSD}/mo, ${updatedPlan.tokensIncludedMonthly.toLocaleString()} tokens`,
+        targetId: sanitizedPlan.id || sanitizedPlan.tier,
+        details: `${exists ? 'Updated' : 'Created new'} plan "${sanitizedPlan.name}": $${sanitizedPlan.monthlyPriceUSD}/mo, ${sanitizedPlan.tokensIncludedMonthly.toLocaleString()} tokens, ${parsedFeatures.length} features`,
       }).catch(() => {});
 
-      setActionNotice({ 
-        type: 'success', 
-        message: `Plan "${updatedPlan.name}" ${exists ? 'updated' : 'created'} & synchronized across entire Velcora ecosystem in real-time!` 
+      setActionNotice({
+        type: 'success',
+        message: `Plan "${sanitizedPlan.name}" (${parsedFeatures.length} details, $${sanitizedPlan.monthlyPriceUSD}/mo) saved & synchronized live across Avanyx!`,
       });
     } catch (err: any) {
+      console.error('Save plan error:', err);
       setActionNotice({ type: 'error', message: `Failed to save plan: ${err.message}` });
     } finally {
       setEditingPlanLoading(false);
@@ -1303,7 +1215,12 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   };
 
   const handleDeletePlan = async (planId: string, planName: string) => {
-    if (!window.confirm(`Are you sure you want to delete the plan "${planName}"? This will immediately remove it from Velcora checkout.`)) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete the plan "${planName}"? This will immediately remove it from Avanyx checkout.`
+      )
+    )
+      return;
     try {
       // Fetch latest plans from Firestore to prevent stale state issues
       const docSnap = await getDoc(doc(db, 'system', 'plans'));
@@ -1312,24 +1229,32 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         currentPlans = docSnap.data().plans;
       }
 
-      const newPlans = currentPlans.filter(p => p.id !== planId && p.tier !== planId);
+      const newPlans = currentPlans.filter((p) => !isTargetPlan(p, planId));
       setPlansList(newPlans);
-      try { localStorage.setItem('velcora_plans_cache', JSON.stringify(newPlans)); } catch {}
+      try {
+        localStorage.setItem('avanyx_plans_cache', JSON.stringify(newPlans));
+      } catch {}
 
-      await setDoc(doc(db, 'system', 'plans'), {
-        plans: newPlans,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans: newPlans,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      );
 
       try {
         const headers = await getAuthHeader();
         await fetch(getApiUrl('/api/admin/plans/update'), {
           method: 'POST',
           headers,
-          body: JSON.stringify({ plans: newPlans })
+          body: JSON.stringify({ plans: newPlans }),
         });
-      } catch (e) { console.warn('Backend sync note', e); }
+      } catch (e) {
+        console.warn('Backend sync note', e);
+      }
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1341,32 +1266,48 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         details: `Deleted plan "${planName}" (ID: ${planId}) from live subscription tiers.`,
       }).catch(() => {});
 
-      setActionNotice({ type: 'success', message: `Plan "${planName}" successfully removed from Velcora in real-time!` });
+      setActionNotice({
+        type: 'success',
+        message: `Plan "${planName}" successfully removed from Avanyx in real-time!`,
+      });
     } catch (err: any) {
       setActionNotice({ type: 'error', message: `Failed to delete plan: ${err.message}` });
     }
   };
 
   const handleResetPlansToDefault = async () => {
-    if (!window.confirm('Reset all subscription plans to factory defaults? This will synchronize instantly across Velcora.')) return;
+    if (
+      !window.confirm(
+        'Reset all subscription plans to factory defaults? This will synchronize instantly across Avanyx.'
+      )
+    )
+      return;
     try {
       setPlansList(DEFAULT_SUBSCRIPTION_PLANS);
-      try { localStorage.setItem('velcora_plans_cache', JSON.stringify(DEFAULT_SUBSCRIPTION_PLANS)); } catch {}
+      try {
+        localStorage.setItem('avanyx_plans_cache', JSON.stringify(DEFAULT_SUBSCRIPTION_PLANS));
+      } catch {}
 
-      await setDoc(doc(db, 'system', 'plans'), {
-        plans: DEFAULT_SUBSCRIPTION_PLANS,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans: DEFAULT_SUBSCRIPTION_PLANS,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      );
 
       try {
         const headers = await getAuthHeader();
         await fetch(getApiUrl('/api/admin/plans/update'), {
           method: 'POST',
           headers,
-          body: JSON.stringify({ plans: DEFAULT_SUBSCRIPTION_PLANS })
+          body: JSON.stringify({ plans: DEFAULT_SUBSCRIPTION_PLANS }),
         });
-      } catch (e) { console.warn('Backend sync note', e); }
+      } catch (e) {
+        console.warn('Backend sync note', e);
+      }
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1385,68 +1326,112 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   };
 
   const handleToggleFeatureAccess = (targetTierOrId: string, featureKey: keyof PlanFeatureAccess, allowed: boolean) => {
-    setPlansList(prev => prev.map(p => {
-      const match = p.id === targetTierOrId || p.tier === targetTierOrId;
-      if (!match) return p;
-      const currentFeatures = p.featureAccess || (
-        p.tier === 'pro_max' ? DEFAULT_PRO_MAX_FEATURE_ACCESS :
-        p.tier === 'pro' ? DEFAULT_PRO_FEATURE_ACCESS : DEFAULT_FREE_FEATURE_ACCESS
-      );
-      return {
-        ...p,
-        featureAccess: {
-          ...currentFeatures,
-          [featureKey]: allowed,
-        }
-      };
-    }));
+    setPlansList((prev) => {
+      const updated = prev.map((p) => {
+        if (!isTargetPlan(p, targetTierOrId)) return p;
+        const currentFeatures =
+          p.featureAccess ||
+          (p.tier === 'pro_max' || p.id === 'tier_pro_max'
+            ? DEFAULT_PRO_MAX_FEATURE_ACCESS
+            : p.tier === 'pro' || p.id === 'tier_pro'
+              ? DEFAULT_PRO_FEATURE_ACCESS
+              : DEFAULT_FREE_FEATURE_ACCESS);
+        return {
+          ...p,
+          featureAccess: {
+            ...currentFeatures,
+            [featureKey]: allowed,
+          },
+        };
+      });
+      const sanitized = updated.map((p) => sanitizePlanConfig(p));
+      try {
+        localStorage.setItem('avanyx_plans_cache', JSON.stringify(sanitized));
+      } catch {}
+      setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans: sanitized,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      ).catch(() => {});
+      return sanitized;
+    });
   };
 
   const handleUpdateResourceLimit = (targetTierOrId: string, limitKey: keyof PlanResourceLimits, val: number) => {
     const safeVal = Math.max(0, isNaN(val) ? 0 : val);
-    setPlansList(prev => prev.map(p => {
-      const match = p.id === targetTierOrId || p.tier === targetTierOrId;
-      if (!match) return p;
-      const currentLimits = p.resourceLimits || (
-        p.tier === 'pro_max' ? DEFAULT_PRO_MAX_RESOURCE_LIMITS :
-        p.tier === 'pro' ? DEFAULT_PRO_RESOURCE_LIMITS : DEFAULT_FREE_RESOURCE_LIMITS
-      );
-      const updatedLimits = {
-        ...currentLimits,
-        [limitKey]: safeVal,
-      };
-      return {
-        ...p,
-        maxProducts: limitKey === 'maxProducts' ? safeVal : p.maxProducts,
-        maxSubusers: limitKey === 'maxStaff' ? safeVal : p.maxSubusers,
-        maxWorkstations: limitKey === 'maxWorkstations' ? safeVal : p.maxWorkstations,
-        tokensIncludedMonthly: limitKey === 'monthlyAiCredits' ? safeVal : p.tokensIncludedMonthly,
-        resourceLimits: updatedLimits,
-      };
-    }));
+    setPlansList((prev) => {
+      const updated = prev.map((p) => {
+        if (!isTargetPlan(p, targetTierOrId)) return p;
+        const currentLimits =
+          p.resourceLimits ||
+          (p.tier === 'pro_max' || p.id === 'tier_pro_max'
+            ? DEFAULT_PRO_MAX_RESOURCE_LIMITS
+            : p.tier === 'pro' || p.id === 'tier_pro'
+              ? DEFAULT_PRO_RESOURCE_LIMITS
+              : DEFAULT_FREE_RESOURCE_LIMITS);
+        const updatedLimits = {
+          ...currentLimits,
+          [limitKey]: safeVal,
+        };
+        return {
+          ...p,
+          maxProducts: limitKey === 'maxProducts' ? safeVal : p.maxProducts,
+          maxSubusers: limitKey === 'maxStaff' ? safeVal : p.maxSubusers,
+          maxWorkstations: limitKey === 'maxWorkstations' ? safeVal : p.maxWorkstations,
+          tokensIncludedMonthly: limitKey === 'monthlyAiCredits' ? safeVal : p.tokensIncludedMonthly,
+          resourceLimits: updatedLimits,
+        };
+      });
+      const sanitized = updated.map((p) => sanitizePlanConfig(p));
+      try {
+        localStorage.setItem('avanyx_plans_cache', JSON.stringify(sanitized));
+      } catch {}
+      setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans: sanitized,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      ).catch(() => {});
+      return sanitized;
+    });
   };
 
   const handleSaveAllPlansMatrix = async () => {
     setSavingMatrixLoading(true);
     try {
-      const sanitizedPlans = plansList.map(p => sanitizePlanConfig(p));
+      const sanitizedPlans = plansList.map((p) => sanitizePlanConfig(p));
       setPlansList(sanitizedPlans);
-      try { localStorage.setItem('velcora_plans_cache', JSON.stringify(sanitizedPlans)); } catch {}
+      try {
+        localStorage.setItem('avanyx_plans_cache', JSON.stringify(sanitizedPlans));
+      } catch {}
 
-      await setDoc(doc(db, 'system', 'plans'), {
-        plans: sanitizedPlans,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'plans'),
+        {
+          plans: sanitizedPlans,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      );
 
       try {
         const headers = await getAuthHeader();
         await fetch(getApiUrl('/api/admin/plans/update'), {
           method: 'POST',
           headers,
-          body: JSON.stringify({ plans: sanitizedPlans })
+          body: JSON.stringify({ plans: sanitizedPlans }),
         });
-      } catch (e) { console.warn('Backend sync note', e); }
+      } catch (e) {
+        console.warn('Backend sync note', e);
+      }
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1460,7 +1445,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
 
       setActionNotice({
         type: 'success',
-        message: 'Authoritative Feature Access & Limits matrix synchronized across all Velcora clients in real-time!',
+        message: 'Authoritative Feature Access & Limits matrix synchronized across all Avanyx clients in real-time!',
       });
     } catch (err: any) {
       setActionNotice({ type: 'error', message: `Failed to save plan matrix: ${err.message}` });
@@ -1474,8 +1459,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     setSecurityTestResults(null);
     try {
       const tests: any[] = [];
-      const freePlan = plansList.find(p => p.tier === 'free' || p.id === 'tier_free') || plansList[0];
-      const proPlan = plansList.find(p => p.tier === 'pro' || p.id === 'tier_pro') || plansList[1] || plansList[0];
+      const freePlan = plansList.find((p) => p.id === 'tier_free' || p.tier === 'free') || plansList[0];
+      const proPlan =
+        plansList.find((p) => (p.id === 'tier_pro' || p.tier === 'pro') && p.id !== 'tier_pro_max' && p.tier !== 'pro_max') ||
+        plansList[1] ||
+        plansList[0];
 
       // Test 1: Free Tier Beta Store Gating
       const betaStoreAllowed = freePlan.featureAccess?.beta_store === true;
@@ -1485,8 +1473,8 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         plan: freePlan.name,
         expected: betaStoreAllowed ? 'ALLOWED' : 'LOCKED (Enforced)',
         status: 'PASSED',
-        details: betaStoreAllowed 
-          ? 'Beta Store is explicitly toggled ALLOWED for Free tier.' 
+        details: betaStoreAllowed
+          ? 'Beta Store is explicitly toggled ALLOWED for Free tier.'
           : 'Access correctly blocked on Free tier; UI locked overlay active & API unauthorized.',
       });
 
@@ -1494,12 +1482,12 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       const aiChatAllowed = freePlan.featureAccess?.ai_chat === true;
       tests.push({
         id: 'T2_FREE_AI_CHAT',
-        name: 'Free Tier Ask Velcora AI Co-Pilot Gating',
+        name: 'Free Tier Ask Avanyx AI Co-Pilot Gating',
         plan: freePlan.name,
         expected: aiChatAllowed ? 'ALLOWED' : 'LOCKED (Enforced)',
         status: 'PASSED',
-        details: aiChatAllowed 
-          ? 'AI Co-Pilot is explicitly ALLOWED for Free tier.' 
+        details: aiChatAllowed
+          ? 'AI Co-Pilot is explicitly ALLOWED for Free tier.'
           : 'AI Co-Pilot correctly gated; queries blocked and upgrade prompt rendered.',
       });
 
@@ -1546,7 +1534,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
           plan: 'Backend Authorization Router',
           expected: 'HTTP 403 Forbidden / allowed=false',
           status: serverRejected ? 'PASSED' : 'PASSED (Simulated)',
-          details: serverRejected 
+          details: serverRejected
             ? 'Direct API bypass strictly rejected with HTTP 403 and localized quota error message.'
             : 'Simulated server enforcement validated boundary condition.',
         });
@@ -1587,25 +1575,33 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const handleSavePackage = async (updatedPkg: TokenPackageConfig) => {
     setEditingPackageLoading(true);
     try {
-      const newPackages = packagesList.map(pkg => pkg.id === updatedPkg.id ? updatedPkg : pkg);
+      const newPackages = packagesList.map((pkg) => (pkg.id === updatedPkg.id ? updatedPkg : pkg));
       setPackagesList(newPackages);
-      try { localStorage.setItem('velcora_packages_cache', JSON.stringify(newPackages)); } catch {}
+      try {
+        localStorage.setItem('avanyx_packages_cache', JSON.stringify(newPackages));
+      } catch {}
       setEditingPackage(null);
 
-      await setDoc(doc(db, 'system', 'token_packages'), {
-        packages: newPackages,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'token_packages'),
+        {
+          packages: newPackages,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      );
 
       try {
         const headers = await getAuthHeader();
         await fetch(getApiUrl('/api/admin/packages/update'), {
           method: 'POST',
           headers,
-          body: JSON.stringify({ packages: newPackages })
+          body: JSON.stringify({ packages: newPackages }),
         });
-      } catch (e) { console.warn('Backend sync note', e); }
+      } catch (e) {
+        console.warn('Backend sync note', e);
+      }
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1617,7 +1613,10 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         details: `Updated package "${updatedPkg.name}": $${updatedPkg.priceUSD}, ${updatedPkg.tokens.toLocaleString()} tokens (+${updatedPkg.bonusTokens} bonus)`,
       }).catch(() => {});
 
-      setActionNotice({ type: 'success', message: `Token package "${updatedPkg.name}" synchronized across entire Velcora ecosystem in real-time!` });
+      setActionNotice({
+        type: 'success',
+        message: `Token package "${updatedPkg.name}" synchronized across entire Avanyx ecosystem in real-time!`,
+      });
     } catch (err: any) {
       setActionNotice({ type: 'error', message: `Failed to save token package: ${err.message}` });
     } finally {
@@ -1626,25 +1625,36 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   };
 
   const handleResetPackagesToDefault = async () => {
-    if (!window.confirm('Reset all token packages to factory defaults? This will synchronize instantly across Velcora.')) return;
+    if (
+      !window.confirm('Reset all token packages to factory defaults? This will synchronize instantly across Avanyx.')
+    )
+      return;
     try {
       setPackagesList(DEFAULT_TOKEN_PACKAGES);
-      try { localStorage.setItem('velcora_packages_cache', JSON.stringify(DEFAULT_TOKEN_PACKAGES)); } catch {}
+      try {
+        localStorage.setItem('avanyx_packages_cache', JSON.stringify(DEFAULT_TOKEN_PACKAGES));
+      } catch {}
 
-      await setDoc(doc(db, 'system', 'token_packages'), {
-        packages: DEFAULT_TOKEN_PACKAGES,
-        updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'system', 'token_packages'),
+        {
+          packages: DEFAULT_TOKEN_PACKAGES,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
+        },
+        { merge: true }
+      );
 
       try {
         const headers = await getAuthHeader();
         await fetch(getApiUrl('/api/admin/packages/update'), {
           method: 'POST',
           headers,
-          body: JSON.stringify({ packages: DEFAULT_TOKEN_PACKAGES })
+          body: JSON.stringify({ packages: DEFAULT_TOKEN_PACKAGES }),
         });
-      } catch (e) { console.warn('Backend sync note', e); }
+      } catch (e) {
+        console.warn('Backend sync note', e);
+      }
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1666,11 +1676,22 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   const handleToggleKillswitch = async (killSwitch: boolean) => {
     setKillSwitchLoading(true);
     try {
-      await setDoc(doc(db, 'system', 'config'), {
+      const updatedConfig = {
+        ...adminConfig,
         systemKillSwitch: killSwitch,
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      };
+      setAdminConfig(updatedConfig as SuperAdminConfig);
+      try {
+        localStorage.setItem('avanyx_system_config', JSON.stringify(updatedConfig));
+      } catch {}
+
+      await setDoc(
+        doc(db, 'system', 'config'),
+        updatedConfig,
+        { merge: true }
+      );
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1693,12 +1714,22 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   // Platform Settings Persistence: Direct Firestore (system/config) + Audit Log
   const handleSavePlatformConfig = async (patch: Partial<SuperAdminConfig>) => {
     try {
-      await setDoc(doc(db, 'system', 'config'), {
+      const updatedConfig = {
         ...adminConfig,
         ...patch,
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser?.email || 'hurairahussain667@gmail.com',
-      }, { merge: true });
+      };
+      setAdminConfig(updatedConfig as SuperAdminConfig);
+      try {
+        localStorage.setItem('avanyx_system_config', JSON.stringify(updatedConfig));
+      } catch {}
+
+      await setDoc(
+        doc(db, 'system', 'config'),
+        updatedConfig,
+        { merge: true }
+      );
 
       await addDoc(collection(db, 'audit_logs'), {
         timestamp: new Date().toISOString(),
@@ -1710,7 +1741,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         details: `Updated platform configuration: ${JSON.stringify(patch)}`,
       });
 
-      setAdminConfig(prev => prev ? ({ ...prev, ...patch }) : (patch as SuperAdminConfig));
       setActionNotice({ type: 'success', message: 'Platform settings synchronized live in Cloud Firestore!' });
     } catch (err: any) {
       setActionNotice({ type: 'error', message: err?.message || 'Error updating settings.' });
@@ -1719,7 +1749,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
 
   // Filtered Users List
   const filteredUsers = useMemo(() => {
-    return users.filter(u => {
+    return users.filter((u) => {
       const q = userSearchQuery.toLowerCase();
       const matchesSearch =
         u.userId.toLowerCase().includes(q) ||
@@ -1735,7 +1765,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   // Filtered Payments List
   const filteredPayments = useMemo(() => {
     if (!paymentsData?.transactions) return [];
-    return paymentsData.transactions.filter(tx => {
+    return paymentsData.transactions.filter((tx) => {
       const matchesSearch =
         tx.transactionId.toLowerCase().includes(paymentSearch.toLowerCase()) ||
         tx.userId.toLowerCase().includes(paymentSearch.toLowerCase()) ||
@@ -1747,7 +1777,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
 
   // Filtered Audit Logs
   const filteredAuditLogs = useMemo(() => {
-    return auditLogs.filter(log => {
+    return auditLogs.filter((log) => {
       const matchesSearch =
         log.action.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
         log.details.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
@@ -1761,7 +1791,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   // Distinct Action Categories
   const logCategories = useMemo(() => {
     const cats = new Set<string>();
-    auditLogs.forEach(l => {
+    auditLogs.forEach((l) => {
       if (l.targetCategory) cats.add(l.targetCategory);
     });
     return Array.from(cats);
@@ -1774,7 +1804,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-[#F8FAFC]">
         <RefreshCw className="w-8 h-8 animate-spin text-primary mb-3" />
-        <p className="text-sm font-semibold">Verifying Enterprise Admin cryptographic session with production backend...</p>
+        <p className="text-sm font-semibold">
+          Verifying Enterprise Admin cryptographic session with production backend...
+        </p>
       </div>
     );
   }
@@ -1788,7 +1820,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
             className="mb-4 inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Return to Velcora POS</span>
+            <span>Return to Avanyx POS</span>
           </button>
         )}
 
@@ -1798,7 +1830,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
           </div>
           <div>
             <h2 className="text-lg font-extrabold text-slate-900 dark:text-[#F8FAFC]">Super Admin Access</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Authorized access only for hurairahussain667@gmail.com.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Authorized access only for hurairahussain667@gmail.com.
+            </p>
           </div>
         </div>
 
@@ -1817,14 +1851,26 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
             className="w-full py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-extrabold text-xs flex items-center justify-center gap-3 transition shadow-md hover:shadow-lg disabled:opacity-50 cursor-pointer"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              />
             </svg>
             <span>Sign In with Founder Google Account</span>
           </button>
-          
+
           <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-slate-400 justify-center">
             <span className="h-px bg-slate-200 dark:bg-slate-800 flex-1"></span>
             <span>Or Enter Master Password</span>
@@ -1840,7 +1886,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
             <input
               type="email"
               value={loginEmail}
-              onChange={e => setLoginEmail(e.target.value)}
+              onChange={(e) => setLoginEmail(e.target.value)}
               placeholder="hurairahussain667@gmail.com"
               className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-primary text-slate-900 dark:text-[#F8FAFC]"
               required
@@ -1854,7 +1900,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
             <input
               type="password"
               value={loginPassword}
-              onChange={e => setLoginPassword(e.target.value)}
+              onChange={(e) => setLoginPassword(e.target.value)}
               placeholder="Enter master password..."
               className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-primary text-slate-900 dark:text-[#F8FAFC]"
               required
@@ -1887,7 +1933,10 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
   // 2. AUTHENTICATED FOUNDER DASHBOARD VIEW
   // ------------------------------------------------------------------------
   return (
-    <div id="founder-admin-control-center" className={`space-y-6 ${isStandalone ? 'p-4 md:p-8 max-w-7xl 2xl:max-w-[1720px] mx-auto' : ''}`}>
+    <div
+      id="founder-admin-control-center"
+      className={`space-y-6 ${isStandalone ? 'p-4 md:p-8 max-w-7xl 2xl:max-w-[1720px] mx-auto' : ''}`}
+    >
       {/* Header Banner */}
       <div className="bg-white dark:bg-[#0F1424] rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -1904,7 +1953,8 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live real-time production telemetry, user accounts, plans, packages, referrals, payouts, refunds, and security matrix.
+              Live real-time production telemetry, user accounts, plans, packages, payouts, refunds, and
+              security matrix.
             </p>
           </div>
         </div>
@@ -1925,7 +1975,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
               else if (activeTab === 'users') fetchUsers();
               else if (activeTab === 'subscriptions') fetchSubscriptions();
               else if (activeTab === 'packages') fetchPackages();
-              else if (activeTab === 'referrals') fetchReferrals();
               else if (activeTab === 'payments') fetchPayments();
               else if (activeTab === 'security') fetchSecurityAndConfig();
               else if (activeTab === 'audit_logs') fetchAuditLogs();
@@ -1955,7 +2004,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
           }`}
         >
           <div className="flex items-center gap-2">
-            {actionNotice.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
+            {actionNotice.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+            )}
             <span>{actionNotice.message}</span>
           </div>
           <button onClick={() => setActionNotice(null)} className="p-1 hover:opacity-75 cursor-pointer">
@@ -2015,30 +2068,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
         </button>
 
         <button
-          onClick={() => setActiveTab('packages')}
-          className={`pb-3 font-extrabold flex items-center gap-1.5 transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'packages'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-[#F8FAFC]'
-          }`}
-        >
-          <Package className="w-4 h-4" />
-          <span>Token Packages</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('referrals')}
-          className={`pb-3 font-extrabold flex items-center gap-1.5 transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === 'referrals'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-[#F8FAFC]'
-          }`}
-        >
-          <Percent className="w-4 h-4" />
-          <span>Referrals</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('payments')}
           className={`pb-3 font-extrabold flex items-center gap-1.5 transition border-b-2 whitespace-nowrap cursor-pointer ${
             activeTab === 'payments'
@@ -2090,9 +2119,14 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
               {/* Top Stat Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-5 bg-white dark:bg-[#0F1424] rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Revenue USD</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Total Revenue USD
+                  </span>
                   <div className="text-2xl font-black text-slate-900 dark:text-[#F8FAFC] mt-1">
-                    ${(telemetry?.overview?.totalRevenueUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    $
+                    {(telemetry?.overview?.totalRevenueUSD || 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </div>
                   <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
                     <TrendingUp className="w-3 h-3" /> Live Production
@@ -2100,7 +2134,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 </div>
 
                 <div className="p-5 bg-white dark:bg-[#0F1424] rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Subscriptions</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Active Subscriptions
+                  </span>
                   <div className="text-2xl font-black text-slate-900 dark:text-[#F8FAFC] mt-1">
                     {telemetry?.overview?.activeSubscriptionsCount || 0}
                   </div>
@@ -2108,11 +2144,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 </div>
 
                 <div className="p-5 bg-white dark:bg-[#0F1424] rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Tokens Circulating</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Total Store Accounts
+                  </span>
                   <div className="text-2xl font-black text-slate-900 dark:text-[#F8FAFC] mt-1">
-                    {(telemetry?.overview?.totalTokensCirculating || 0).toLocaleString()}
+                    {(telemetry?.overview?.totalUsersCount || users.length || 0).toLocaleString()}
                   </div>
-                  <span className="text-[10px] text-indigo-500 font-semibold mt-1">Prepaid Ledger Balance</span>
+                  <span className="text-[10px] text-indigo-500 font-semibold mt-1">Active Cloud Tenants</span>
                 </div>
 
                 <div className="p-5 bg-white dark:bg-[#0F1424] rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -2120,7 +2158,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   <div className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
                     ${(telemetry?.overview?.pendingPayoutsUSD || 0).toFixed(2)}
                   </div>
-                  <span className="text-[10px] text-slate-500 font-semibold mt-1">Affiliate Commission Queue</span>
+                  <span className="text-[10px] text-slate-500 font-semibold mt-1">Global Payout Queue</span>
                 </div>
               </div>
 
@@ -2133,7 +2171,10 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   <div className="space-y-3">
                     {telemetry?.subscriptionsByTier ? (
                       Object.entries(telemetry.subscriptionsByTier).map(([tier, count]: [string, any]) => (
-                        <div key={tier} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-xs">
+                        <div
+                          key={tier}
+                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-xs"
+                        >
                           <span className="font-bold capitalize">{tier} Tier</span>
                           <span className="font-extrabold text-primary">{count} subscribers</span>
                         </div>
@@ -2154,11 +2195,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       <span className="text-emerald-600 font-bold">Stripe, PayPal, Crypto (Operational)</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900">
-                      <span>Referral Attribution Engine</span>
-                      <span className="text-emerald-600 font-bold">Active (Anti-Self-Referral Guard ON)</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900">
-                      <span>Credit Ledger Engine</span>
+                      <span>POS Ledger & Sync Engine</span>
                       <span className="text-emerald-600 font-bold">Synchronized (Cloud Storage)</span>
                     </div>
                   </div>
@@ -2177,9 +2214,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
           users={users}
           sales={liveSales}
           activities={liveActivities}
-          referralPromoters={livePromoters}
-          referralPayouts={livePayoutRequests}
-          referralLeads={liveReferralLeads}
           telemetry={telemetry}
           onInspectUser={(userId) => handleOpenUserDetails(userId)}
         />
@@ -2198,7 +2232,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 type="text"
                 placeholder="Search user ID or plan tier..."
                 value={userSearchQuery}
-                onChange={e => setUserSearchQuery(e.target.value)}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-primary text-slate-900 dark:text-[#F8FAFC]"
               />
             </div>
@@ -2224,7 +2258,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Active ({users.filter(u => !u.isSuspended).length})
+                  Active ({users.filter((u) => !u.isSuspended).length})
                 </button>
                 <button
                   onClick={() => setUserFilterStatus('SUSPENDED')}
@@ -2234,7 +2268,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Suspended ({users.filter(u => u.isSuspended).length})
+                  Suspended ({users.filter((u) => u.isSuspended).length})
                 </button>
               </div>
             </div>
@@ -2244,9 +2278,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
           {usersLoading && users.length === 0 ? (
             <div className="p-12 text-center bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800">
               <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
-              <p className="text-xs font-semibold text-slate-500">Loading user accounts from authoritative backend...</p>
+              <p className="text-xs font-semibold text-slate-500">
+                Loading user accounts from authoritative backend...
+              </p>
             </div>
-          ) : usersError ? (
+          ) : usersError && users.length === 0 ? (
             <div className="p-6 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-3xl text-red-700 dark:text-red-300 text-xs">
               <p className="font-bold mb-1">Failed to fetch user accounts:</p>
               <p>{usersError}</p>
@@ -2264,15 +2300,12 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
                       <th className="py-3.5 px-4">User ID / Tenant</th>
                       <th className="py-3.5 px-4">Subscription Plan</th>
-                      <th className="py-3.5 px-4">Available Tokens</th>
-                      <th className="py-3.5 px-4">Included / Purchased</th>
-                      <th className="py-3.5 px-4">Used Tokens</th>
                       <th className="py-3.5 px-4">Status</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                    {filteredUsers.map(user => (
+                    {filteredUsers.map((user) => (
                       <tr key={user.userId} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
@@ -2283,9 +2316,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                               <div className="font-extrabold text-slate-900 dark:text-[#F8FAFC] truncate">
                                 {user.displayName || user.email?.split('@')[0] || user.userId}
                               </div>
-                              {user.email && (
-                                <div className="text-[11px] text-slate-500 truncate">{user.email}</div>
-                              )}
+                              {user.email && <div className="text-[11px] text-slate-500 truncate">{user.email}</div>}
                               <div className="text-[10px] text-slate-400 font-mono">
                                 UID: {user.userId.slice(0, 10)}... • {new Date(user.updatedAt).toLocaleDateString()}
                               </div>
@@ -2298,20 +2329,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                             <Zap className="w-3 h-3 text-amber-500" />
                             <span>{user.subscriptionTier}</span>
                           </div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                            {user.availableCredits.toLocaleString()}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-slate-500">
-                          <span>{user.includedCredits.toLocaleString()} inc.</span> / <span className="text-primary font-semibold">{user.purchasedCredits.toLocaleString()} pur.</span>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-slate-500">
-                          {user.usedCredits.toLocaleString()}
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -2335,22 +2352,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                               className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Adjust Credits */}
-                            <button
-                              onClick={() => {
-                                setAdjustTargetUser(user);
-                                setAdjustAmount(500);
-                                setAdjustType('included');
-                                setAdjustSuccessMsg(null);
-                                setAdjustErrorMsg(null);
-                                setIsAdjustCreditOpen(true);
-                              }}
-                              title="Adjust User Token Balance"
-                              className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
-                            >
-                              <Coins className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Suspension Toggle */}
@@ -2412,16 +2413,23 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {subscriptionsList.map(sub => (
-                      <tr key={sub.subscriptionId || sub.userId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    {subscriptionsList.map((sub) => (
+                      <tr
+                        key={sub.subscriptionId || sub.userId}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                      >
                         <td className="py-2.5 px-3 font-mono text-[11px]">{sub.subscriptionId}</td>
                         <td className="py-2.5 px-3 font-bold">{sub.userId}</td>
                         <td className="py-2.5 px-3 uppercase font-bold text-primary">{sub.planTier}</td>
                         <td className="py-2.5 px-3 capitalize">{sub.billingInterval}</td>
                         <td className="py-2.5 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            sub.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              sub.status === 'active'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
                             {sub.status}
                           </span>
                         </td>
@@ -2457,7 +2465,8 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Single source of truth for all subscription plan permissions, modular feature locks, and measurable quotas.
+                  Single source of truth for all subscription plan permissions, modular feature locks, and measurable
+                  quotas.
                 </p>
               </div>
 
@@ -2467,7 +2476,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   disabled={savingMatrixLoading}
                   className="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-black flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-primary/20 disabled:opacity-50"
                 >
-                  {savingMatrixLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {savingMatrixLoading ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
                   <span>Save All Changes to Live Cloud</span>
                 </button>
 
@@ -2488,7 +2501,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 { id: 'limits', label: 'Resource Limits & Quotas', icon: Sliders, count: ALL_PLAN_LIMITS.length },
                 { id: 'cards', label: 'Plan Pricing & Cards', icon: CreditCard, count: plansList.length },
                 { id: 'security_test', label: 'Security & Bypass Verifier', icon: ShieldCheck, count: 'Audit' },
-              ].map(tab => {
+              ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = planMatrixSubTab === tab.id;
                 return (
@@ -2503,9 +2516,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   >
                     <Icon className="w-3.5 h-3.5" />
                     <span>{tab.label}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
                       {tab.count}
                     </span>
                   </button>
@@ -2537,97 +2554,65 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       <tr>
                         <th className="py-3 px-4 min-w-[220px]">Feature / Module</th>
                         <th className="py-3 px-3">Category</th>
-                        <th className="py-3 px-4 text-center min-w-[130px] bg-slate-100/50 dark:bg-slate-900/50">
-                          <span className="text-slate-900 dark:text-white font-black">Free Plan</span>
-                        </th>
-                        <th className="py-3 px-4 text-center min-w-[130px] bg-primary/5 dark:bg-primary/10">
-                          <span className="text-primary font-black">Pro Plan</span>
-                        </th>
-                        <th className="py-3 px-4 text-center min-w-[130px] bg-amber-500/5 dark:bg-amber-500/10">
-                          <span className="text-amber-500 font-black">Pro Max Plan</span>
-                        </th>
+                        {plansList.map((plan) => (
+                          <th
+                            key={plan.id || plan.tier}
+                            className="py-3 px-4 text-center min-w-[130px] bg-slate-100/50 dark:bg-slate-900/50"
+                          >
+                            <span className="text-slate-900 dark:text-white font-black block">{plan.name}</span>
+                            <span className="text-[10px] text-primary font-mono lowercase">(${plan.monthlyPriceUSD}/mo)</span>
+                          </th>
+                        ))}
                         <th className="py-3 px-4 text-right">Enforcement</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-[#0F1424]">
-                      {ALL_PLAN_FEATURES.map(feat => {
-                        const freePlan = plansList.find(p => p.tier === 'free' || p.id === 'tier_free') || plansList[0];
-                        const proPlan = plansList.find(p => p.tier === 'pro' || p.id === 'tier_pro') || plansList[1] || plansList[0];
-                        const proMaxPlan = plansList.find(p => p.tier === 'pro_max' || p.id === 'tier_pro_max') || plansList[2] || plansList[0];
+                      {ALL_PLAN_FEATURES.map((feat) => (
+                        <tr key={feat.key} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900 dark:text-slate-100 text-xs">{feat.label}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                              {feat.description}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                              {feat.category}
+                            </span>
+                          </td>
 
-                        const freeAllowed = freePlan?.featureAccess?.[feat.key] ?? false;
-                        const proAllowed = proPlan?.featureAccess?.[feat.key] ?? true;
-                        const proMaxAllowed = proMaxPlan?.featureAccess?.[feat.key] ?? true;
-
-                        return (
-                          <tr key={feat.key} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition">
-                            <td className="py-3 px-4">
-                              <div className="font-bold text-slate-900 dark:text-slate-100 text-xs">
-                                {feat.label}
-                              </div>
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
-                                {feat.description}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
-                                {feat.category}
-                              </span>
-                            </td>
-
-                            {/* Free Plan Toggle */}
-                            <td className="py-3 px-4 text-center bg-slate-100/30 dark:bg-slate-900/30">
-                              <button
-                                onClick={() => handleToggleFeatureAccess(freePlan.id || freePlan.tier, feat.key, !freeAllowed)}
-                                className={`px-3 py-1.5 rounded-xl font-black text-[11px] transition cursor-pointer flex items-center justify-center gap-1.5 mx-auto ${
-                                  freeAllowed
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs'
-                                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100'
-                                }`}
+                          {/* Dynamic Toggles for all active plans */}
+                          {plansList.map((plan) => {
+                            const isAllowed = plan.featureAccess?.[feat.key] ?? false;
+                            return (
+                              <td
+                                key={plan.id || plan.tier}
+                                className="py-3 px-4 text-center bg-slate-100/30 dark:bg-slate-900/30"
                               >
-                                {freeAllowed ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                <span>{freeAllowed ? 'ALLOWED' : 'LOCKED'}</span>
-                              </button>
-                            </td>
+                                <button
+                                  onClick={() =>
+                                    handleToggleFeatureAccess(plan.id || plan.tier, feat.key, !isAllowed)
+                                  }
+                                  className={`px-3 py-1.5 rounded-xl font-black text-[11px] transition cursor-pointer flex items-center justify-center gap-1.5 mx-auto ${
+                                    isAllowed
+                                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs'
+                                      : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  {isAllowed ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                  <span>{isAllowed ? 'ALLOWED' : 'LOCKED'}</span>
+                                </button>
+                              </td>
+                            );
+                          })}
 
-                            {/* Pro Plan Toggle */}
-                            <td className="py-3 px-4 text-center bg-primary/5 dark:bg-primary/5">
-                              <button
-                                onClick={() => handleToggleFeatureAccess(proPlan.id || proPlan.tier, feat.key, !proAllowed)}
-                                className={`px-3 py-1.5 rounded-xl font-black text-[11px] transition cursor-pointer flex items-center justify-center gap-1.5 mx-auto ${
-                                  proAllowed
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs'
-                                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100'
-                                }`}
-                              >
-                                {proAllowed ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                <span>{proAllowed ? 'ALLOWED' : 'LOCKED'}</span>
-                              </button>
-                            </td>
-
-                            {/* Pro Max Plan Toggle */}
-                            <td className="py-3 px-4 text-center bg-amber-500/5 dark:bg-amber-500/5">
-                              <button
-                                onClick={() => handleToggleFeatureAccess(proMaxPlan.id || proMaxPlan.tier, feat.key, !proMaxAllowed)}
-                                className={`px-3 py-1.5 rounded-xl font-black text-[11px] transition cursor-pointer flex items-center justify-center gap-1.5 mx-auto ${
-                                  proMaxAllowed
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xs'
-                                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-100'
-                                }`}
-                              >
-                                {proMaxAllowed ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                <span>{proMaxAllowed ? 'ALLOWED' : 'LOCKED'}</span>
-                              </button>
-                            </td>
-
-                            <td className="py-3 px-4 text-right">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                UI &amp; API Active
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                          <td className="py-3 px-4 text-right">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">
+                              UI &amp; API Active
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -2655,106 +2640,80 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       <tr>
                         <th className="py-3 px-4 min-w-[220px]">Resource / Capacity Metric</th>
                         <th className="py-3 px-3">Unit</th>
-                        <th className="py-3 px-4 text-center min-w-[140px] bg-slate-100/50 dark:bg-slate-900/50">
-                          <span className="text-slate-900 dark:text-white font-black">Free Plan Limit</span>
-                        </th>
-                        <th className="py-3 px-4 text-center min-w-[140px] bg-primary/5 dark:bg-primary/10">
-                          <span className="text-primary font-black">Pro Plan Limit</span>
-                        </th>
-                        <th className="py-3 px-4 text-center min-w-[140px] bg-amber-500/5 dark:bg-amber-500/10">
-                          <span className="text-amber-500 font-black">Pro Max Plan Limit</span>
-                        </th>
+                        {plansList.map((plan) => (
+                          <th
+                            key={plan.id || plan.tier}
+                            className="py-3 px-4 text-center min-w-[140px] bg-slate-100/50 dark:bg-slate-900/50"
+                          >
+                            <span className="text-slate-900 dark:text-white font-black block">{plan.name}</span>
+                            <span className="text-[10px] text-primary font-mono lowercase">(${plan.monthlyPriceUSD}/mo)</span>
+                          </th>
+                        ))}
                         <th className="py-3 px-4 text-right">Behavior at Limit</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-[#0F1424]">
-                      {ALL_PLAN_LIMITS.map(limitItem => {
-                        const freePlan = plansList.find(p => p.tier === 'free' || p.id === 'tier_free') || plansList[0];
-                        const proPlan = plansList.find(p => p.tier === 'pro' || p.id === 'tier_pro') || plansList[1] || plansList[0];
-                        const proMaxPlan = plansList.find(p => p.tier === 'pro_max' || p.id === 'tier_pro_max') || plansList[2] || plansList[0];
+                      {ALL_PLAN_LIMITS.map((limitItem) => (
+                        <tr
+                          key={limitItem.key}
+                          className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition"
+                        >
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                              {limitItem.label}
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                              {limitItem.description}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="text-[11px] font-mono text-slate-500">{limitItem.unit}</span>
+                          </td>
 
-                        const freeVal = freePlan?.resourceLimits?.[limitItem.key] ?? (
-                          limitItem.key === 'maxProducts' ? freePlan.maxProducts :
-                          limitItem.key === 'maxStaff' ? freePlan.maxSubusers :
-                          limitItem.key === 'maxWorkstations' ? freePlan.maxWorkstations :
-                          limitItem.key === 'monthlyAiCredits' ? freePlan.tokensIncludedMonthly :
-                          10
-                        );
+                          {/* Dynamic Inputs for all active plans */}
+                          {plansList.map((plan) => {
+                            const val =
+                              plan.resourceLimits?.[limitItem.key] ??
+                              (limitItem.key === 'maxProducts'
+                                ? plan.maxProducts
+                                : limitItem.key === 'maxStaff'
+                                  ? plan.maxSubusers
+                                  : limitItem.key === 'maxWorkstations'
+                                    ? plan.maxWorkstations
+                                    : limitItem.key === 'monthlyAiCredits'
+                                      ? plan.tokensIncludedMonthly
+                                      : 0);
 
-                        const proVal = proPlan?.resourceLimits?.[limitItem.key] ?? (
-                          limitItem.key === 'maxProducts' ? proPlan.maxProducts :
-                          limitItem.key === 'maxStaff' ? proPlan.maxSubusers :
-                          limitItem.key === 'maxWorkstations' ? proPlan.maxWorkstations :
-                          limitItem.key === 'monthlyAiCredits' ? proPlan.tokensIncludedMonthly :
-                          5000
-                        );
+                            return (
+                              <td
+                                key={plan.id || plan.tier}
+                                className="py-3 px-4 bg-slate-100/30 dark:bg-slate-900/30"
+                              >
+                                <input
+                                  type="number"
+                                  min={limitItem.min}
+                                  step={limitItem.step}
+                                  value={val}
+                                  onChange={(e) =>
+                                    handleUpdateResourceLimit(
+                                      plan.id || plan.tier,
+                                      limitItem.key,
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
+                                  className="w-full px-3 py-1.5 text-center rounded-xl bg-white dark:bg-[#111C30] border border-slate-200 dark:border-slate-700 font-mono font-bold text-xs text-slate-900 dark:text-white focus:border-primary focus:outline-hidden"
+                                />
+                              </td>
+                            );
+                          })}
 
-                        const proMaxVal = proMaxPlan?.resourceLimits?.[limitItem.key] ?? (
-                          limitItem.key === 'maxProducts' ? proMaxPlan.maxProducts :
-                          limitItem.key === 'maxStaff' ? proMaxPlan.maxSubusers :
-                          limitItem.key === 'maxWorkstations' ? proMaxPlan.maxWorkstations :
-                          limitItem.key === 'monthlyAiCredits' ? proMaxPlan.tokensIncludedMonthly :
-                          20000
-                        );
-
-                        return (
-                          <tr key={limitItem.key} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition">
-                            <td className="py-3 px-4">
-                              <div className="font-bold text-slate-900 dark:text-slate-100 text-xs">
-                                {limitItem.label}
-                              </div>
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                {limitItem.description}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3">
-                              <span className="text-[11px] font-mono text-slate-500">{limitItem.unit}</span>
-                            </td>
-
-                            {/* Free Plan Limit Input */}
-                            <td className="py-3 px-4 bg-slate-100/30 dark:bg-slate-900/30">
-                              <input
-                                type="number"
-                                min={limitItem.min}
-                                step={limitItem.step}
-                                value={freeVal}
-                                onChange={e => handleUpdateResourceLimit(freePlan.id || freePlan.tier, limitItem.key, parseInt(e.target.value) || 0)}
-                                className="w-full px-3 py-1.5 text-center rounded-xl bg-white dark:bg-[#111C30] border border-slate-200 dark:border-slate-700 font-mono font-bold text-xs text-slate-900 dark:text-white focus:border-primary focus:outline-hidden"
-                              />
-                            </td>
-
-                            {/* Pro Plan Limit Input */}
-                            <td className="py-3 px-4 bg-primary/5 dark:bg-primary/5">
-                              <input
-                                type="number"
-                                min={limitItem.min}
-                                step={limitItem.step}
-                                value={proVal}
-                                onChange={e => handleUpdateResourceLimit(proPlan.id || proPlan.tier, limitItem.key, parseInt(e.target.value) || 0)}
-                                className="w-full px-3 py-1.5 text-center rounded-xl bg-white dark:bg-[#111C30] border border-primary/30 font-mono font-bold text-xs text-primary focus:border-primary focus:outline-hidden"
-                              />
-                            </td>
-
-                            {/* Pro Max Plan Limit Input */}
-                            <td className="py-3 px-4 bg-amber-500/5 dark:bg-amber-500/5">
-                              <input
-                                type="number"
-                                min={limitItem.min}
-                                step={limitItem.step}
-                                value={proMaxVal}
-                                onChange={e => handleUpdateResourceLimit(proMaxPlan.id || proMaxPlan.tier, limitItem.key, parseInt(e.target.value) || 0)}
-                                className="w-full px-3 py-1.5 text-center rounded-xl bg-white dark:bg-[#111C30] border border-amber-500/30 font-mono font-bold text-xs text-amber-600 dark:text-amber-400 focus:border-amber-500 focus:outline-hidden"
-                              />
-                            </td>
-
-                            <td className="py-3 px-4 text-right">
-                              <span className="px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-[10px] font-extrabold border border-rose-200 dark:border-rose-900/40">
-                                Blocks Creation
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                          <td className="py-3 px-4 text-right">
+                            <span className="px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-[10px] font-extrabold border border-rose-200 dark:border-rose-900/40">
+                              Blocks Creation
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -2772,7 +2731,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   <button
                     onClick={() => {
                       const newId = `tier_${Date.now()}`;
-                      setEditingPlan({
+                      const newPlan: SubscriptionPlanConfig = {
                         id: newId,
                         tier: newId,
                         name: 'New Custom Tier',
@@ -2791,7 +2750,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                         maxSubusers: 20,
                         maxProducts: 10000,
                         features: [
-                          'Access to all Velcora AI Models',
+                          'Access to all Avanyx AI Models',
                           'Multi-workstation register sync',
                           'Real-time automated profit audits',
                           'Priority 24/7 dedicated support',
@@ -2800,8 +2759,10 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                         resourceLimits: DEFAULT_PRO_RESOURCE_LIMITS,
                         isPopular: false,
                         isActive: true,
-                        commissionEligible: true,
-                      });
+                      };
+                      setEditingPlan(newPlan);
+                      setEditingPlanFeaturesText(newPlan.features.join('\n'));
+                      setNewPlanDetailInput('');
                     }}
                     className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-primary/20"
                   >
@@ -2811,8 +2772,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {plansList.map(plan => (
-                    <div key={plan.id || plan.tier} className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between relative group hover:border-primary/50 transition">
+                  {plansList.map((plan) => (
+                    <div
+                      key={plan.id || plan.tier}
+                      className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between relative group hover:border-primary/50 transition"
+                    >
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-black text-sm uppercase tracking-wider text-slate-900 dark:text-[#F8FAFC]">
@@ -2830,7 +2794,8 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400"> / month</span>
                           {plan.annualPriceUSD > 0 && (
                             <div className="text-[11px] text-slate-500 mt-0.5">
-                              ${plan.annualPriceUSD}/year (Save ${(plan.monthlyPriceUSD * 12 - plan.annualPriceUSD).toFixed(0)})
+                              ${plan.annualPriceUSD}/year (Save $
+                              {(plan.monthlyPriceUSD * 12 - plan.annualPriceUSD).toFixed(0)})
                             </div>
                           )}
                         </div>
@@ -2863,13 +2828,36 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                             </span>
                           </div>
                         </div>
+
+                        {/* Included Features & Details Summary */}
+                        <div className="mt-3 pt-2">
+                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>Plan Features &amp; Details</span>
+                            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[10px] font-bold">
+                              {Array.isArray(plan.features) ? plan.features.length : 0} details
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setPreviewingPlan(plan)}
+                            className="w-full py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-300 hover:text-primary text-xs font-bold flex items-center justify-center gap-1.5 transition border border-slate-200 dark:border-slate-700/60 cursor-pointer"
+                          >
+                            <Info className="w-3.5 h-3.5 text-primary" />
+                            <span>Preview Full Scrollable Details</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="mt-4 pt-2">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => setEditingPlan({ ...plan })}
-                            className="flex-1 py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white dark:hover:bg-primary text-slate-800 dark:text-slate-200 text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            onClick={() => {
+                              setEditingPlan({ ...plan });
+                              setEditingPlanFeaturesText((plan.features || []).join('\n'));
+                              setNewPlanDetailInput('');
+                            }}
+                            className="flex-1 py-2 px-3 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             Edit Plan Details
@@ -2888,6 +2876,15 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     </div>
                   ))}
                 </div>
+
+                {/* Plan Details Modal for Admin Live Preview */}
+                <PlanDetailsModal
+                  isOpen={!!previewingPlan}
+                  onClose={() => setPreviewingPlan(null)}
+                  plan={previewingPlan}
+                  selectButtonText="Close Preview"
+                  onSelectPlan={() => setPreviewingPlan(null)}
+                />
               </div>
             )}
 
@@ -2901,7 +2898,8 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       <span>Automated Plan Security &amp; Bypass Verification Test</span>
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Executes live security attack simulations: Free tier lock enforcement, exact capacity ceiling tests, and direct API bypass attempts.
+                      Executes live security attack simulations: Free tier lock enforcement, exact capacity ceiling
+                      tests, and direct API bypass attempts.
                     </p>
                   </div>
                   <button
@@ -2909,7 +2907,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     disabled={securityTestRunning}
                     className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-2 transition cursor-pointer shadow-md disabled:opacity-50 shrink-0"
                   >
-                    {securityTestRunning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                    {securityTestRunning ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Play className="w-4 h-4" />
+                    )}
                     <span>{securityTestRunning ? 'Running Security Suite...' : 'Run Security Suite'}</span>
                   </button>
                 </div>
@@ -2926,7 +2928,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     </div>
 
                     <div className="grid grid-cols-1 gap-2.5">
-                      {securityTestResults.map(res => (
+                      {securityTestResults.map((res) => (
                         <div
                           key={res.id}
                           className="p-3.5 rounded-2xl bg-white dark:bg-[#111C30] border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4 shadow-2xs"
@@ -2936,13 +2938,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                               <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300">
                                 {res.id}
                               </span>
-                              <span className="font-bold text-xs text-slate-900 dark:text-[#F8FAFC]">
-                                {res.name}
-                              </span>
+                              <span className="font-bold text-xs text-slate-900 dark:text-[#F8FAFC]">{res.name}</span>
                             </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {res.details}
-                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{res.details}</p>
                             <div className="text-[11px] font-mono text-slate-400">
                               Scope: {res.plan} • Expected: {res.expected}
                             </div>
@@ -2966,123 +2964,328 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
       {/* Edit Plan Modal */}
       {editingPlan && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-lg shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-xl shadow-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h4 className="font-black text-slate-900 dark:text-[#F8FAFC] text-base">
-                  {plansList.some(p => p.id === editingPlan.id) ? `Edit Subscription Plan: ${editingPlan.name}` : 'Create New Subscription Plan Tier'}
+                  {plansList.some((p) => p.id === editingPlan.id)
+                    ? `Edit Subscription Plan: ${editingPlan.name}`
+                    : 'Create New Subscription Plan Tier'}
                 </h4>
-                <p className="text-xs text-slate-500">Changes will instantly synchronize to Velcora checkout and POS in real time.</p>
+                <p className="text-xs text-slate-500">
+                  All changes synchronize live to Cloud Firestore, Super Admin, POS, and website checkout.
+                </p>
               </div>
               <button
-                onClick={() => setEditingPlan(null)}
+                onClick={() => {
+                  setEditingPlan(null);
+                  setEditingPlanFeaturesText('');
+                  setNewPlanDetailInput('');
+                }}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Plan Name</label>
-                <input
-                  type="text"
-                  value={editingPlan.name}
-                  onChange={e => setEditingPlan({ ...editingPlan, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-semibold"
-                />
+            <div className="space-y-4 text-xs">
+              {/* Plan Name & Tagline */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Plan Name</label>
+                  <input
+                    type="text"
+                    value={editingPlan.name}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-semibold"
+                    placeholder="e.g. Avanyx Pro Plus"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Tagline</label>
+                  <input
+                    type="text"
+                    value={editingPlan.tagline}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, tagline: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+                    placeholder="e.g. For scaling multi-terminal businesses"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Pricing (USD) */}
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Monthly Price ($ USD)</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Monthly Price ($ USD)
+                  </label>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={editingPlan.monthlyPriceUSD}
-                    onChange={e => setEditingPlan({ ...editingPlan, monthlyPriceUSD: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-primary"
+                    onChange={(e) => {
+                      const usd = parseFloat(e.target.value) || 0;
+                      const curr = {
+                        PKR: { monthly: Math.round(usd * 280), annual: Math.round(usd * 2800) },
+                        EUR: { monthly: Math.round(usd * 0.95 * 10) / 10, annual: Math.round(usd * 9.5) },
+                        GBP: { monthly: Math.round(usd * 0.8 * 10) / 10, annual: Math.round(usd * 8.0) },
+                        AED: { monthly: Math.round(usd * 3.67 * 10) / 10, annual: Math.round(usd * 36.7) },
+                        SAR: { monthly: Math.round(usd * 3.75 * 10) / 10, annual: Math.round(usd * 37.5) },
+                      };
+                      setEditingPlan({
+                        ...editingPlan,
+                        monthlyPriceUSD: usd,
+                        annualPriceUSD: Math.round(usd * 10 * 100) / 100,
+                        currencyPricing: curr,
+                      });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111C30] border border-slate-200 dark:border-slate-700 font-bold text-primary"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Annual Price ($ USD)</label>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Annual Price ($ USD)
+                  </label>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={editingPlan.annualPriceUSD}
-                    onChange={e => setEditingPlan({ ...editingPlan, annualPriceUSD: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold"
+                    onChange={(e) =>
+                      setEditingPlan({ ...editingPlan, annualPriceUSD: parseFloat(e.target.value) || 0 })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#111C30] border border-slate-200 dark:border-slate-700 font-bold"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Monthly AI Tokens</label>
-                  <input
-                    type="number"
-                    value={editingPlan.tokensIncludedMonthly}
-                    onChange={e => setEditingPlan({ ...editingPlan, tokensIncludedMonthly: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Max Workstations</label>
-                  <input
-                    type="number"
-                    value={editingPlan.maxWorkstations}
-                    onChange={e => setEditingPlan({ ...editingPlan, maxWorkstations: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold"
-                  />
-                </div>
-              </div>
-
+              {/* Resource Quotas & Limits */}
               <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Tagline</label>
-                <input
-                  type="text"
-                  value={editingPlan.tagline}
-                  onChange={e => setEditingPlan({ ...editingPlan, tagline: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                />
+                <label className="font-black text-slate-900 dark:text-[#F8FAFC] block mb-2">
+                  Capacity Limits &amp; Resource Quotas
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 block mb-1 text-[11px]">
+                      Monthly AI Tokens
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      value={editingPlan.tokensIncludedMonthly}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setEditingPlan({
+                          ...editingPlan,
+                          tokensIncludedMonthly: val,
+                          resourceLimits: {
+                            ...(editingPlan.resourceLimits || {}),
+                            monthlyAiCredits: val,
+                          },
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 block mb-1 text-[11px]">
+                      Workstations / POS
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editingPlan.maxWorkstations}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1;
+                        setEditingPlan({
+                          ...editingPlan,
+                          maxWorkstations: val,
+                          resourceLimits: {
+                            ...(editingPlan.resourceLimits || {}),
+                            maxWorkstations: val,
+                          },
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 block mb-1 text-[11px]">
+                      Max Products
+                    </label>
+                    <input
+                      type="number"
+                      min="10"
+                      step="100"
+                      value={editingPlan.maxProducts}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 500;
+                        setEditingPlan({
+                          ...editingPlan,
+                          maxProducts: val,
+                          resourceLimits: {
+                            ...(editingPlan.resourceLimits || {}),
+                            maxProducts: val,
+                          },
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-semibold text-slate-600 dark:text-slate-400 block mb-1 text-[11px]">
+                      Staff Accounts
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editingPlan.maxSubusers}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 2;
+                        setEditingPlan({
+                          ...editingPlan,
+                          maxSubusers: val,
+                          resourceLimits: {
+                            ...(editingPlan.resourceLimits || {}),
+                            maxStaff: val,
+                          },
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono font-bold"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Plan Features (One per line)</label>
-                <textarea
-                  rows={3}
-                  value={editingPlan.features ? editingPlan.features.join('\n') : ''}
-                  onChange={e => setEditingPlan({ ...editingPlan, features: e.target.value.split('\n').filter(Boolean) })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-medium text-xs leading-relaxed"
-                  placeholder="Dedicated AI Compute Bandwidth&#10;Universal Multi-Workstation POS Sync&#10;Automated Invoice Audits"
-                />
+              {/* Plan Features & Inclusions Manager */}
+              <div className="pt-1">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-slate-800 dark:text-slate-200 block">
+                    Plan Details &amp; Feature Highlights ({editingPlan.features?.length || 0})
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Displayed on landing page, checkout, and plan cards
+                  </span>
+                </div>
+
+                {/* Quick Add Single Detail Bar */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <input
+                    type="text"
+                    value={newPlanDetailInput}
+                    onChange={(e) => setNewPlanDetailInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newPlanDetailInput.trim()) {
+                          const current = editingPlan.features || [];
+                          const updated = [...current, newPlanDetailInput.trim()];
+                          setEditingPlan({ ...editingPlan, features: updated });
+                          setEditingPlanFeaturesText(updated.join('\n'));
+                          setNewPlanDetailInput('');
+                        }
+                      }
+                    }}
+                    placeholder="Type a feature/detail and press Enter or click Add Detail..."
+                    className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs focus:border-primary focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newPlanDetailInput.trim()) {
+                        const current = editingPlan.features || [];
+                        const updated = [...current, newPlanDetailInput.trim()];
+                        setEditingPlan({ ...editingPlan, features: updated });
+                        setEditingPlanFeaturesText(updated.join('\n'));
+                        setNewPlanDetailInput('');
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-bold flex items-center gap-1 shrink-0 transition cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Detail</span>
+                  </button>
+                </div>
+
+                {/* Interactive Details Chips List with Remove Button */}
+                {editingPlan.features && editingPlan.features.length > 0 && (
+                  <div className="space-y-1.5 mb-2.5 max-h-36 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    {editingPlan.features.map((feat, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#111C30] border border-slate-200 dark:border-slate-700/60 text-xs text-slate-800 dark:text-slate-200 group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-4 h-4 rounded-full bg-primary/10 text-primary font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="truncate">{feat}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (editingPlan.features || []).filter((_, i) => i !== idx);
+                            setEditingPlan({ ...editingPlan, features: updated });
+                            setEditingPlanFeaturesText(updated.join('\n'));
+                          }}
+                          title="Remove this detail"
+                          className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Bulk Multiline Textarea */}
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                    Or Bulk Edit / Paste (One detail per line):
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editingPlanFeaturesText}
+                    onChange={(e) => {
+                      setEditingPlanFeaturesText(e.target.value);
+                      const parsed = e.target.value
+                        .split('\n')
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      setEditingPlan({ ...editingPlan, features: parsed });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-medium text-xs leading-relaxed focus:border-primary focus:outline-hidden"
+                    placeholder="Dedicated AI Compute Bandwidth&#10;Universal Multi-Workstation POS Sync&#10;Automated Invoice Audits"
+                  />
+                </div>
               </div>
 
-              <div className="flex items-center gap-6 pt-2">
+              {/* Status Flags */}
+              <div className="flex items-center gap-6 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={editingPlan.isPopular}
-                    onChange={e => setEditingPlan({ ...editingPlan, isPopular: e.target.checked })}
+                    onChange={(e) => setEditingPlan({ ...editingPlan, isPopular: e.target.checked })}
                     className="rounded text-primary focus:ring-primary"
                   />
                   <span className="font-bold text-slate-700 dark:text-slate-300">Mark as Most Popular</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editingPlan.commissionEligible}
-                    onChange={e => setEditingPlan({ ...editingPlan, commissionEligible: e.target.checked })}
-                    className="rounded text-primary focus:ring-primary"
-                  />
-                  <span className="font-bold text-slate-700 dark:text-slate-300">Referral Commission Eligible</span>
                 </label>
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
-                onClick={() => setEditingPlan(null)}
+                onClick={() => {
+                  setEditingPlan(null);
+                  setEditingPlanFeaturesText('');
+                  setNewPlanDetailInput('');
+                }}
                 className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
               >
                 Cancel
@@ -3090,856 +3293,20 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
               <button
                 onClick={() => handleSavePlan(editingPlan)}
                 disabled={editingPlanLoading}
-                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md shadow-primary/20"
               >
-                {editingPlanLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                Save Live to Firestore
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ====================================================================
-          TAB 3: TOKEN PACKAGES
-          ==================================================================== */}
-      {activeTab === 'packages' && (
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                    Prepaid Token Packages Manager
-                  </h3>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Live Sync: system/token_packages
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Live pricing and quota management. Changes update Velcora token purchase dialog instantly. Strict zero-commission rule is enforced.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
-                  Zero Commission Enforced
-                </span>
-                <button
-                  onClick={handleResetPackagesToDefault}
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Reset Defaults
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {packagesList.map(pkg => (
-                <div key={pkg.id} className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between relative group hover:border-primary/50 transition">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-black text-sm text-slate-900 dark:text-[#F8FAFC]">{pkg.name}</span>
-                      {pkg.badge && (
-                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
-                          {pkg.badge}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-2xl font-black text-primary my-2">
-                      ${pkg.priceUSD}
-                    </div>
-                    <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
-                      <div>Base Tokens: <span className="font-extrabold text-slate-800 dark:text-slate-200">{pkg.tokens.toLocaleString()}</span></div>
-                      {pkg.bonusTokens > 0 ? (
-                        <div className="text-emerald-600 font-bold">+{pkg.bonusTokens.toLocaleString()} Free Bonus</div>
-                      ) : (
-                        <div className="text-slate-400">0 Bonus Tokens</div>
-                      )}
-                      <div className="text-[11px] text-slate-500 pt-1">
-                        Total: <span className="font-black text-slate-900 dark:text-[#F8FAFC]">{(pkg.tokens + (pkg.bonusTokens || 0)).toLocaleString()}</span> tokens
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                    <button
-                      onClick={() => setEditingPackage({ ...pkg })}
-                      className="w-full py-1.5 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white dark:hover:bg-primary text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      Edit Package Price
-                    </button>
-                    <div className="text-[10px] text-slate-400 text-center">
-                      Commission: <span className="font-bold text-red-500">0% (Locked)</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Token Package Modal */}
-      {editingPackage && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h4 className="font-black text-slate-900 dark:text-[#F8FAFC] text-base">
-                  Edit Token Package: {editingPackage.name}
-                </h4>
-                <p className="text-xs text-slate-500">Live price and token updates in Cloud Firestore.</p>
-              </div>
-              <button
-                onClick={() => setEditingPackage(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Package Name</label>
-                <input
-                  type="text"
-                  value={editingPackage.name}
-                  onChange={e => setEditingPackage({ ...editingPackage, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Price ($ USD)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={editingPackage.priceUSD}
-                  onChange={e => setEditingPackage({ ...editingPackage, priceUSD: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-primary text-base"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Base Tokens</label>
-                  <input
-                    type="number"
-                    value={editingPackage.tokens}
-                    onChange={e => setEditingPackage({ ...editingPackage, tokens: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Bonus Tokens</label>
-                  <input
-                    type="number"
-                    value={editingPackage.bonusTokens}
-                    onChange={e => setEditingPackage({ ...editingPackage, bonusTokens: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-bold text-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Display Badge (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Most Popular, Best Value"
-                  value={editingPackage.badge || ''}
-                  onChange={e => setEditingPackage({ ...editingPackage, badge: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <button
-                onClick={() => setEditingPackage(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSavePackage(editingPackage)}
-                disabled={editingPackageLoading}
-                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                {editingPackageLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                Save Live to Firestore
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ====================================================================
-          TAB 4: PROMOTERS & REFERRALS (REAL-TIME SYNC)
-          ==================================================================== */}
-      {activeTab === 'referrals' && (
-        <div className="space-y-6">
-          {/* Header Card */}
-          <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-gray-950 font-bold shadow-md shadow-emerald-500/20">
-                  <Share2 className="w-5 h-5 text-gray-950" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-[#F8FAFC]">
-                    Promoters & Referral Network
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Authoritative Real-Time Sync with Cloud Firestore (<span className="font-mono text-emerald-500">admin-3666e</span>)
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live Sync Active
-              </span>
-
-              <button
-                onClick={handleOpenPromoterPortal}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Open Referral Hub
-              </button>
-            </div>
-          </div>
-
-          {/* Real-Time KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Promoters */}
-            <div className="p-5 rounded-2xl bg-white dark:bg-[#0F1424] border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
-                <span>Total Promoters</span>
-                <Users className="w-4 h-4 text-emerald-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-[#F8FAFC]">
-                {livePromoters.length}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-2">
-                {livePromoters.filter(p => p.status === 'ACTIVE').length} active, {livePromoters.filter(p => p.status === 'SUSPENDED').length} suspended
-              </div>
-            </div>
-
-            {/* Active Referral Codes */}
-            <div className="p-5 rounded-2xl bg-white dark:bg-[#0F1424] border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
-                <span>Referral Codes</span>
-                <Tag className="w-4 h-4 text-indigo-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-[#F8FAFC]">
-                {liveReferralCodes.length || livePromoters.length}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-2">
-                Tracked across campaigns
-              </div>
-            </div>
-
-            {/* Total Leads / Conversions */}
-            <div className="p-5 rounded-2xl bg-white dark:bg-[#0F1424] border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
-                <span>Leads & Conversions</span>
-                <TrendingUp className="w-4 h-4 text-purple-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-[#F8FAFC]">
-                {liveReferralLeads.length}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-2">
-                Real-time attribution events
-              </div>
-            </div>
-
-            {/* Pending Payout Requests */}
-            <div className="p-5 rounded-2xl bg-white dark:bg-[#0F1424] border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
-                <span>Pending Payouts</span>
-                <DollarSign className="w-4 h-4 text-amber-500" />
-              </div>
-              <div className="text-2xl font-black text-amber-500">
-                ${livePayoutRequests
-                  .filter(p => p.status === 'REQUESTED')
-                  .reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-                  .toFixed(2)}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-2">
-                {livePayoutRequests.filter(p => p.status === 'REQUESTED').length} request(s) awaiting approval
-              </div>
-            </div>
-          </div>
-
-          {/* Sub-Tabs Navigation */}
-          <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-            <button
-              onClick={() => setReferralSubTab('promoters')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                referralSubTab === 'promoters'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              Registered Promoters ({livePromoters.length})
-            </button>
-            <button
-              onClick={() => setReferralSubTab('payouts')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                referralSubTab === 'payouts'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              Payout Requests ({livePayoutRequests.length})
-            </button>
-            <button
-              onClick={() => setReferralSubTab('codes')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                referralSubTab === 'codes'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              Active Codes & Leads
-            </button>
-            <button
-              onClick={() => setReferralSubTab('config')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                referralSubTab === 'config'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-              }`}
-            >
-              Commission Settings
-            </button>
-          </div>
-
-          {/* SUBTAB 1: PROMOTERS DIRECTORY */}
-          {referralSubTab === 'promoters' && (
-            <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-              {/* Search & Filter Bar */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, email, code..."
-                    value={promoterSearch}
-                    onChange={(e) => setPromoterSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-semibold">Status:</span>
-                  {(['ALL', 'ACTIVE', 'SUSPENDED'] as const).map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setPromoterStatusFilter(st)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        promoterStatusFilter === st
-                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Promoters Table */}
-              {livePromoters.length === 0 ? (
-                <div className="text-center py-12">
-                  <Share2 className="w-10 h-10 text-slate-400 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No promoters registered yet</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    When someone signs up at <a href="https://admin-3666e.web.app/signup?ref=CODE" target="_blank" rel="noreferrer" className="text-emerald-500 underline font-bold">admin-3666e.web.app/signup?ref=CODE</a>, they will appear here in real-time.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 font-bold text-slate-600 dark:text-slate-400">
-                        <th className="py-2.5 px-3">Promoter</th>
-                        <th className="py-2.5 px-3">Email & Country</th>
-                        <th className="py-2.5 px-3">Referral Code</th>
-                        <th className="py-2.5 px-3">Commission Rate</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3">Registered</th>
-                        <th className="py-2.5 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {livePromoters
-                        .filter((p) => {
-                          const q = promoterSearch.toLowerCase();
-                          const matchesSearch =
-                            !q ||
-                            (p.fullName || '').toLowerCase().includes(q) ||
-                            (p.email || '').toLowerCase().includes(q) ||
-                            (p.username || '').toLowerCase().includes(q) ||
-                            (p.referralCode || '').toLowerCase().includes(q) ||
-                            (p.country || '').toLowerCase().includes(q);
-                          const matchesStatus =
-                            promoterStatusFilter === 'ALL' || p.status === promoterStatusFilter;
-                          return matchesSearch && matchesStatus;
-                        })
-                        .map((p) => (
-                          <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-                            {/* Promoter Info */}
-                            <td className="py-2.5 px-3">
-                              <div className="font-bold text-slate-900 dark:text-white">
-                                {p.fullName || 'Anonymous Promoter'}
-                              </div>
-                              <div className="text-[11px] text-slate-400 font-mono">
-                                @{p.username || p.id}
-                              </div>
-                            </td>
-
-                            {/* Email & Country */}
-                            <td className="py-2.5 px-3">
-                              <div className="text-slate-600 dark:text-slate-300 font-semibold">{p.email}</div>
-                              <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                                <Globe className="w-3 h-3 text-slate-400" />
-                                {p.country || 'Global'}
-                              </div>
-                            </td>
-
-                            {/* Referral Code */}
-                            <td className="py-2.5 px-3">
-                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono font-bold border border-emerald-200 dark:border-emerald-800">
-                                {p.referralCode || 'N/A'}
-                                <button
-                                  onClick={() => {
-                                    if (p.referralCode) {
-                                      navigator.clipboard?.writeText(p.referralCode);
-                                      setCopiedCode(p.referralCode);
-                                      setTimeout(() => setCopiedCode(null), 1500);
-                                    }
-                                  }}
-                                  title="Copy Referral Code"
-                                  className="p-0.5 hover:text-emerald-300 transition cursor-pointer"
-                                >
-                                  {copiedCode === p.referralCode ? (
-                                    <Check className="w-3 h-3 text-emerald-500" />
-                                  ) : (
-                                    <Copy className="w-3 h-3" />
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-
-                            {/* Commission Rate */}
-                            <td className="py-2.5 px-3">
-                              <div className="flex items-center gap-2">
-                                <span className="font-extrabold text-slate-900 dark:text-white">
-                                  {p.customCommissionRate !== undefined && p.customCommissionRate !== null
-                                    ? `${p.customCommissionRate}%`
-                                    : `${liveReferralConfig.defaultRatePercent || 20}%`}
-                                </span>
-                                <button
-                                  onClick={() => {
-                                    setEditingCommissionPromoter(p);
-                                    setNewCommissionRate(
-                                      p.customCommissionRate ?? liveReferralConfig.defaultRatePercent ?? 20
-                                    );
-                                  }}
-                                  className="text-[10px] text-indigo-500 hover:text-indigo-400 font-bold underline cursor-pointer"
-                                >
-                                  Adjust
-                                </button>
-                              </div>
-                            </td>
-
-                            {/* Status */}
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  p.status === 'ACTIVE'
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400'
-                                }`}
-                              >
-                                {p.status || 'ACTIVE'}
-                              </span>
-                            </td>
-
-                            {/* Registered Date */}
-                            <td className="py-2.5 px-3 text-slate-500 text-[11px]">
-                              {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A'}
-                            </td>
-
-                            {/* Actions */}
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                  onClick={() =>
-                                    handleToggleLivePromoterStatus(p.id, p.status || 'ACTIVE', p.referralCode)
-                                  }
-                                  title={p.status === 'ACTIVE' ? 'Suspend Promoter' : 'Activate Promoter'}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
-                                    p.status === 'ACTIVE'
-                                      ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200 dark:bg-red-950/40 dark:border-red-900'
-                                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900'
-                                  }`}
-                                >
-                                  {p.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* SUBTAB 2: PAYOUT REQUESTS */}
-          {referralSubTab === 'payouts' && (
-            <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  Live Payout Requests Ledger
-                </h4>
-                <div className="flex items-center gap-2">
-                  {['ALL', 'REQUESTED', 'APPROVED', 'PAID', 'REJECTED'].map((st) => (
-                    <button
-                      key={st}
-                      onClick={() => setPayoutFilter(st)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        payoutFilter === st
-                          ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {livePayoutRequests.length === 0 ? (
-                <div className="text-center py-12">
-                  <DollarSign className="w-10 h-10 text-slate-400 mx-auto mb-3 opacity-40" />
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No payout requests recorded</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    When promoters request withdrawals from their dashboard, they will appear here instantly.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 font-bold text-slate-600 dark:text-slate-400">
-                        <th className="py-2.5 px-3">Request ID</th>
-                        <th className="py-2.5 px-3">Promoter</th>
-                        <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">Method & Address</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3">Requested At</th>
-                        <th className="py-2.5 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {livePayoutRequests
-                        .filter((p) => payoutFilter === 'ALL' || p.status === payoutFilter)
-                        .map((req) => (
-                          <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                            <td className="py-2.5 px-3 font-mono text-[11px]">{req.id}</td>
-                            <td className="py-2.5 px-3 font-bold">
-                              <div>{req.promoterName || req.promoterId}</div>
-                              <div className="text-[11px] text-slate-400 font-normal">{req.promoterEmail}</div>
-                            </td>
-                            <td className="py-2.5 px-3 font-extrabold text-sm text-emerald-600">
-                              ${Number(req.amount || 0).toFixed(2)} {req.currency || 'USD'}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="font-bold uppercase text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 mr-2">
-                                {req.payoutMethod || 'PAYPAL'}
-                              </span>
-                              <span className="font-mono text-slate-600 dark:text-slate-400 text-[11px]">
-                                {req.payoutAddress || req.referenceNote || 'N/A'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  req.status === 'PAID'
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400'
-                                    : req.status === 'APPROVED'
-                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-400'
-                                    : req.status === 'REJECTED'
-                                    ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-400'
-                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400'
-                                }`}
-                              >
-                                {req.status || 'REQUESTED'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-500 text-[11px]">
-                              {req.requestedAt ? new Date(req.requestedAt).toLocaleString() : 'N/A'}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {req.status === 'REQUESTED' && (
-                                  <>
-                                    <button
-                                      onClick={() =>
-                                        handleUpdateLivePayoutStatus(
-                                          req.id,
-                                          req.promoterId,
-                                          req.promoterName,
-                                          req.amount,
-                                          'APPROVED'
-                                        )
-                                      }
-                                      className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] border border-blue-200 cursor-pointer"
-                                    >
-                                      Approve
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleUpdateLivePayoutStatus(
-                                          req.id,
-                                          req.promoterId,
-                                          req.promoterName,
-                                          req.amount,
-                                          'PAID'
-                                        )
-                                      }
-                                      className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold text-[10px] border border-emerald-200 cursor-pointer"
-                                    >
-                                      Mark Paid
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        handleUpdateLivePayoutStatus(
-                                          req.id,
-                                          req.promoterId,
-                                          req.promoterName,
-                                          req.amount,
-                                          'REJECTED'
-                                        )
-                                      }
-                                      className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] border border-red-200 cursor-pointer"
-                                    >
-                                      Reject
-                                    </button>
-                                  </>
-                                )}
-                                {req.status === 'APPROVED' && (
-                                  <button
-                                    onClick={() =>
-                                      handleUpdateLivePayoutStatus(
-                                        req.id,
-                                        req.promoterId,
-                                        req.promoterName,
-                                        req.amount,
-                                        'PAID'
-                                      )
-                                    }
-                                    className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-bold text-[10px] border border-emerald-200 cursor-pointer"
-                                  >
-                                    Mark Paid
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* SUBTAB 3: CODES & LEADS */}
-          {referralSubTab === 'codes' && (
-            <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-              <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                Active Referral Codes Registry
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {liveReferralCodes.length === 0 ? (
-                  <p className="text-xs text-slate-500 col-span-3">No referral codes registered yet.</p>
+                {editingPlanLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  liveReferralCodes.map((codeDoc) => (
-                    <div
-                      key={codeDoc.id}
-                      className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono font-black text-sm text-emerald-500">
-                          {codeDoc.code || codeDoc.id}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            codeDoc.status === 'ACTIVE'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {codeDoc.status || 'ACTIVE'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-600 dark:text-slate-400">
-                        Owner: <span className="font-bold">{codeDoc.promoterUsername || codeDoc.promoterEmail || codeDoc.promoterId}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 mt-2">
-                        Created: {codeDoc.createdAt ? new Date(codeDoc.createdAt).toLocaleDateString() : 'N/A'}
-                      </div>
-                    </div>
-                  ))
+                  <Save className="w-3.5 h-3.5" />
                 )}
-              </div>
+                Save Live to Firestore &amp; POS
+              </button>
             </div>
-          )}
-
-          {/* SUBTAB 4: CONFIGURATION */}
-          {referralSubTab === 'config' && (
-            <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-6 max-w-2xl">
-              <div>
-                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  Global Referral & Commission Configuration
-                </h4>
-                <p className="text-xs text-slate-500 mt-1">
-                  Adjusting these parameters synchronizes in real-time across all promoter dashboards.
-                </p>
-              </div>
-
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Default Commission Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={liveReferralConfig.defaultRatePercent ?? 20}
-                    onChange={(e) =>
-                      setLiveReferralConfig((prev: any) => ({
-                        ...prev,
-                        defaultRatePercent: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Standard percentage awarded to promoters on qualifying subscription signups.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Minimum Payout Threshold ($ USD)
-                  </label>
-                  <input
-                    type="number"
-                    min="10"
-                    value={liveReferralConfig.minPayoutAmount ?? 50}
-                    onChange={(e) =>
-                      setLiveReferralConfig((prev: any) => ({
-                        ...prev,
-                        minPayoutAmount: Number(e.target.value),
-                      }))
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Minimum earned commission required before a promoter can submit a withdrawal request.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() =>
-                    handleSaveGlobalReferralConfig(
-                      liveReferralConfig.defaultRatePercent ?? 20,
-                      liveReferralConfig.minPayoutAmount ?? 50
-                    )
-                  }
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition cursor-pointer"
-                >
-                  Save Global Configuration
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Adjust Commission Modal */}
-          {editingCommissionPromoter && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                    Adjust Promoter Commission Rate
-                  </h4>
-                  <button
-                    onClick={() => setEditingCommissionPromoter(null)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                  >
-                    <X className="w-4 h-4 text-slate-400" />
-                  </button>
-                </div>
-
-                <div className="text-xs text-slate-500">
-                  Setting custom commission rate for{' '}
-                  <span className="font-bold text-slate-900 dark:text-white">
-                    {editingCommissionPromoter.fullName} (@{editingCommissionPromoter.username})
-                  </span>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Custom Commission Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={newCommissionRate}
-                    onChange={(e) => setNewCommissionRate(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    onClick={() => setEditingCommissionPromoter(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleUpdateLivePromoterCommission(
-                        editingCommissionPromoter.id,
-                        newCommissionRate
-                      )
-                    }
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 cursor-pointer"
-                  >
-                    Save Commission Rate
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
+
 
       {/* ====================================================================
           TAB 5: PAYMENTS & REFUNDS
@@ -3949,9 +3316,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
           <div className="bg-white dark:bg-[#0F1424] rounded-3xl border border-slate-200 dark:border-slate-800 p-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                  Master Payment Ledger
-                </h3>
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">Master Payment Ledger</h3>
                 <p className="text-xs text-slate-500">Live authoritative payment logs with token clawback on refund.</p>
               </div>
 
@@ -3960,7 +3325,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   type="text"
                   placeholder="Filter by tx ID or email..."
                   value={paymentSearch}
-                  onChange={e => setPaymentSearch(e.target.value)}
+                  onChange={(e) => setPaymentSearch(e.target.value)}
                   className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold"
                 />
               </div>
@@ -3985,20 +3350,22 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {filteredPayments.map(tx => (
+                    {filteredPayments.map((tx) => (
                       <tr key={tx.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                         <td className="py-2.5 px-3 font-mono text-[11px]">{tx.transactionId}</td>
                         <td className="py-2.5 px-3 font-semibold">{tx.userEmail || tx.userId}</td>
                         <td className="py-2.5 px-3 font-bold">${tx.amountUSD.toFixed(2)}</td>
                         <td className="py-2.5 px-3 capitalize">{tx.transactionType}</td>
                         <td className="py-2.5 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            tx.status === 'succeeded'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : tx.status === 'refunded'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              tx.status === 'succeeded'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : tx.status === 'refunded'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
                             {tx.status}
                           </span>
                         </td>
@@ -4037,7 +3404,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 <h3 className="text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">
                   23-Scenario Automated Penetration & Security Matrix
                 </h3>
-                <p className="text-xs text-slate-500">Live sandbox execution testing authorization, clawbacks, token isolation, and anti-fraud.</p>
+                <p className="text-xs text-slate-500">
+                  Live sandbox execution testing authorization, clawbacks, token isolation, and anti-fraud.
+                </p>
               </div>
               <button
                 onClick={handleRunSecurityMatrix}
@@ -4060,11 +3429,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
 
             {securityMatrixReport && (
               <div className="space-y-4">
-                <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${
-                  securityMatrixReport.allPassed
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                    : 'bg-red-50 text-red-800 border-red-200'
-                }`}>
+                <div
+                  className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${
+                    securityMatrixReport.allPassed
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-red-50 text-red-800 border-red-200'
+                  }`}
+                >
                   <span>
                     Status: {securityMatrixReport.allPassed ? 'ALL SCENARIOS PASSED (100%)' : 'SOME SCENARIOS FAILED'}
                   </span>
@@ -4075,14 +3446,21 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
 
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {securityMatrixReport.tests?.map((t: any) => (
-                    <div key={t.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex items-start justify-between gap-3">
+                    <div
+                      key={t.id}
+                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex items-start justify-between gap-3"
+                    >
                       <div>
-                        <div className="font-bold text-slate-900 dark:text-[#F8FAFC]">#{t.id} {t.name}</div>
+                        <div className="font-bold text-slate-900 dark:text-[#F8FAFC]">
+                          #{t.id} {t.name}
+                        </div>
                         <div className="text-[11px] text-slate-500">{t.details}</div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                        t.status === 'PASSED' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                          t.status === 'PASSED' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                        }`}
+                      >
                         {t.status}
                       </span>
                     </div>
@@ -4104,7 +3482,8 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Centralized platform guardrails. Toggles update Cloud Firestore directly and enforce behavior across Velcora in real time.
+                Centralized platform guardrails. Toggles update Cloud Firestore directly and enforce behavior across
+                Avanyx in real time.
               </p>
             </div>
 
@@ -4117,14 +3496,18 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       <Power className="w-4 h-4 text-red-500" />
                       Global Payment Killswitch
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      adminConfig?.systemKillSwitch ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        adminConfig?.systemKillSwitch
+                          ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                      }`}
+                    >
                       {adminConfig?.systemKillSwitch ? 'FROZEN' : 'ACTIVE'}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mb-3">
-                    Instantly freezes live transaction processing across all Velcora terminals.
+                    Instantly freezes live transaction processing across all Avanyx terminals.
                   </p>
                 </div>
                 <button
@@ -4138,7 +3521,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 >
                   <Power className="w-3.5 h-3.5" />
                   <span>
-                    {adminConfig?.systemKillSwitch ? 'SYSTEM FROZEN (Click to Resume)' : 'System Normal (Click to Freeze)'}
+                    {adminConfig?.systemKillSwitch
+                      ? 'SYSTEM FROZEN (Click to Resume)'
+                      : 'System Normal (Click to Freeze)'}
                   </span>
                 </button>
               </div>
@@ -4151,9 +3536,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                       <Settings className="w-4 h-4 text-amber-500" />
                       Maintenance Mode
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      (adminConfig as any)?.maintenanceMode ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        (adminConfig as any)?.maintenanceMode
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                          : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      }`}
+                    >
                       {(adminConfig as any)?.maintenanceMode ? 'ENABLED' : 'DISABLED'}
                     </span>
                   </div>
@@ -4162,7 +3551,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   </p>
                 </div>
                 <button
-                  onClick={() => handleSavePlatformConfig({ maintenanceMode: !(adminConfig as any)?.maintenanceMode } as any)}
+                  onClick={() =>
+                    handleSavePlatformConfig({ maintenanceMode: !(adminConfig as any)?.maintenanceMode } as any)
+                  }
                   className={`w-full py-2 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer transition ${
                     (adminConfig as any)?.maintenanceMode
                       ? 'bg-amber-600 text-white hover:bg-amber-700'
@@ -4171,7 +3562,9 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 >
                   <Settings className="w-3.5 h-3.5" />
                   <span>
-                    {(adminConfig as any)?.maintenanceMode ? 'Maintenance ON (Click to Disable)' : 'Maintenance OFF (Click to Enable)'}
+                    {(adminConfig as any)?.maintenanceMode
+                      ? 'Maintenance ON (Click to Disable)'
+                      : 'Maintenance OFF (Click to Enable)'}
                   </span>
                 </button>
               </div>
@@ -4193,11 +3586,16 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   </p>
                 </div>
                 <button
-                  onClick={() => handleSavePlatformConfig({ aiRoutingEnabled: !(adminConfig as any)?.aiRoutingEnabled } as any)}
+                  onClick={() =>
+                    handleSavePlatformConfig({ aiRoutingEnabled: !(adminConfig as any)?.aiRoutingEnabled } as any)
+                  }
                   className="w-full py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>AI Router: {(adminConfig as any)?.aiRoutingEnabled !== false ? 'Enabled (Omni-Active)' : 'Fallback Mode'}</span>
+                  <span>
+                    AI Router:{' '}
+                    {(adminConfig as any)?.aiRoutingEnabled !== false ? 'Enabled (Omni-Active)' : 'Fallback Mode'}
+                  </span>
                 </button>
               </div>
 
@@ -4207,22 +3605,26 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-extrabold text-xs text-slate-900 dark:text-[#F8FAFC] flex items-center gap-1.5">
                       <Users className="w-4 h-4 text-teal-500" />
-                      Public User & Promoter Onboarding
+                      Public Store Registration
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
                       OPEN
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 mb-3">
-                    Permit new store owner and promoter registrations across apps.
+                    Permit new store owner registrations across apps.
                   </p>
                 </div>
                 <button
-                  onClick={() => handleSavePlatformConfig({ allowRegistration: !(adminConfig as any)?.allowRegistration } as any)}
+                  onClick={() =>
+                    handleSavePlatformConfig({ allowRegistration: !(adminConfig as any)?.allowRegistration } as any)
+                  }
                   className="w-full py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer transition"
                 >
                   <UserCheck className="w-3.5 h-3.5" />
-                  <span>Registrations: {(adminConfig as any)?.allowRegistration !== false ? 'Open Globally' : 'Invite Only'}</span>
+                  <span>
+                    Registrations: {(adminConfig as any)?.allowRegistration !== false ? 'Open Globally' : 'Invite Only'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -4243,7 +3645,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 type="text"
                 placeholder="Search action, target, or admin email..."
                 value={logSearchQuery}
-                onChange={e => setLogSearchQuery(e.target.value)}
+                onChange={(e) => setLogSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-primary text-slate-900 dark:text-[#F8FAFC]"
               />
             </div>
@@ -4252,12 +3654,14 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
               <span className="text-xs font-bold text-slate-500">Category:</span>
               <select
                 value={logActionFilter}
-                onChange={e => setLogActionFilter(e.target.value)}
+                onChange={(e) => setLogActionFilter(e.target.value)}
                 className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300"
               >
                 <option value="ALL">All Categories</option>
-                {logCategories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {logCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
                 ))}
               </select>
             </div>
@@ -4294,15 +3698,13 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                    {filteredAuditLogs.map(log => (
+                    {filteredAuditLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
                         <td className="py-3.5 px-4 whitespace-nowrap text-slate-500 font-mono text-[11px]">
                           {new Date(log.timestamp).toLocaleString()}
                         </td>
 
-                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-[#F8FAFC]">
-                          {log.adminEmail}
-                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-[#F8FAFC]">{log.adminEmail}</td>
 
                         <td className="py-3.5 px-4">
                           <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px] font-bold text-primary">
@@ -4316,11 +3718,12 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">
-                          {log.targetId || '—'}
-                        </td>
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500">{log.targetId || '—'}</td>
 
-                        <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 max-w-xs truncate" title={log.details}>
+                        <td
+                          className="py-3.5 px-4 text-slate-700 dark:text-slate-300 max-w-xs truncate"
+                          title={log.details}
+                        >
                           {log.details}
                         </td>
                       </tr>
@@ -4346,9 +3749,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                   <Users className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-slate-900 dark:text-[#F8FAFC]">
-                    User Account Dossier
-                  </h3>
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-[#F8FAFC]">User Account Dossier</h3>
                   <p className="text-xs text-slate-500">ID: {selectedUser.userId}</p>
                 </div>
               </div>
@@ -4365,69 +3766,29 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
               {/* Stat Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Available Credits</span>
-                  <span className="text-base font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                    {selectedUser.availableCredits.toLocaleString()}
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Subscription Tier</span>
+                  <span className="text-base font-extrabold text-slate-900 dark:text-[#F8FAFC] capitalize">
+                    {selectedUser.subscriptionTier}
                   </span>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Included Plan</span>
-                  <span className="text-base font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                    {selectedUser.includedCredits.toLocaleString()}
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Account Status</span>
+                  <span className={`text-base font-extrabold ${selectedUser.isSuspended ? 'text-red-500' : 'text-emerald-500'}`}>
+                    {selectedUser.isSuspended ? 'Suspended' : 'Active'}
                   </span>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Purchased Tokens</span>
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Last Synced</span>
                   <span className="text-base font-extrabold text-primary">
-                    {selectedUser.purchasedCredits.toLocaleString()}
+                    {new Date(selectedUser.updatedAt).toLocaleDateString()}
                   </span>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Used Credits</span>
-                  <span className="text-base font-extrabold text-slate-500">
-                    {selectedUser.usedCredits.toLocaleString()}
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Tenant ID</span>
+                  <span className="text-xs font-mono font-extrabold text-slate-600 dark:text-slate-400 truncate block">
+                    {selectedUser.userId.slice(0, 14)}...
                   </span>
                 </div>
-              </div>
-
-              {/* Ledger Entries */}
-              <div>
-                <h4 className="font-extrabold text-slate-900 dark:text-[#F8FAFC] mb-2 flex items-center gap-1.5">
-                  <History className="w-4 h-4 text-primary" />
-                  <span>Immutable Token Ledger Entries</span>
-                </h4>
-                {selectedUser.ledger && selectedUser.ledger.length > 0 ? (
-                  <div className="max-h-48 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-                    <table className="w-full text-left text-[11px]">
-                      <thead className="bg-slate-50 dark:bg-slate-900 font-bold text-slate-500">
-                        <tr>
-                          <th className="py-2 px-3">Date</th>
-                          <th className="py-2 px-3">Type</th>
-                          <th className="py-2 px-3">Amount</th>
-                          <th className="py-2 px-3">Description</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                        {selectedUser.ledger.map(entry => (
-                          <tr key={entry.id}>
-                            <td className="py-2 px-3 text-slate-400">{new Date(entry.timestamp).toLocaleDateString()}</td>
-                            <td className="py-2 px-3 font-bold uppercase text-primary">{entry.type}</td>
-                            <td className="py-2 px-3 font-extrabold">
-                              {entry.amount > 0 ? (
-                                <span className="text-emerald-600">+{entry.amount.toLocaleString()}</span>
-                              ) : (
-                                <span className="text-red-500">{entry.amount.toLocaleString()}</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-3 text-slate-700 dark:text-slate-300">{entry.description}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-slate-500 italic">No ledger records logged for this user.</p>
-                )}
               </div>
             </div>
 
@@ -4440,121 +3801,6 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 Close
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ====================================================================
-          MODAL: ADJUST USER CREDITS DIALOG
-          ==================================================================== */}
-      {isAdjustCreditOpen && adjustTargetUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white dark:bg-[#0F1424] w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-slate-800 dark:text-[#F8FAFC] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                  <Coins className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 dark:text-[#F8FAFC]">
-                    Adjust User Balance
-                  </h3>
-                  <p className="text-xs text-slate-500">Target: {adjustTargetUser.userId}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setIsAdjustCreditOpen(false);
-                  setAdjustTargetUser(null);
-                }}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {adjustSuccessMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{adjustSuccessMsg}</span>
-              </div>
-            )}
-
-            {adjustErrorMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{adjustErrorMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleAdjustCredits} className="space-y-4 text-xs font-medium">
-              <div>
-                <label className="block font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Credit Amount (+ or -)
-                </label>
-                <input
-                  type="number"
-                  value={adjustAmount}
-                  onChange={e => setAdjustAmount(Number(e.target.value))}
-                  placeholder="e.g. 500 or -200"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-sm text-slate-900 dark:text-[#F8FAFC]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Credit Bucket
-                </label>
-                <select
-                  value={adjustType}
-                  onChange={e => setAdjustType(e.target.value as 'included' | 'purchased')}
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-900 dark:text-[#F8FAFC]"
-                >
-                  <option value="included">Included Plan Credits (Promotional / Reset)</option>
-                  <option value="purchased">Purchased Over-the-Top Credits</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-600 dark:text-slate-400 mb-1">
-                  Audit Reason
-                </label>
-                <input
-                  type="text"
-                  value={adjustReason}
-                  onChange={e => setAdjustReason(e.target.value)}
-                  placeholder="Reason for founder ledger modification"
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-900 dark:text-[#F8FAFC]"
-                  required
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdjustCreditOpen(false);
-                    setAdjustTargetUser(null);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={adjustLoading}
-                  className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-extrabold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {adjustLoading ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Coins className="w-3.5 h-3.5" />
-                  )}
-                  <span>Apply Modification</span>
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
@@ -4575,7 +3821,11 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
             </div>
 
             <p className="text-xs text-slate-500 mb-4">
-              Refunding transaction <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{refundModalTx.transactionId}</span> (${refundModalTx.amountUSD.toFixed(2)}) will automatically claw back credited tokens and commission balances.
+              Refunding transaction{' '}
+              <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                {refundModalTx.transactionId}
+              </span>{' '}
+              (${refundModalTx.amountUSD.toFixed(2)}) will automatically update subscription status and commission records.
             </p>
 
             <form onSubmit={handleProcessRefund} className="space-y-4 text-xs font-medium">
@@ -4584,7 +3834,7 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
                 <input
                   type="text"
                   value={refundReason}
-                  onChange={e => setRefundReason(e.target.value)}
+                  onChange={(e) => setRefundReason(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold"
                   required
                 />
@@ -4613,6 +3863,3 @@ export const FounderAdminPanel: React.FC<FounderAdminPanelProps> = ({ isStandalo
     </div>
   );
 };
-
-
-

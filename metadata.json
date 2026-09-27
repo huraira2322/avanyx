@@ -1,6 +1,6 @@
 {
-  "name": "Velcora POS",
-  "description": "Velcora POS - Modern, intuitive Point of Sale & Business Management Platform with live inventory, sales intelligence, and production referral & commission system.",
+  "name": "Avanyx AI",
+  "description": "Avanyx — Your AI Assistant & Universal Business Intelligence Platform with live inventory, multimodal reasoning, and financial analytics.",
   "requestFramePermissions": [
     "microphone"
   ],

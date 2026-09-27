@@ -159,7 +159,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   },
 ];
 
-export class VelcoraIndustryEngine {
+export class AvanyxIndustryEngine {
   public static parseNaturalLanguageIndustry(query: string): {
     bestMatch: IndustryPreset;
     confidence: number;

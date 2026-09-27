@@ -4,7 +4,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = 
   import.meta.env.VITE_SUPABASE_URL || 
   import.meta.env.VITE_PUBLIC_SUPABASE_URL || 
-  'https://placeholder-velcora.supabase.co';
+  'https://placeholder-avanyx.supabase.co';
 
 const supabaseKey = 
   import.meta.env.VITE_SUPABASE_ANON_KEY || 

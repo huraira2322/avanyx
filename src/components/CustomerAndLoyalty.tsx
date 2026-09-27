@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Users, Award, Plus, Search, Edit2, Trash2, AlertTriangle, Sliders,
   DollarSign, Check, X, ShieldCheck, Sparkles, Phone, Mail
 } from 'lucide-react';
 import { Customer, LoyaltyRuleConfig } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
-import { VelcoraLoyaltyEngine } from '../utils/loyaltyEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
+import { AvanyxLoyaltyEngine } from '../utils/loyaltyEngine';
 import { useTranslation } from '../context/TranslationContext';
 
-export const CustomerAndLoyalty: React.FC = () => {
+interface CustomerAndLoyaltyProps {
+  initialTab?: 'customers' | 'loyalty_rules';
+}
+
+export const CustomerAndLoyalty: React.FC<CustomerAndLoyaltyProps> = ({ initialTab = 'customers' }) => {
   const {
     customers,
     addCustomer,
@@ -19,10 +23,14 @@ export const CustomerAndLoyalty: React.FC = () => {
     updateLoyaltyConfig,
     currency,
     activeBusiness,
-    activeUser} = useVelcora();
+    activeUser} = useAvanyx();
   const { t } = useTranslation();
 
-  const [activeTab, setActiveTab] = useState<'customers' | 'loyalty_rules'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'loyalty_rules'>(initialTab);
+
+  React.useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
   const [search, setSearch] = useState('');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
@@ -115,11 +123,11 @@ export const CustomerAndLoyalty: React.FC = () => {
   };
 
   // Sim preview
-  const simPointsEarned = VelcoraLoyaltyEngine.calculatePointsEarned(simSpend, [], configForm, simTier);
-  const simRedemptionValue = VelcoraLoyaltyEngine.calculateRedemptionDiscount(simPointsEarned, configForm);
+  const simPointsEarned = AvanyxLoyaltyEngine.calculatePointsEarned(simSpend, [], configForm, simTier);
+  const simRedemptionValue = AvanyxLoyaltyEngine.calculateRedemptionDiscount(simPointsEarned, configForm);
 
   return (
-    <div id="velcora-customers-loyalty" className="space-y-4">
+    <div id="avanyx-customers-loyalty" className="space-y-4">
       {permissionError && (
         <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 p-4 rounded-2xl flex items-start gap-3 text-rose-800 dark:text-rose-300 text-xs font-semibold shadow-xs">
           <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
@@ -254,17 +262,17 @@ export const CustomerAndLoyalty: React.FC = () => {
                       ⭐ {c.loyaltyPoints.toLocaleString()} pts
                     </td>
                     <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                      {VelcoraPricingEngine.formatCurrency(c.totalSpent, currency)}
+                      {AvanyxPricingEngine.formatCurrency(c.totalSpent, currency)}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 dark:text-[#94A3B8] font-semibold">{c.ordersCount} orders</td>
                     <td className="py-3.5 px-4 text-right">
                       {c.outstandingBalance > 0 ? (
                         <span className="font-bold text-rose-600 dark:text-rose-400">
-                          {VelcoraPricingEngine.formatCurrency(c.outstandingBalance, currency)}
+                          {AvanyxPricingEngine.formatCurrency(c.outstandingBalance, currency)}
                         </span>
                       ) : (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                          {VelcoraPricingEngine.formatCurrency(0, currency)}
+                          {AvanyxPricingEngine.formatCurrency(0, currency)}
                         </span>
                       )}
                     </td>

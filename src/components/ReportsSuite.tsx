@@ -1,22 +1,33 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
-  BarChart3, FileSpreadsheet, Download, Printer, Filter,
-  DollarSign, TrendingUp, Calendar, Table, Sparkles
+  BarChart3,
+  FileSpreadsheet,
+  Download,
+  Printer,
+  Filter,
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  Table,
+  Sparkles,
 } from 'lucide-react';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 
-export const ReportsSuite: React.FC = () => {
-  const {
-    salesHistory,
-    products,
-    expenses,
-    customers,
-    brainMetrics,
-    currency,
-    activeBusiness} = useVelcora();
+export interface ReportsSuiteProps {
+  initialReport?: 'pnl' | 'sales_by_item' | 'inventory_val' | 'custom';
+}
 
-  const [activeReport, setActiveReport] = useState<'pnl' | 'sales_by_item' | 'inventory_val' | 'custom'>('pnl');
+export const ReportsSuite: React.FC<ReportsSuiteProps> = ({ initialReport = 'pnl' }) => {
+  const { salesHistory, products, expenses, customers, brainMetrics, currency, activeBusiness } = useAvanyx();
+
+  const [activeReport, setActiveReport] = useState<'pnl' | 'sales_by_item' | 'inventory_val' | 'custom'>(initialReport);
+
+  React.useEffect(() => {
+    if (initialReport) {
+      setActiveReport(initialReport);
+    }
+  }, [initialReport]);
 
   const reportTabs = React.useMemo(() => {
     const tabs = [
@@ -26,7 +37,7 @@ export const ReportsSuite: React.FC = () => {
       { id: 'custom', label: 'Custom Report Builder' },
     ];
     if (activeBusiness.businessModel === 'service') {
-      return tabs.filter(t => t.id !== 'inventory_val');
+      return tabs.filter((t) => t.id !== 'inventory_val');
     }
     return tabs;
   }, [activeBusiness.businessModel]);
@@ -36,14 +47,14 @@ export const ReportsSuite: React.FC = () => {
   const [customMetric, setCustomMetric] = useState<'revenue' | 'quantity' | 'profit'>('revenue');
 
   const pivotData = React.useMemo(() => {
-    const validSales = (salesHistory || []).filter(s => s.status !== 'cancelled');
+    const validSales = (salesHistory || []).filter((s) => s.status !== 'cancelled');
     const totals: Record<string, number> = {};
 
-    validSales.forEach(sale => {
-      sale.items.forEach(item => {
-        const prod = products.find(p => p.id === item.productId);
+    validSales.forEach((sale) => {
+      sale.items.forEach((item) => {
+        const prod = products.find((p) => p.id === item.productId);
         const cat = prod?.category || (prod?.isService ? 'Services' : 'General');
-        
+
         let key = '';
         if (customDimension === 'category') {
           key = cat;
@@ -60,7 +71,7 @@ export const ReportsSuite: React.FC = () => {
         } else if (customMetric === 'quantity') {
           amount = item.quantity;
         } else if (customMetric === 'profit') {
-          const cost = prod?.costPrice || item.costPrice || (item.unitPrice * 0.55);
+          const cost = prod?.costPrice || item.costPrice || item.unitPrice * 0.55;
           amount = (item.unitPrice - cost) * item.quantity;
         }
 
@@ -68,17 +79,19 @@ export const ReportsSuite: React.FC = () => {
       });
     });
 
-    return Object.entries(totals).map(([dimensionValue, aggValue]) => ({
-      dimensionValue,
-      aggValue,
-    })).sort((a, b) => b.aggValue - a.aggValue);
+    return Object.entries(totals)
+      .map(([dimensionValue, aggValue]) => ({
+        dimensionValue,
+        aggValue,
+      }))
+      .sort((a, b) => b.aggValue - a.aggValue);
   }, [salesHistory, products, customDimension, customMetric]);
 
   const handleExportCsv = () => {
     let csvContent = 'data:text/csv;charset=utf-8,';
     if (activeReport === 'sales_by_item') {
       csvContent += 'Product,SKU,Category,Sold Qty,Unit Price,Revenue\n';
-      products.forEach(p => {
+      products.forEach((p) => {
         const sellingPrice = p.sellingPrice ?? 0;
         const stock = p.stock ?? 0;
         csvContent += `"${p.name}","${p.sku}","${p.category}",${stock},${sellingPrice},${(stock * sellingPrice).toFixed(2)}\n`;
@@ -95,14 +108,14 @@ export const ReportsSuite: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Velcora_${activeReport}_Report_${Date.now()}.csv`);
+    link.setAttribute('download', `Avanyx_${activeReport}_Report_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div id="velcora-reports-suite" className="space-y-4">
+    <div id="avanyx-reports-suite" className="space-y-4">
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#111C30] p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-[#1F2E4D] shadow-2xs">
         <div className="flex items-center gap-3">
@@ -112,8 +125,12 @@ export const ReportsSuite: React.FC = () => {
             </div>
           </div>
           <div>
-            <h2 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-[#F8FAFC]">Financial & Operational Reports Suite</h2>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">Official P&L statements, COGS margins, and custom data builder</p>
+            <h2 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-[#F8FAFC]">
+              Financial & Operational Reports Suite
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">
+              Official P&L statements, COGS margins, and custom data builder
+            </p>
           </div>
         </div>
 
@@ -137,7 +154,7 @@ export const ReportsSuite: React.FC = () => {
 
       {/* Report Nav Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {reportTabs.map(tab => (
+        {reportTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveReport(tab.id as any)}
@@ -171,11 +188,13 @@ export const ReportsSuite: React.FC = () => {
               </div>
               <div className="flex justify-between text-slate-600 dark:text-[#94A3B8]">
                 <span>Gross Point-of-Sale Invoiced Receipts</span>
-                <span className="font-bold text-slate-900 dark:text-[#F8FAFC]">{VelcoraPricingEngine.formatCurrency(brainMetrics.totalRevenue, currency)}</span>
+                <span className="font-bold text-slate-900 dark:text-[#F8FAFC]">
+                  {AvanyxPricingEngine.formatCurrency(brainMetrics.totalRevenue, currency)}
+                </span>
               </div>
               <div className="flex justify-between font-bold text-slate-900 dark:text-[#F8FAFC] pt-1.5 border-t border-slate-200 dark:border-[#1F2E4D]">
                 <span>Total Net Revenue</span>
-                <span>{VelcoraPricingEngine.formatCurrency(brainMetrics.totalRevenue, currency)}</span>
+                <span>{AvanyxPricingEngine.formatCurrency(brainMetrics.totalRevenue, currency)}</span>
               </div>
             </div>
 
@@ -186,11 +205,13 @@ export const ReportsSuite: React.FC = () => {
               </div>
               <div className="flex justify-between text-slate-600 dark:text-[#94A3B8]">
                 <span>Product Acquisition / Inventory Cost</span>
-                <span className="font-mono text-rose-600 dark:text-rose-400">({VelcoraPricingEngine.formatCurrency(brainMetrics.cogs, currency)})</span>
+                <span className="font-mono text-rose-600 dark:text-rose-400">
+                  ({AvanyxPricingEngine.formatCurrency(brainMetrics.cogs, currency)})
+                </span>
               </div>
               <div className="flex justify-between font-extrabold text-[#2563EB] dark:text-[#06B6D4] pt-1.5 border-t border-slate-200 dark:border-[#1F2E4D] text-sm">
                 <span>GROSS PROFIT</span>
-                <span>{VelcoraPricingEngine.formatCurrency(brainMetrics.grossProfit, currency)}</span>
+                <span>{AvanyxPricingEngine.formatCurrency(brainMetrics.grossProfit, currency)}</span>
               </div>
             </div>
 
@@ -199,15 +220,19 @@ export const ReportsSuite: React.FC = () => {
               <div className="font-extrabold text-slate-900 dark:text-[#F8FAFC] uppercase tracking-wider text-[11px] pb-1.5 border-b border-slate-200 dark:border-[#1F2E4D]">
                 3. Operating Expenses
               </div>
-              {expenses.map(exp => (
+              {expenses.map((exp) => (
                 <div key={exp.id} className="flex justify-between text-slate-500 dark:text-[#94A3B8]">
-                  <span>{exp.category} ({exp.receiptNote || exp.title})</span>
-                  <span className="font-mono text-rose-600 dark:text-rose-400">({VelcoraPricingEngine.formatCurrency(exp.amount, currency)})</span>
+                  <span>
+                    {exp.category} ({exp.receiptNote || exp.title})
+                  </span>
+                  <span className="font-mono text-rose-600 dark:text-rose-400">
+                    ({AvanyxPricingEngine.formatCurrency(exp.amount, currency)})
+                  </span>
                 </div>
               ))}
               <div className="flex justify-between font-bold text-rose-600 dark:text-rose-400 pt-1.5 border-t border-slate-200 dark:border-[#1F2E4D]">
                 <span>Total Operating Overhead</span>
-                <span>({VelcoraPricingEngine.formatCurrency(brainMetrics.totalExpenses, currency)})</span>
+                <span>({AvanyxPricingEngine.formatCurrency(brainMetrics.totalExpenses, currency)})</span>
               </div>
             </div>
 
@@ -220,7 +245,7 @@ export const ReportsSuite: React.FC = () => {
                 </span>
               </div>
               <span className="text-2xl text-emerald-600 dark:text-emerald-400">
-                {VelcoraPricingEngine.formatCurrency(brainMetrics.netProfit, currency)}
+                {AvanyxPricingEngine.formatCurrency(brainMetrics.netProfit, currency)}
               </span>
             </div>
           </div>
@@ -243,9 +268,9 @@ export const ReportsSuite: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#1F2E4D] font-medium text-slate-700 dark:text-[#94A3B8]">
-                {products.map(p => {
+                {products.map((p) => {
                   const sPrice = p.sellingPrice ?? 0;
-                  const cPrice = p.costPrice ?? (sPrice * 0.4);
+                  const cPrice = p.costPrice ?? sPrice * 0.4;
                   const stock = p.stock ?? 0;
                   const margin = sPrice - cPrice;
                   const marginPct = sPrice > 0 ? Math.round((margin / sPrice) * 100) : 0;
@@ -255,16 +280,22 @@ export const ReportsSuite: React.FC = () => {
                         <div className="font-bold text-slate-900 dark:text-[#F8FAFC]">{p.name}</div>
                         <div className="font-mono text-[10px] text-slate-400 dark:text-[#94A3B8]/70">{p.sku}</div>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-[#F8FAFC]">{VelcoraPricingEngine.formatCurrency(sPrice, currency)}</td>
-                      <td className="py-3.5 px-4 font-mono text-slate-500 dark:text-[#94A3B8]">{VelcoraPricingEngine.formatCurrency(cPrice, currency)}</td>
-                      <td className="py-3.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">+{VelcoraPricingEngine.formatCurrency(margin, currency)}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-[#F8FAFC]">
+                        {AvanyxPricingEngine.formatCurrency(sPrice, currency)}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-slate-500 dark:text-[#94A3B8]">
+                        {AvanyxPricingEngine.formatCurrency(cPrice, currency)}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">
+                        +{AvanyxPricingEngine.formatCurrency(margin, currency)}
+                      </td>
                       <td className="py-3.5 px-4">
                         <span className="font-bold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px]">
                           {marginPct}%
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                        {VelcoraPricingEngine.formatCurrency(stock * cPrice, currency)}
+                        {AvanyxPricingEngine.formatCurrency(stock * cPrice, currency)}
                       </td>
                     </tr>
                   );
@@ -277,7 +308,9 @@ export const ReportsSuite: React.FC = () => {
 
       {activeReport === 'inventory_val' && (
         <div className="bg-white dark:bg-[#111C30] rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-[#1F2E4D] shadow-2xs space-y-4">
-          <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-[#F8FAFC]">Warehouse Inventory & Dead Stock Summary</h3>
+          <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-[#F8FAFC]">
+            Warehouse Inventory & Dead Stock Summary
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 bg-slate-50 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-[#1F2E4D] space-y-1">
               <span className="text-xs text-slate-500 dark:text-[#94A3B8] font-bold">Total Stock Units</span>
@@ -288,13 +321,13 @@ export const ReportsSuite: React.FC = () => {
             <div className="p-5 bg-slate-50 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-[#1F2E4D] space-y-1">
               <span className="text-xs text-slate-500 dark:text-[#94A3B8] font-bold">Total Asset Value (Cost)</span>
               <div className="text-2xl font-extrabold text-[#2563EB] dark:text-[#06B6D4]">
-                {VelcoraPricingEngine.formatCurrency(brainMetrics.totalInventoryValuation, currency)}
+                {AvanyxPricingEngine.formatCurrency(brainMetrics.totalInventoryValuation, currency)}
               </div>
             </div>
             <div className="p-5 bg-slate-50 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-[#1F2E4D] space-y-1">
               <span className="text-xs text-slate-500 dark:text-[#94A3B8] font-bold">Dead Stock at Risk</span>
               <div className="text-2xl font-extrabold text-rose-600 dark:text-rose-400">
-                {VelcoraPricingEngine.formatCurrency(brainMetrics.deadStockValuation, currency)}
+                {AvanyxPricingEngine.formatCurrency(brainMetrics.deadStockValuation, currency)}
               </div>
             </div>
           </div>
@@ -305,8 +338,12 @@ export const ReportsSuite: React.FC = () => {
         /* CUSTOM REPORT BUILDER */
         <div className="bg-white dark:bg-[#111C30] rounded-3xl p-6 sm:p-7 border border-slate-200 dark:border-[#1F2E4D] shadow-2xs space-y-5">
           <div>
-            <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-[#F8FAFC]">Interactive Custom Report Builder</h3>
-            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">Pivot and aggregate your data across any dimension</p>
+            <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-[#F8FAFC]">
+              Interactive Custom Report Builder
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">
+              Pivot and aggregate your data across any dimension
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -314,12 +351,21 @@ export const ReportsSuite: React.FC = () => {
               <label className="block font-bold text-slate-700 dark:text-[#94A3B8] mb-1">Group By Dimension</label>
               <select
                 value={customDimension}
-                onChange={e => setCustomDimension(e.target.value as any)}
+                onChange={(e) => setCustomDimension(e.target.value as any)}
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-[#1F2E4D] bg-slate-50 dark:bg-[#0B1220] text-slate-900 dark:text-[#F8FAFC] font-bold focus:border-[#2563EB] focus:outline-hidden"
               >
-                <option value="category" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">Product Category</option>
-                <option value="customer" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">Customer Account</option>
-                <option value="payment_method" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">Payment Tender Method</option>
+                <option value="category" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">
+                  Product Category
+                </option>
+                <option value="customer" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">
+                  Customer Account
+                </option>
+                <option
+                  value="payment_method"
+                  className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]"
+                >
+                  Payment Tender Method
+                </option>
               </select>
             </div>
 
@@ -327,12 +373,18 @@ export const ReportsSuite: React.FC = () => {
               <label className="block font-bold text-slate-700 dark:text-[#94A3B8] mb-1">Aggregate Metric</label>
               <select
                 value={customMetric}
-                onChange={e => setCustomMetric(e.target.value as any)}
+                onChange={(e) => setCustomMetric(e.target.value as any)}
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-[#1F2E4D] bg-slate-50 dark:bg-[#0B1220] text-slate-900 dark:text-[#F8FAFC] font-bold focus:border-[#2563EB] focus:outline-hidden"
               >
-                <option value="revenue" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">Total Revenue ({currency || '$'})</option>
-                <option value="quantity" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">Units Sold Count</option>
-                <option value="profit" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">Net Margin ({currency || '$'})</option>
+                <option value="revenue" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">
+                  Total Revenue ({currency || '$'})
+                </option>
+                <option value="quantity" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">
+                  Units Sold Count
+                </option>
+                <option value="profit" className="bg-white dark:bg-[#111C30] text-slate-900 dark:text-[#F8FAFC]">
+                  Net Margin ({currency || '$'})
+                </option>
               </select>
             </div>
           </div>
@@ -345,14 +397,16 @@ export const ReportsSuite: React.FC = () => {
                   No transaction data recorded yet for this grouping.
                 </div>
               ) : (
-                pivotData.map(item => (
-                  <div key={item.dimensionValue} className="flex justify-between p-3 bg-white dark:bg-[#111C30] rounded-xl border border-slate-200 dark:border-[#1F2E4D]">
+                pivotData.map((item) => (
+                  <div
+                    key={item.dimensionValue}
+                    className="flex justify-between p-3 bg-white dark:bg-[#111C30] rounded-xl border border-slate-200 dark:border-[#1F2E4D]"
+                  >
                     <span className="font-bold text-slate-900 dark:text-[#F8FAFC]">{item.dimensionValue}</span>
                     <span className="font-mono font-extrabold text-[#2563EB] dark:text-[#06B6D4]">
                       {customMetric === 'quantity'
                         ? `${item.aggValue} units`
-                        : VelcoraPricingEngine.formatCurrency(item.aggValue, currency)
-                      }
+                        : AvanyxPricingEngine.formatCurrency(item.aggValue, currency)}
                     </span>
                   </div>
                 ))

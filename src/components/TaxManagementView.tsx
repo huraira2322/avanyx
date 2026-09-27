@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import { TaxRateConfig } from '../types';
 import {
   FileSpreadsheet, Plus, CheckCircle, Percent,
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 export const TaxManagementView: React.FC = () => {
-  const { taxRates, addTaxRate, updateTaxRate, deleteTaxRate, activeBusiness, updateActiveBusiness } = useVelcora();
+  const { taxRates, addTaxRate, updateTaxRate, deleteTaxRate, activeBusiness, updateActiveBusiness, salesHistory } = useAvanyx();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Form State
@@ -18,6 +18,10 @@ export const TaxManagementView: React.FC = () => {
   const [formIsDefault, setFormIsDefault] = useState(false);
 
   const currencySymbol = activeBusiness.currencySymbol || '$';
+
+  const totalTaxCollected = (salesHistory || [])
+    .filter((s) => s.status !== 'cancelled')
+    .reduce((acc, s) => acc + (s.taxTotal || 0), 0);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +64,7 @@ export const TaxManagementView: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header Banner */}
-      <div className="velcora-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="avanyx-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-xl bg-primary-light text-primary flex items-center justify-center">
@@ -79,7 +83,7 @@ export const TaxManagementView: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="velcora-btn-primary flex items-center gap-2"
+            className="avanyx-btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span>Add Tax Rate</span>
@@ -89,7 +93,7 @@ export const TaxManagementView: React.FC = () => {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>DEFAULT TAX RATE</span>
             <Percent className="w-4 h-4 text-primary" />
@@ -100,7 +104,7 @@ export const TaxManagementView: React.FC = () => {
           <div className="text-xs text-slate-500 mt-1">Applied to standard checkout</div>
         </div>
 
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>PRICING MODEL</span>
             <Building2 className="w-4 h-4 text-emerald-500" />
@@ -113,26 +117,32 @@ export const TaxManagementView: React.FC = () => {
           </div>
         </div>
 
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
-            <span>EST. TAX COLLECTED</span>
+            <span>TAX COLLECTED (POS)</span>
             <FileSpreadsheet className="w-4 h-4 text-blue-500" />
           </div>
           <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            {currencySymbol}624.80
+            {currencySymbol}{totalTaxCollected.toFixed(2)}
           </div>
-          <div className="text-xs text-slate-500 mt-1">Active billing period</div>
+          <div className="text-xs text-slate-500 mt-1">Calculated from completed POS sales</div>
         </div>
 
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>TAX IDENTIFIER</span>
             <ShieldCheck className="w-4 h-4 text-primary" />
           </div>
           <div className="text-base font-mono font-bold text-slate-900 dark:text-white truncate">
-            {activeBusiness.taxNumber || 'US-TAX-892182'}
+            {activeBusiness.taxNumber && activeBusiness.taxNumber.trim() !== '' && activeBusiness.taxNumber !== 'US-TAX-892182'
+              ? activeBusiness.taxNumber
+              : 'Not Configured'}
           </div>
-          <div className="text-xs text-primary/80 mt-1">Printed on receipts</div>
+          <div className="text-xs text-primary/80 mt-1">
+            {activeBusiness.taxNumber && activeBusiness.taxNumber.trim() !== '' && activeBusiness.taxNumber !== 'US-TAX-892182'
+              ? 'Printed on receipts'
+              : 'Set your tax ID below'}
+          </div>
         </div>
       </div>
 
@@ -140,7 +150,7 @@ export const TaxManagementView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Tax Rates List */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="velcora-card overflow-hidden">
+          <div className="avanyx-card overflow-hidden">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h2 className="font-bold text-slate-900 dark:text-white text-sm">Configured Tax Rates</h2>
               <span className="text-xs text-slate-500">{taxRates.length} rules defined</span>
@@ -232,7 +242,7 @@ export const TaxManagementView: React.FC = () => {
 
         {/* Right Col: Global Tax Settings */}
         <div className="space-y-4">
-          <div className="velcora-card p-5 space-y-4">
+          <div className="avanyx-card p-5 space-y-4">
             <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-primary" />
               <span>Fiscal Display Settings</span>
@@ -262,9 +272,9 @@ export const TaxManagementView: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  value={activeBusiness.taxNumber || ''}
+                  value={activeBusiness.taxNumber && activeBusiness.taxNumber !== 'US-TAX-892182' ? activeBusiness.taxNumber : ''}
                   onChange={(e) => updateActiveBusiness({ taxNumber: e.target.value })}
-                  placeholder="e.g. US-TAX-892182"
+                  placeholder="e.g. GSTIN / VAT / Sales Tax ID"
                   className="w-full px-3 py-2 text-xs font-mono rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -289,7 +299,7 @@ export const TaxManagementView: React.FC = () => {
       {/* Create Tax Rate Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="velcora-card w-full max-w-md p-6 space-y-4 animate-scale-in">
+          <div className="avanyx-card w-full max-w-md p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-primary-light text-primary flex items-center justify-center">
@@ -387,7 +397,7 @@ export const TaxManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="velcora-btn-primary"
+                  className="avanyx-btn-primary"
                 >
                   Save Tax Rate
                 </button>

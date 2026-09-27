@@ -32,7 +32,7 @@ export const DynamicCatalogFields: React.FC<Props> = ({ schema, values, onChange
         {f.safetyCritical ? (
           <span
             className="ml-1 inline-flex items-center gap-0.5 text-[9px] font-black text-amber-600 dark:text-amber-400"
-            title="Specialised information — verify with a qualified professional. Velcora never invents these values."
+            title="Specialised information — verify with a qualified professional. Avanyx never invents these values."
           >
             <ShieldAlert className="w-3 h-3" /> VERIFY
           </span>

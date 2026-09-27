@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { SaleTransaction, BusinessProfile } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 import { generateBarcodeSvg } from '../utils/barcodeGenerator';
 import { motion } from 'motion/react';
 import { 
@@ -19,12 +19,12 @@ import {
   Loader2, 
   AlertCircle,
   Tag,
-  ArrowLeft
+  ArrowLeft,
+  Receipt
 } from 'lucide-react';
-import { VelcoraMascot } from './VelcoraMascot';
 
 interface DigitalReceiptViewProps {
-  businessId: string;
+  businessId?: string;
   saleId: string;
   onBack?: () => void;
 }
@@ -40,26 +40,74 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
       setIsLoading(true);
       setError(null);
       try {
-        if (!businessId || !saleId) {
-          throw new Error('Invalid receipt lookup parameters.');
+        if (!saleId) {
+          throw new Error('Invalid receipt lookup parameters: missing transaction ID.');
         }
 
-        // Fetch business
-        const bizRef = doc(db, 'businesses', businessId);
-        const bizSnap = await getDoc(bizRef);
-        let bizData: BusinessProfile | null = null;
-        if (bizSnap.exists()) {
-          bizData = { id: bizSnap.id, ...bizSnap.data() } as BusinessProfile;
-          setBusiness(bizData);
+        let foundSale: SaleTransaction | null = null;
+        let resolvedBizId = businessId || '';
+
+        // Strategy 1: Direct lookup if businessId is supplied
+        if (resolvedBizId) {
+          try {
+            const saleRef = doc(db, 'businesses', resolvedBizId, 'sales', saleId);
+            const saleSnap = await getDoc(saleRef);
+            if (saleSnap.exists()) {
+              foundSale = { id: saleSnap.id, ...saleSnap.data() } as SaleTransaction;
+            }
+          } catch {
+            // fallback to search
+          }
         }
 
-        // Fetch sale
-        const saleRef = doc(db, 'businesses', businessId, 'sales', saleId);
-        const saleSnap = await getDoc(saleRef);
-        if (saleSnap.exists()) {
-          setSale({ id: saleSnap.id, ...saleSnap.data() } as SaleTransaction);
+        // Strategy 2: If not found or no businessId, search across businesses collection
+        if (!foundSale) {
+          try {
+            const bizCollectionSnap = await getDocs(collection(db, 'businesses'));
+            for (const bizDoc of bizCollectionSnap.docs) {
+              const testSaleSnap = await getDoc(doc(db, 'businesses', bizDoc.id, 'sales', saleId));
+              if (testSaleSnap.exists()) {
+                foundSale = { id: testSaleSnap.id, ...testSaleSnap.data() } as SaleTransaction;
+                resolvedBizId = bizDoc.id;
+                setBusiness({ id: bizDoc.id, ...bizDoc.data() } as BusinessProfile);
+                break;
+              }
+            }
+          } catch (e) {
+            console.warn('Cross-business sale search warning:', e);
+          }
+        }
+
+        // Strategy 3: Check localStorage cache (for offline/demo or instant verification)
+        if (!foundSale && typeof window !== 'undefined') {
+          try {
+            const localSales = JSON.parse(localStorage.getItem('avanyx_offline_sales') || '[]');
+            const matchedLocal = localSales.find((s: SaleTransaction) => s.id === saleId);
+            if (matchedLocal) {
+              foundSale = matchedLocal;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        if (foundSale) {
+          setSale(foundSale);
+
+          // Fetch business data if not already set
+          if (resolvedBizId && !business) {
+            try {
+              const bizRef = doc(db, 'businesses', resolvedBizId);
+              const bizSnap = await getDoc(bizRef);
+              if (bizSnap.exists()) {
+                setBusiness({ id: bizSnap.id, ...bizSnap.data() } as BusinessProfile);
+              }
+            } catch {
+              // ignore
+            }
+          }
         } else {
-          throw new Error('Digital receipt record not found in database.');
+          throw new Error(`Digital receipt record #${saleId.toUpperCase()} not found.`);
         }
       } catch (err: any) {
         console.error('Receipt fetch error:', err);
@@ -153,8 +201,10 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <VelcoraMascot size={28} />
-            <span className="font-black text-xs tracking-wider text-slate-900 dark:text-white">VELCORA DIGITAL PASS</span>
+            <div className="w-7 h-7 rounded-xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200/80 dark:border-blue-800/40 shadow-xs">
+              <Receipt className="w-4 h-4" />
+            </div>
+            <span className="font-extrabold text-xs tracking-wider text-slate-900 dark:text-white">OFFICIAL DIGITAL RECEIPT</span>
           </div>
         )}
 
@@ -196,7 +246,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
             
             <div className="space-y-1">
               <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                {business?.name || 'Velcora Retailer'}
+                {business?.name || 'Avanyx Retailer'}
               </h1>
               {business?.legalName && (
                 <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
@@ -277,12 +327,12 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-slate-900 truncate">{it.name}</div>
                       <div className="text-[10px] text-slate-400 mt-0.5 font-mono">
-                        {VelcoraPricingEngine.formatCurrency(it.unitPrice, currencyCode)} × {it.quantity}
-                        {it.discount ? ` (-${VelcoraPricingEngine.formatCurrency(it.discount, currencyCode)})` : ''}
+                        {AvanyxPricingEngine.formatCurrency(it.unitPrice, currencyCode)} × {it.quantity}
+                        {it.discount ? ` (-${AvanyxPricingEngine.formatCurrency(it.discount, currencyCode)})` : ''}
                       </div>
                     </div>
                     <div className="text-right font-mono font-extrabold text-slate-900 shrink-0">
-                      {VelcoraPricingEngine.formatCurrency(lineTotal, currencyCode)}
+                      {AvanyxPricingEngine.formatCurrency(lineTotal, currencyCode)}
                     </div>
                   </div>
                 );
@@ -295,7 +345,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
             <div className="flex justify-between">
               <span>Subtotal</span>
               <span className="font-mono font-bold text-slate-900">
-                {VelcoraPricingEngine.formatCurrency(sale.subtotal, currencyCode)}
+                {AvanyxPricingEngine.formatCurrency(sale.subtotal, currencyCode)}
               </span>
             </div>
 
@@ -306,7 +356,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
                   Discount Savings
                 </span>
                 <span className="font-mono font-bold">
-                  -{VelcoraPricingEngine.formatCurrency(discountTotal, currencyCode)}
+                  -{AvanyxPricingEngine.formatCurrency(discountTotal, currencyCode)}
                 </span>
               </div>
             )}
@@ -315,7 +365,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
               <div className="flex justify-between text-indigo-600">
                 <span>Loyalty Redeemed ({sale.pointsRedeemed} pts)</span>
                 <span className="font-mono font-bold">
-                  -{VelcoraPricingEngine.formatCurrency(pointsRedeemedAmount, currencyCode)}
+                  -{AvanyxPricingEngine.formatCurrency(pointsRedeemedAmount, currencyCode)}
                 </span>
               </div>
             )}
@@ -324,7 +374,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
               <div className="flex justify-between">
                 <span>Sales Tax ({business?.taxInclusive ? 'Inclusive' : 'Exclusive'})</span>
                 <span className="font-mono font-bold text-slate-900">
-                  {VelcoraPricingEngine.formatCurrency(taxTotal, currencyCode)}
+                  {AvanyxPricingEngine.formatCurrency(taxTotal, currencyCode)}
                 </span>
               </div>
             )}
@@ -332,7 +382,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
             <div className="flex justify-between text-sm font-black text-slate-950 border-t pt-2 mt-1">
               <span>GRAND TOTAL</span>
               <span className="font-mono text-base font-black">
-                {VelcoraPricingEngine.formatCurrency(sale.grandTotal, currencyCode)}
+                {AvanyxPricingEngine.formatCurrency(sale.grandTotal, currencyCode)}
               </span>
             </div>
 
@@ -341,7 +391,7 @@ export function DigitalReceiptView({ businessId, saleId, onBack }: DigitalReceip
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-bold">Cash Received:</span>
                   <span className="font-extrabold text-slate-800">
-                    {VelcoraPricingEngine.formatCurrency(firstPayment?.amount || sale.grandTotal, currencyCode)}
+                    {AvanyxPricingEngine.formatCurrency(firstPayment?.amount || sale.grandTotal, currencyCode)}
                   </span>
                 </div>
               </div>

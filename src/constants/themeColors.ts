@@ -9,16 +9,16 @@ export interface ColorPaletteOption {
   description: string;
 }
 
-export const VELCORA_COLOR_PALETTES: ColorPaletteOption[] = [
+export const AVANYX_COLOR_PALETTES: ColorPaletteOption[] = [
   {
     id: 'indigo',
-    name: 'Velcora Deep Indigo',
+    name: 'Avanyx Deep Indigo',
     hex: '#5B5CE2',
     hoverHex: '#4647C7',
     lightBg: '#EEF2FF',
     ringHex: 'rgba(91, 92, 226, 0.35)',
-    tag: 'Velcora Signature',
-    description: 'Modern, intelligent, and authoritative flagship Velcora aesthetic',
+    tag: 'Avanyx Signature',
+    description: 'Modern, intelligent, and authoritative flagship Avanyx aesthetic',
   },
   {
     id: 'electric-blue',

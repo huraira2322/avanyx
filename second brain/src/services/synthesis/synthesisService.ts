@@ -20,7 +20,7 @@ export class SynthesisService {
     const facts = memories.filter(m => m.classification === 'knowledge' || m.classification === 'memory');
 
     let markdown = `# Strategic Synthesis: ${topic}\n\n`;
-    markdown += `*Generated automatically by Velcora Second Brain Synthesis Engine on ${new Date().toLocaleDateString()}*\n\n`;
+    markdown += `*Generated automatically by Avanyx Second Brain Synthesis Engine on ${new Date().toLocaleDateString()}*\n\n`;
 
     if (decisions.length > 0) {
       markdown += `## 🎯 Historical Decisions\n`;

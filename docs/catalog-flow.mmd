@@ -12,7 +12,7 @@ sequenceDiagram
     S->>C: reserveCredits (maxCost)
     C-->>S: reserved
 
-    S->>R: routeAIRequest(engine=velcora-chat)
+    S->>R: routeAIRequest(engine=Avanyx-chat)
     R->>DS: chat/completions (16s budget)
     alt DeepSeek answers
         DS-->>R: JSON schema

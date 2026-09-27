@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Globe, ShoppingBag, Eye, ExternalLink, Sparkles,
   CheckCircle2, ArrowRight, ShieldCheck, Tag, Plus, Minus, X,
   Search, Check
 } from 'lucide-react';
 import { Product } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 import { resolveActivePlan, isFeatureAllowed } from '../utils/planLimitsEngine';
 
 export const OnlineStoreBeta: React.FC = () => {
@@ -18,7 +18,7 @@ export const OnlineStoreBeta: React.FC = () => {
     activeSubscription,
     subscriptionPlans,
     openCheckoutModal,
-  } = useVelcora();
+  } = useAvanyx();
 
   // Dynamic Plan Feature Check
   const currentPlan = resolveActivePlan(activeSubscription, subscriptionPlans, activeBusiness);
@@ -119,8 +119,8 @@ export const OnlineStoreBeta: React.FC = () => {
   };
 
   const copyStoreLink = () => {
-    const slug = (activeBusiness?.name || 'velcora').toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const url = `https://velcora.shop/${slug}`;
+    const slug = (activeBusiness?.name || 'avanyx').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const url = `https://avanyx.shop/${slug}`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -128,7 +128,7 @@ export const OnlineStoreBeta: React.FC = () => {
 
   if (!isBetaStoreUnlocked) {
     return (
-      <div id="velcora-online-store" className="max-w-4xl mx-auto py-12 px-4">
+      <div id="avanyx-online-store" className="max-w-4xl mx-auto py-12 px-4">
         <div className="bg-white dark:bg-[#111C30] rounded-3xl border border-slate-200 dark:border-[#1F2E4D] p-8 sm:p-12 text-center shadow-xl relative overflow-hidden space-y-6">
           <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
@@ -154,7 +154,7 @@ export const OnlineStoreBeta: React.FC = () => {
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 <span>Custom Domain Link</span>
               </div>
-              <p className="text-[11px] text-slate-500">velcora.shop/your-business</p>
+              <p className="text-[11px] text-slate-500">avanyx.shop/your-business</p>
             </div>
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] space-y-1">
               <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -187,7 +187,7 @@ export const OnlineStoreBeta: React.FC = () => {
   }
 
   return (
-    <div id="velcora-online-store" className="space-y-4">
+    <div id="avanyx-online-store" className="space-y-4">
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#111C30] p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-[#1F2E4D] shadow-2xs">
         <div className="flex items-center gap-3">
@@ -199,7 +199,7 @@ export const OnlineStoreBeta: React.FC = () => {
           <div>
             <h2 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-[#F8FAFC]">Online Storefront (Beta)</h2>
             <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">
-              Live link: <span className="font-mono text-[#2563EB] dark:text-[#06B6D4] font-bold">velcora.shop/{(activeBusiness?.name || 'velcora').toLowerCase().replace(/[^a-z0-9]/g, '-')}</span>
+              Live link: <span className="font-mono text-[#2563EB] dark:text-[#06B6D4] font-bold">avanyx.shop/{(activeBusiness?.name || 'avanyx').toLowerCase().replace(/[^a-z0-9]/g, '-')}</span>
             </p>
           </div>
         </div>
@@ -253,7 +253,7 @@ export const OnlineStoreBeta: React.FC = () => {
                 onClick={() => setShowCheckoutModal(true)}
                 className="px-4 py-2 rounded-xl bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-xs font-bold shadow-2xs transition active:scale-98"
               >
-                Checkout ({VelcoraPricingEngine.formatCurrency(cartTotal, currency)})
+                Checkout ({AvanyxPricingEngine.formatCurrency(cartTotal, currency)})
               </button>
             )}
           </div>
@@ -335,7 +335,7 @@ export const OnlineStoreBeta: React.FC = () => {
                     <div className="mt-4 pt-3.5 border-t border-slate-200 dark:border-[#1F2E4D] flex items-center justify-between">
                       <div>
                         <span className="text-base font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                          {VelcoraPricingEngine.formatCurrency(prod.sellingPrice, currency)}
+                          {AvanyxPricingEngine.formatCurrency(prod.sellingPrice, currency)}
                         </span>
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-bold">In Stock</span>
                       </div>
@@ -441,7 +441,7 @@ export const OnlineStoreBeta: React.FC = () => {
               <div className="p-3.5 bg-slate-50 dark:bg-[#0B1220] rounded-2xl border border-slate-200 dark:border-[#1F2E4D] space-y-1">
                 <div className="flex justify-between font-bold text-slate-800 dark:text-[#F8FAFC]">
                   <span>Order Total ({cartItemCount} items):</span>
-                  <span className="text-[#2563EB] dark:text-[#06B6D4] font-extrabold">{VelcoraPricingEngine.formatCurrency(cartTotal, currency)}</span>
+                  <span className="text-[#2563EB] dark:text-[#06B6D4] font-extrabold">{AvanyxPricingEngine.formatCurrency(cartTotal, currency)}</span>
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-[#94A3B8] font-medium">Payment on Delivery / Direct Store Pickup</p>
               </div>

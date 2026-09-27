@@ -1,15 +1,15 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Search, Barcode, ShoppingCart, Trash2, Plus, Minus, CreditCard,
   Banknote, Wallet, Building2, User, PauseCircle, PlayCircle, Check,
   Printer, X, Tag, Sparkles, AlertCircle, ArrowRight, ShieldCheck,
   Layers, Package, Phone, Mail, Award, RotateCcw, QrCode, Smartphone,
-  Camera, CameraOff
+  Camera, CameraOff, Keyboard, Sliders, CheckCircle2, AlertTriangle
 } from 'lucide-react';
-import { Product, ProductVariant, PaymentBreakdown, CartItem } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
-import { VelcoraLoyaltyEngine } from '../utils/loyaltyEngine';
+import { Product, ProductVariant, PaymentBreakdown, CartItem, KeyboardShortcut } from '../types';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
+import { AvanyxLoyaltyEngine } from '../utils/loyaltyEngine';
 import { generateBarcodeSvg } from '../utils/barcodeGenerator';
 import { CustomerDigitalPassModal } from './CustomerDigitalPassModal';
 import { soundEffects } from '../utils/audioEffects';
@@ -41,9 +41,14 @@ export const PosBillingScreen: React.FC = () => {
     completeSale,
     activeBusiness,
     activeSubuser,
+    activeUser,
     currency,
     shortcuts,
-  } = useVelcora();
+    updateShortcut,
+    resetShortcuts,
+    addShortcut,
+    deleteShortcut,
+  } = useAvanyx();
   const { t, locale, setLocale } = useTranslation();
   const model = useBusinessModel();
 
@@ -78,6 +83,62 @@ export const PosBillingScreen: React.FC = () => {
   // Receipt Modal
   const [completedReceiptSale, setCompletedReceiptSale] = useState<ReturnType<typeof completeSale> | null>(null);
   const [showDigitalPassModal, setShowDigitalPassModal] = useState(false);
+
+  // Personalized Operator Keyboard Shortcuts Customizer Modal State
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [listeningShortcutId, setListeningShortcutId] = useState<string | null>(null);
+  const [shortcutFeedback, setShortcutFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Dynamic shortcut formatter helper
+  const getShortcutDisplay = (actionOrId: string, fallback = ''): string => {
+    const s = (shortcuts || []).find(sc => (sc.action || sc.id) === actionOrId);
+    if (!s) return fallback;
+    const parts: string[] = [];
+    if (s.ctrlKey) parts.push('Ctrl');
+    if (s.altKey) parts.push('Alt');
+    if (s.shiftKey) parts.push('Shift');
+    parts.push(s.key === ' ' ? 'Space' : s.key);
+    return parts.join(' + ');
+  };
+
+  // Keyboard capture for customizing hotkeys in POS
+  useEffect(() => {
+    if (!listeningShortcutId) return;
+
+    const handleKeyCapture = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const modifierKeys = ['control', 'alt', 'shift', 'meta'];
+      if (modifierKeys.includes(e.key.toLowerCase())) {
+        return;
+      }
+
+      if (!e.key) return;
+      const formattedKey = e.key.toUpperCase();
+
+      const target = (shortcuts || []).find(s => s.id === listeningShortcutId);
+      const res = updateShortcut(listeningShortcutId, {
+        key: formattedKey,
+        ctrlKey: e.ctrlKey,
+        altKey: e.altKey,
+        shiftKey: e.shiftKey,
+      });
+
+      if (res.success) {
+        setShortcutFeedback({
+          text: `HotKey for "${target?.label || 'Action'}" updated to ${e.ctrlKey ? 'Ctrl+' : ''}${e.altKey ? 'Alt+' : ''}${e.shiftKey ? 'Shift+' : ''}${formattedKey}!`,
+          type: 'success',
+        });
+        setListeningShortcutId(null);
+      } else {
+        setShortcutFeedback({ text: res.error || 'Failed to update shortcut.', type: 'error' });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyCapture, true);
+    return () => window.removeEventListener('keydown', handleKeyCapture, true);
+  }, [listeningShortcutId, updateShortcut, shortcuts]);
 
   // Real Barcode Scanner, Camera & Hardware HID Engine
   const [showScannerModal, setShowScannerModal] = useState(false);
@@ -246,6 +307,9 @@ export const PosBillingScreen: React.FC = () => {
   // Dynamic customizable keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Do not trigger actions if user is actively recording/customizing a hotkey
+      if (listeningShortcutId) return;
+
       const activeEl = document.activeElement;
       const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
       
@@ -293,11 +357,25 @@ export const PosBillingScreen: React.FC = () => {
           soundEffects.playSuccess();
           break;
         case 'voice_pilot':
-          window.dispatchEvent(new CustomEvent('velcora:toggle-voice-pilot'));
+          window.dispatchEvent(new CustomEvent('avanyx:toggle-voice-pilot'));
           break;
         case 'apply_discount':
           if (cart.length > 0) {
             setShowPaymentModal(true);
+          }
+          break;
+        case 'edit_shortcuts':
+        case 'shortcuts_help':
+          setShowShortcutsModal(true);
+          break;
+        case 'hold_cart':
+          if (cart.length > 0) {
+            holdCurrentCart();
+          }
+          break;
+        case 'resume_cart':
+          if (heldCarts.length > 0) {
+            setShowHeldModal(true);
           }
           break;
         default:
@@ -307,7 +385,7 @@ export const PosBillingScreen: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [shortcuts, cart, clearCart]);
+  }, [shortcuts, cart, clearCart, listeningShortcutId, heldCarts, holdCurrentCart]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -332,16 +410,16 @@ export const PosBillingScreen: React.FC = () => {
   }, [products, selectedCategory, searchQuery]);
 
   const evaluatedCart = useMemo(() => {
-    return VelcoraPricingEngine.evaluateCart(cart, 0, redeemPoints, loyaltyConfig);
+    return AvanyxPricingEngine.evaluateCart(cart, 0, redeemPoints, loyaltyConfig);
   }, [cart, redeemPoints, loyaltyConfig]);
 
   const maxLoyaltyRedeem = useMemo(() => {
     if (!selectedCustomer) return { maxPoints: 0, maxDiscountValue: 0 };
-    return VelcoraLoyaltyEngine.calculateMaxRedeemable(evaluatedCart.subtotal, selectedCustomer.loyaltyPoints, loyaltyConfig);
+    return AvanyxLoyaltyEngine.calculateMaxRedeemable(evaluatedCart.subtotal, selectedCustomer.loyaltyPoints, loyaltyConfig);
   }, [selectedCustomer, evaluatedCart.subtotal, loyaltyConfig]);
 
   const pointsEarnedPreview = useMemo(() => {
-    return VelcoraLoyaltyEngine.calculatePointsEarned(
+    return AvanyxLoyaltyEngine.calculatePointsEarned(
       evaluatedCart.grandTotal,
       cart,
       loyaltyConfig,
@@ -412,7 +490,7 @@ export const PosBillingScreen: React.FC = () => {
     if (paymentMethod === 'cash') {
       const tender = parseFloat(cashTendered) || 0;
       if (tender < evaluatedCart.grandTotal && evaluatedCart.grandTotal > 0) {
-        setPaymentError(`Cash tendered (${VelcoraPricingEngine.formatCurrency(tender, currency)}) is less than total payable (${VelcoraPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}).`);
+        setPaymentError(`Cash tendered (${AvanyxPricingEngine.formatCurrency(tender, currency)}) is less than total payable (${AvanyxPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}).`);
         return;
       }
       payments.push({
@@ -423,7 +501,7 @@ export const PosBillingScreen: React.FC = () => {
     } else if (paymentMethod === 'split') {
       const splitTotal = splitAmounts.cash + splitAmounts.card + splitAmounts.bank + splitAmounts.wallet + splitAmounts.credit;
       if (splitTotal < evaluatedCart.grandTotal && evaluatedCart.grandTotal > 0) {
-        setPaymentError(`Total split payment (${VelcoraPricingEngine.formatCurrency(splitTotal, currency)}) does not cover grand total (${VelcoraPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}).`);
+        setPaymentError(`Total split payment (${AvanyxPricingEngine.formatCurrency(splitTotal, currency)}) does not cover grand total (${AvanyxPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}).`);
         return;
       }
       if (splitAmounts.cash > 0) payments.push({ method: 'cash', amount: splitAmounts.cash, paidAt: now });
@@ -449,7 +527,7 @@ export const PosBillingScreen: React.FC = () => {
   const changeDue = Math.max(0, tenderNumber - evaluatedCart.grandTotal);
 
   return (
-    <div id="velcora-pos-billing-screen" className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col-reverse lg:grid lg:grid-cols-12 gap-4 2xl:gap-6">
+    <div id="avanyx-pos-billing-screen" className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto flex flex-col-reverse lg:grid lg:grid-cols-12 gap-4 2xl:gap-6">
       {/* LEFT 7-8 COLS: PRODUCT CATALOG */}
       <div className="lg:col-span-7 xl:col-span-8 2xl:col-span-8 flex flex-col gap-3.5">
         {/* Search Bar */}
@@ -461,7 +539,7 @@ export const PosBillingScreen: React.FC = () => {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder={model.hasBarcodes ? `Search ${model.itemLabelPluralLower} or scan barcode (F2)...` : `Search ${model.itemLabelPluralLower}...`}
+              placeholder={model.hasBarcodes ? `Search ${model.itemLabelPluralLower} or scan barcode (${getShortcutDisplay('focus_search', 'F2')})...` : `Search ${model.itemLabelPluralLower} (${getShortcutDisplay('focus_search', 'F2')})...`}
               className="w-full pl-10 pr-14 py-2 rounded-xl bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] text-xs sm:text-sm text-slate-900 dark:text-[#F8FAFC] placeholder-slate-400 dark:placeholder-[#94A3B8]/60 focus:border-primary focus:ring-0 focus:outline-hidden transition"
             />
             {searchQuery && (
@@ -473,7 +551,7 @@ export const PosBillingScreen: React.FC = () => {
               </button>
             )}
             <kbd className="hidden sm:inline absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-[#111C30] text-slate-500 dark:text-[#94A3B8] border border-slate-200 dark:border-[#1F2E4D] rounded-md shadow-2xs">
-              F2
+              {getShortcutDisplay('focus_search', 'F2')}
             </kbd>
           </div>
 
@@ -482,10 +560,29 @@ export const PosBillingScreen: React.FC = () => {
               setShowScannerModal(true);
               setCameraActive(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#152644] hover:bg-slate-200 dark:hover:bg-[#1E2E4A] text-slate-800 dark:text-[#F8FAFC] border border-slate-200 dark:border-[#1F2E4D] text-xs font-bold transition shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#152644] hover:bg-slate-200 dark:hover:bg-[#1E2E4A] text-slate-800 dark:text-[#F8FAFC] border border-slate-200 dark:border-[#1F2E4D] text-xs font-bold transition shadow-2xs cursor-pointer"
+            title={`Barcode Scanner (${getShortcutDisplay('barcode_scan', 'F9')})`}
           >
             <Barcode className="w-3.5 h-3.5 text-blue-600 dark:text-[#06B6D4]" />
-            <span>Scanner</span>
+            <span className="hidden sm:inline">Scanner</span>
+            <kbd className="hidden md:inline px-1 py-0.2 text-[9px] font-mono rounded bg-white/80 dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              {getShortcutDisplay('barcode_scan', 'F9')}
+            </kbd>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowShortcutsModal(true);
+              setListeningShortcutId(null);
+              setShortcutFeedback(null);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-900 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 text-xs font-bold transition shadow-2xs cursor-pointer"
+            title="Customize personal keyboard hotkeys for this operator"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span className="hidden sm:inline">Hotkeys</span>
+            <span className="sm:hidden">Keys</span>
           </button>
         </div>
 
@@ -584,7 +681,7 @@ export const PosBillingScreen: React.FC = () => {
                     <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-[#1F2E4D] flex items-center justify-between">
                       <div>
                         <span className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                          {VelcoraPricingEngine.formatCurrency(prod.sellingPrice, currency)}
+                          {AvanyxPricingEngine.formatCurrency(prod.sellingPrice, currency)}
                         </span>
                       </div>
                       <div className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition">
@@ -712,11 +809,11 @@ export const PosBillingScreen: React.FC = () => {
                       <div className="min-w-0">
                         <h5 className="font-bold text-slate-800 dark:text-[#F8FAFC] truncate">{item.name}</h5>
                         <div className="text-[10px] text-slate-400 dark:text-[#94A3B8]/80 font-mono">
-                          {VelcoraPricingEngine.formatCurrency(item.unitPrice, currency)} × {item.quantity}
+                          {AvanyxPricingEngine.formatCurrency(item.unitPrice, currency)} × {item.quantity}
                         </div>
                       </div>
                       <span className="font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                        {VelcoraPricingEngine.formatCurrency(lineNet, currency)}
+                        {AvanyxPricingEngine.formatCurrency(lineNet, currency)}
                       </span>
                     </div>
 
@@ -756,19 +853,19 @@ export const PosBillingScreen: React.FC = () => {
               <div className="flex justify-between">
                 <span>{t('subtotal')}</span>
                 <span className="font-bold text-slate-800 dark:text-[#F8FAFC]">
-                  {VelcoraPricingEngine.formatCurrency(evaluatedCart.subtotal, currency)}
+                  {AvanyxPricingEngine.formatCurrency(evaluatedCart.subtotal, currency)}
                 </span>
               </div>
               {evaluatedCart.totalDiscount > 0 && (
                 <div className="flex justify-between text-slate-900 dark:text-[#F8FAFC] font-bold">
                   <span>{t('discount')}</span>
-                  <span>-{VelcoraPricingEngine.formatCurrency(evaluatedCart.totalDiscount, currency)}</span>
+                  <span>-{AvanyxPricingEngine.formatCurrency(evaluatedCart.totalDiscount, currency)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC] pt-2 border-t border-slate-200 dark:border-[#1F2E4D]">
                 <span>Total Payable</span>
                 <span className="font-black text-base text-slate-900 dark:text-[#F8FAFC]">
-                  {VelcoraPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}
+                  {AvanyxPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}
                 </span>
               </div>
             </div>
@@ -782,9 +879,9 @@ export const PosBillingScreen: React.FC = () => {
                   : 'bg-slate-900 dark:bg-white hover:opacity-90 shadow-sm active:scale-98'
               }`}
             >
-              <span>Pay Now</span>
+              <span>Pay Now ({getShortcutDisplay('pay_checkout', 'F8')})</span>
               <span>•</span>
-              <span>{VelcoraPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}</span>
+              <span>{AvanyxPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -826,7 +923,7 @@ export const PosBillingScreen: React.FC = () => {
                     <div className="text-[10px] text-slate-400 dark:text-[#94A3B8]/60 font-mono mt-0.5">SKU: {variant.sku}</div>
                   </div>
                   <div className="text-right font-black text-sm text-slate-900 dark:text-[#F8FAFC]">
-                    {VelcoraPricingEngine.formatCurrency(variant.sellingPrice, currency)}
+                    {AvanyxPricingEngine.formatCurrency(variant.sellingPrice, currency)}
                   </div>
                 </button>
               ))}
@@ -906,7 +1003,7 @@ export const PosBillingScreen: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-[#94A3B8]">
                   Payable:{' '}
                   <span className="font-black text-slate-900 dark:text-[#F8FAFC]">
-                    {VelcoraPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}
+                    {AvanyxPricingEngine.formatCurrency(evaluatedCart.grandTotal, currency)}
                   </span>
                 </p>
               </div>
@@ -992,7 +1089,7 @@ export const PosBillingScreen: React.FC = () => {
                 {changeDue > 0 && (
                   <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#152644] border border-slate-200 dark:border-[#1F2E4D] text-slate-800 dark:text-[#94A3B8] text-xs font-bold flex justify-between items-center">
                     <span>Change Due:</span>
-                    <span className="font-mono text-sm">{VelcoraPricingEngine.formatCurrency(changeDue, currency)}</span>
+                    <span className="font-mono text-sm">{AvanyxPricingEngine.formatCurrency(changeDue, currency)}</span>
                   </div>
                 )}
               </div>
@@ -1085,7 +1182,7 @@ export const PosBillingScreen: React.FC = () => {
                         : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
                     }`}>
                       <span>{diff >= 0 ? 'Total Split Paid:' : 'Remaining Balance:'}</span>
-                      <span className="font-mono">{VelcoraPricingEngine.formatCurrency(diff >= 0 ? currentSplitTotal : Math.abs(diff), currency)}</span>
+                      <span className="font-mono">{AvanyxPricingEngine.formatCurrency(diff >= 0 ? currentSplitTotal : Math.abs(diff), currency)}</span>
                     </div>
                   );
                 })()}
@@ -1383,6 +1480,189 @@ export const PosBillingScreen: React.FC = () => {
                 className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#152644] text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 dark:hover:bg-[#1E2E4A] transition cursor-pointer"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PERSONALIZED OPERATOR KEYBOARD SHORTCUTS CUSTOMIZER MODAL */}
+      {showShortcutsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#111C30] rounded-3xl max-w-2xl w-full p-6 border border-slate-200 dark:border-[#1F2E4D] shadow-2xl space-y-4 text-slate-800 dark:text-[#F8FAFC] max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100 dark:border-[#1F2E4D]">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Keyboard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                    Personalized POS Hotkeys
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-[#94A3B8] flex items-center gap-1.5 mt-0.5">
+                    <span>Operator:</span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      {activeSubuser?.name || activeUser?.name || 'Active Cashier'}
+                    </span>
+                    <span className="px-2 py-0.2 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold uppercase tracking-wider">
+                      {(activeSubuser?.roleId || (activeUser as any)?.role || 'Cashier').replace('role-', '')}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetShortcuts();
+                    setShortcutFeedback({ text: 'Reset shortcuts to defaults for this operator profile.', type: 'success' });
+                    setListeningShortcutId(null);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#152644] dark:hover:bg-[#1E2E4A] text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  title="Restore default shortcut key bindings"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reset Defaults</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowShortcutsModal(false);
+                    setListeningShortcutId(null);
+                    setShortcutFeedback(null);
+                  }}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Notification / Feedback Banner */}
+            {shortcutFeedback && (
+              <div
+                className={`p-3 rounded-2xl border text-xs font-bold flex items-center gap-2.5 animate-fade-in ${
+                  shortcutFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
+                    : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800'
+                }`}
+              >
+                {shortcutFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                )}
+                <span className="flex-1">{shortcutFeedback.text}</span>
+                <button
+                  onClick={() => setShortcutFeedback(null)}
+                  className="text-[10px] uppercase font-bold tracking-wider opacity-80 hover:opacity-100"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Listening Indicator Banner */}
+            {listeningShortcutId && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </span>
+                  <div className="text-xs font-bold text-amber-900 dark:text-amber-300">
+                    Listening for keystroke... Press any key or key combination (e.g. F1, F8, Space, or Ctrl+P) on your physical keyboard now.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setListeningShortcutId(null)}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500 text-white font-bold text-[11px] hover:bg-amber-600 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Shortcut Rows List */}
+            <div className="space-y-2.5">
+              {(shortcuts || []).map(sh => {
+                const isListening = listeningShortcutId === sh.id;
+                const parts: string[] = [];
+                if (sh.ctrlKey) parts.push('Ctrl');
+                if (sh.altKey) parts.push('Alt');
+                if (sh.shiftKey) parts.push('Shift');
+                parts.push(sh.key === ' ' ? 'Space' : sh.key);
+                const comboStr = parts.join(' + ');
+
+                return (
+                  <div
+                    key={sh.id}
+                    className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
+                      isListening
+                        ? 'border-amber-500 bg-amber-500/10'
+                        : 'border-slate-200 dark:border-[#1F2E4D] bg-slate-50/60 dark:bg-[#0B1220]/60 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-2">
+                        {sh.label}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-[#94A3B8]">{sh.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="font-mono text-xs font-black px-3 py-1.5 rounded-xl bg-white dark:bg-[#152644] border border-slate-200 dark:border-[#1F2E4D] text-slate-900 dark:text-white shadow-2xs min-w-[70px] text-center">
+                        {comboStr}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setListeningShortcutId(isListening ? null : sh.id);
+                          setShortcutFeedback(null);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          isListening
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'bg-slate-200 dark:bg-[#1E2E4A] hover:bg-slate-300 dark:hover:bg-[#253A5E] text-slate-800 dark:text-white'
+                        }`}
+                      >
+                        {isListening ? 'Listening...' : 'Customise'}
+                      </button>
+
+                      {sh.id.startsWith('shortcut-') && (
+                        <button
+                          type="button"
+                          onClick={() => deleteShortcut(sh.id)}
+                          className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs transition cursor-pointer"
+                          title="Delete custom shortcut"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quick Helper Note & Back to POS */}
+            <div className="pt-2 border-t border-slate-100 dark:border-[#1F2E4D] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-[#94A3B8]">
+              <div className="flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-amber-500" />
+                <span>Keys save automatically to your personal profile. No restart required.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowShortcutsModal(false);
+                  setListeningShortcutId(null);
+                }}
+                className="w-full sm:w-auto px-5 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-bold text-xs hover:opacity-90 transition cursor-pointer"
+              >
+                Apply & Back to POS
               </button>
             </div>
           </div>

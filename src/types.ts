@@ -31,8 +31,7 @@ export type SystemModuleKey =
   | 'settings'
   | 'help'
   | 'online_store' | 'appointments' | 'manufacturing'
-  | 'ask_velcora'
-  | 'referral_hub'
+  | 'ask_avanyx'
   | 'super_admin';
 
 export interface PromotionCampaign {
@@ -147,6 +146,7 @@ export interface CatalogSchema {
   capabilities: CatalogCapabilities;
   workflows: string[];
   recommendedModules?: string[];
+  starterProducts?: { name: string; category: string; type: 'product' | 'service'; price: number; cost?: number; sku?: string }[];
   researchNotes?: string;
   safetyNotes?: string;
   confidence: number;
@@ -645,8 +645,6 @@ export type PermissionKey =
   | 'ai:access_brain'
   | 'store:manage'
   | 'employees:manage'
-  | 'referrals:view'
-  | 'referrals:manage'
   | 'settings:manage';
 
 export interface PermissionDefinition {
@@ -715,7 +713,7 @@ export interface AuditLogEntry {
   severity?: 'info' | 'warning' | 'security';
 }
 
-export interface VelcoraUserProfile {
+export interface AvanyxUserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
@@ -821,7 +819,7 @@ export interface SmartAlert {
 export interface AIModelDefinition {
   id: string;
   name: string;
-  provider: 'Velcora AI' | 'Velcora Neural' | 'Velcora Core' | 'Custom';
+  provider: 'Avanyx AI' | 'Avanyx Neural' | 'Avanyx Core' | 'Custom';
   category: 'Reasoning' | 'Fast & Direct' | 'Creative Writing' | 'Multimodal Vision' | 'Code & Math';
   latencyMs: number;
   costPer1kTokens: number;
@@ -871,74 +869,6 @@ export interface OnlineStoreOrder {
   notes?: string;
 }
 
-// ----------------------------------------------------
-// VELCORA REFERRAL, ATTRIBUTION & COMMISSION TYPES
-// ----------------------------------------------------
-
-export type ReferralPartnerStatus = 'NOT_ELIGIBLE' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REVOKED';
-
-export interface ReferralPartner {
-  partnerId: string;
-  id?: string;
-  userId: string;
-  userEmail: string;
-  userName: string;
-  status: ReferralPartnerStatus;
-  referralCode?: string;
-  payoutMethod?: 'bank_transfer' | 'stripe_connect' | 'paypal' | 'manual';
-  payoutDetails?: string;
-  applicationNotes?: string;
-  adminNotes?: string;
-  createdAt: ISODateString;
-  approvedAt?: ISODateString;
-  suspendedAt?: ISODateString;
-  revokedAt?: ISODateString;
-}
-
-export interface ReferralRecord {
-  referralId: string;
-  referralPartnerId: string;
-  referralCode: string; // VEL + 6 digits (e.g., VEL453821)
-  status: 'ACTIVE' | 'REVOKED' | 'INACTIVE';
-  createdAt: ISODateString;
-}
-
-export type AttributionSource = 'url_param' | 'checkout_input' | 'direct';
-export type AttributionStatus = 'ATTRIBUTED' | 'QUALIFIED' | 'EXPIRED' | 'DISQUALIFIED';
-
-export interface ReferralAttribution {
-  attributionId: string;
-  referralId: string;
-  referralCode: string;
-  referredUserId: string;
-  referredUserEmail?: string;
-  source: AttributionSource;
-  ipHash?: string;
-  status: AttributionStatus;
-  createdAt: ISODateString;
-  qualifiedAt?: ISODateString;
-}
-
-export type CommissionStatus = 'PENDING' | 'APPROVED' | 'AVAILABLE' | 'PAID' | 'REVERSED';
-
-export interface CommissionRecord {
-  commissionId: string;
-  referralId: string;
-  referralPartnerId: string;
-  attributionId: string;
-  subscriptionPlan: string;
-  paymentEventId?: string;
-  amount: number;
-  currency: string;
-  status: CommissionStatus;
-  createdAt: ISODateString;
-  approvedAt?: ISODateString;
-  availableAt?: ISODateString;
-  paidAt?: ISODateString;
-  reversedAt?: ISODateString;
-  notes?: string;
-}
-
 export interface PaymentEvent {
   eventId: string;
   provider: 'stripe' | 'paddle' | 'razorpay' | 'manual' | 'simulator';
@@ -949,86 +879,16 @@ export interface PaymentEvent {
   eventType: 'payment_intent.succeeded' | 'charge.refunded' | 'charge.dispute.created' | 'subscription.created';
   subscriptionPlan: string;
   userId: string;
-  referralCode?: string;
   receivedAt: ISODateString;
   processedAt: ISODateString;
   signatureVerified: boolean;
 }
 
-export interface ReferralConfig {
-  programEnabled: boolean;
-  commissionAmount: number; // e.g. 3 ($3 per qualifying subscription)
-  defaultCommissionAmount?: number;
-  currency: string;
-  eligiblePlans: string[];
-  verificationPeriodDays: number; // e.g. 14 or 30 days
-  verificationHoldDays?: number;
-  minPayoutAmount: number; // e.g. $20
-  minimumPayoutAmount?: number;
-  selfReferralProtection: boolean;
-  preventSelfReferrals?: boolean;
-  allowCustomerDiscount: boolean;
-  payoutIntegrationConfigured: boolean;
-}
-
-export interface ReferralActivityItem {
-  id: string;
-  description: string;
-  reward: number;
-  currency: string;
-  status: CommissionStatus;
-  date: ISODateString;
-  eventDate?: string;
-  referenceHash?: string;
-  planName?: string;
-  commissionAmount?: number;
-  holdReleaseDate?: string;
-}
-
-export interface ReferralPartnerStats {
-  partnerId: string;
-  referralCode: string;
-  referralLink: string;
-  status: ReferralPartnerStatus;
-  referralRateAmount?: number;
-  successfulReferrals: number;
-  pendingRewards: number;
-  availableRewards: number;
-  totalEarned: number;
-  totalPaid: number;
-  currency: string;
-  metrics?: {
-    totalAttributed: number;
-    totalQualified: number;
-    pendingCommissions: number;
-    availableCommissions: number;
-    totalPaidCommissions: number;
-    conversionRate: number;
-    totalReferrals?: number;
-    totalCommissionEarned?: number;
-    pendingCommissionAmount?: number;
-    availableCommissionAmount?: number;
-  };
-  recentActivity: ReferralActivityItem[];
-}
-
-export interface ReferralAuditLog {
-  logId: string;
-  actorId: string;
-  actorRole: string;
-  action: string;
-  targetType: string;
-  targetId: string;
-  details: string;
-  timestamp: ISODateString;
-  ipAddress?: string;
-}
-
 // ----------------------------------------------------
-// VELCORA MASTER PAYMENT, SUBSCRIPTION & TOKEN TYPES
+// AVANYX MASTER PAYMENT, SUBSCRIPTION & TOKEN TYPES
 // ----------------------------------------------------
 
-export type VelcoraSubscriptionTier = 'free' | 'pro' | 'pro_max' | 'starter' | 'professional' | 'enterprise' | string;
+export type AvanyxSubscriptionTier = 'free' | 'pro' | 'pro_max' | 'starter' | 'professional' | 'enterprise' | string;
 
 export interface PlanFeatureAccess {
   beta_store: boolean;
@@ -1063,7 +923,7 @@ export interface PlanResourceLimits {
 
 export interface SubscriptionPlanConfig {
   id: string; // e.g. 'tier_starter', 'tier_professional', 'tier_enterprise'
-  tier: VelcoraSubscriptionTier;
+  tier: AvanyxSubscriptionTier;
   name: string;
   tagline: string;
   monthlyPriceUSD: number;
@@ -1078,7 +938,6 @@ export interface SubscriptionPlanConfig {
   resourceLimits?: Partial<PlanResourceLimits>;
   isPopular?: boolean;
   isActive: boolean;
-  commissionEligible: boolean; // Always TRUE for subscriptions
 }
 
 export interface TokenPackageConfig {
@@ -1091,7 +950,6 @@ export interface TokenPackageConfig {
   badge?: string;
   isPopular?: boolean;
   isActive: boolean;
-  commissionEligible: false; // STRICT RULE: Always FALSE (ZERO commission)
   internalAllowanceUSD?: number; // Server-side internal API usage allowance (never shown to customer)
 }
 
@@ -1134,9 +992,6 @@ export interface MasterPaymentTransaction {
   paymentMethodDetails?: string;
   signatureVerified: boolean;
   idempotencyKey: string;
-  referralCode?: string;
-  commissionEligible: boolean; // TRUE for SUBSCRIPTION, FALSE for TOKEN_PURCHASE
-  commissionRecordId?: string;
   createdAt: ISODateString;
   completedAt?: ISODateString;
   paidAt?: ISODateString;
@@ -1153,7 +1008,7 @@ export interface SubscriptionRecord {
   businessId?: string;
   planId: string;
   planName: string;
-  tier: VelcoraSubscriptionTier;
+  tier: AvanyxSubscriptionTier;
   billingInterval: 'monthly' | 'annual';
   amount: number;
   currency: string;
@@ -1171,7 +1026,6 @@ export interface SubscriptionRecord {
   paymentProvider: PaymentGatewayProvider;
   externalSubscriptionId?: string;
   lastPaymentTransactionId?: string;
-  referralCodeUsed?: string;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }
@@ -1232,7 +1086,6 @@ export interface SuperAdminConfig {
   maintenanceMode: boolean;
   allowTokenPurchases: boolean;
   allowSubscriptions: boolean;
-  allowReferralPayouts: boolean;
   defaultTrialDays: number;
   defaultCommissionRatePercent: number; // e.g. 20% on subscriptions
   defaultFixedCommissionUSD: number; // e.g. $10 on Starter, $25 on Pro, $50 on Enterprise
@@ -1259,7 +1112,7 @@ export interface SuperAdminAuditLog {
   adminId: string;
   adminEmail: string;
   action: string;
-  targetCategory: 'USER' | 'SUBSCRIPTION' | 'TOKEN' | 'PAYMENT' | 'REFERRAL' | 'PAYOUT' | 'CONFIG' | 'SECURITY';
+  targetCategory: 'USER' | 'SUBSCRIPTION' | 'TOKEN' | 'PAYMENT' | 'PAYOUT' | 'CONFIG' | 'SECURITY';
   targetId: string;
   details: string;
   metadata?: Record<string, any>;

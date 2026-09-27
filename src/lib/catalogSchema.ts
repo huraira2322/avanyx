@@ -234,7 +234,7 @@ export function deriveOnboardingFromSchema(schema: CatalogSchema): OnboardingDer
     'financial_reports',
     'dashboard',
     'settings',
-    'ask_velcora',
+    'ask_avanyx',
   ];
   if (caps.barcodes) modules.push('barcodes');
   if (caps.stock) modules.push('inventory');
@@ -385,7 +385,7 @@ export interface PresetCatalogBlueprint {
 
 /** Every business gets these regardless of industry. */
 const CORE_ONBOARDING_MODULES: SystemModuleKey[] = [
-  'pos', 'products', 'business_brain', 'financial_reports', 'settings', 'ask_velcora',
+  'pos', 'products', 'business_brain', 'financial_reports', 'settings', 'ask_avanyx',
 ];
 
 export const PRESET_CATALOG_BLUEPRINTS: Record<string, PresetCatalogBlueprint> = {

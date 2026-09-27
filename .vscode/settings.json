@@ -1,5 +1,5 @@
 {
-  // ── Velcora workspace: interconnects Cline, ESLint, Prettier, Error Lens,
+  // ── Avanyx workspace: interconnects Cline, ESLint, Prettier, Error Lens,
   //    Tailwind CSS IntelliSense, GitLens, Mermaid Chart, Thunder Client. ──
 
   // ESLint (flat config, lint while you type so Error Lens can surface it)

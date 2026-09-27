@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
-import { VelcoraWordmark } from './VelcoraWordmark';
+import { useAvanyx } from '../context/AvanyxContext';
+import { AvanyxWordmark } from './AvanyxWordmark';
 import { UserAvatarRing } from './UserAvatarRing';
 import { LivingLine } from './LivingLine';
 import {
@@ -9,8 +9,8 @@ import {
   Cpu, X, LogOut, Share2, Search, Radio, CheckCircle2, Store, Sun, Moon
 } from 'lucide-react';
 import { LocaleCode } from '../types';
-import { VelcoraVoiceHudModal } from './VelcoraVoiceHudModal';
-import { VelcoraNotificationsEngine } from '../utils/notificationsEngine';
+import { AvanyxVoiceHudModal } from './AvanyxVoiceHudModal';
+import { AvanyxNotificationsEngine } from '../utils/notificationsEngine';
 
 interface HeaderProps {
   onOpenAuth: () => void;
@@ -59,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
     theme,
     toggleTheme,
     shortcuts,
-  } = useVelcora();
+  } = useAvanyx();
 
   const [showBizMenu, setShowBizMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   // Dynamically compute real live system notifications
   const liveNotifications = useMemo(() => {
-    return VelcoraNotificationsEngine.generateRealNotifications({
+    return AvanyxNotificationsEngine.generateRealNotifications({
       products,
       sales,
       expenses,
@@ -109,10 +109,10 @@ export const Header: React.FC<HeaderProps> = ({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('velcora:toggle-voice-pilot', handleCustomToggle);
+    window.addEventListener('avanyx:toggle-voice-pilot', handleCustomToggle);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('velcora:toggle-voice-pilot', handleCustomToggle);
+      window.removeEventListener('avanyx:toggle-voice-pilot', handleCustomToggle);
     };
   }, [shortcuts]);
 
@@ -129,10 +129,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
-      id="velcora-main-header"
+      id="avanyx-main-header"
       className="h-14 sm:h-16 flex items-center justify-between px-2 xs:px-3 sm:px-6 border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-[#0B101D]/95 text-slate-900 dark:text-[#F8FAFC] shrink-0 z-30 select-none transition-colors duration-200 shadow-2xs backdrop-blur-md"
     >
-      {/* Left: Sidebar Toggle + Velcora Logo & Workspace Switcher */}
+      {/* Left: Sidebar Toggle + Avanyx Logo & Workspace Switcher */}
       <div className="flex items-center gap-1.5 xs:gap-2 sm:gap-3 shrink-0 min-w-0">
         {onToggleSidebar && (
           <button
@@ -154,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <div className="flex flex-col items-start select-none">
             <span className="font-black text-slate-900 dark:text-white tracking-tight text-base sm:text-lg">
-              velcora
+              Avanyx
             </span>
             <div className="hidden sm:block mt-0.5 -ml-0.5">
               <LivingLine mode="ambient" width={80} height={8} />
@@ -200,18 +200,6 @@ export const Header: React.FC<HeaderProps> = ({
                     {biz.id === activeBusiness.id && <div className="w-2 h-2 rounded-full bg-white" />}
                   </button>
                 ))}
-              </div>
-              <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 space-y-1">
-                <button
-                  onClick={() => {
-                    setShowBizMenu(false);
-                    setIsOnboardingOpen(true);
-                  }}
-                  className="w-full text-center py-2 px-3 rounded-2xl text-xs font-bold text-primary hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center gap-1.5 transition"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Create / Customize Store</span>
-                </button>
               </div>
             </div>
           )}
@@ -431,7 +419,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <div
                     key={notif.id}
                     onClick={() => {
-                      VelcoraNotificationsEngine.markAsRead(notif.id);
+                      AvanyxNotificationsEngine.markAsRead(notif.id);
                       setShowAlertsMenu(false);
                       if (notif.actionModule) {
                         setCurrentModule(notif.actionModule);
@@ -483,9 +471,9 @@ export const Header: React.FC<HeaderProps> = ({
             <UserAvatarRing
               photoUrl={authUser?.photoURL || userProfile?.photoURL}
               displayName={authUser?.displayName || userProfile?.displayName || activeUser?.name || 'Operator'}
-              email={authUser?.email || userProfile?.email || 'operator@velcora.com'}
+              email={authUser?.email || userProfile?.email || 'operator@avanyx.ai'}
               isGoogle={Boolean(authUser?.providerData?.some(p => p.providerId === 'google.com'))}
-              tier={userProfile?.subscriptionTier || activeBusiness?.subscriptionTier || 'plus'}
+              tier={userProfile?.subscriptionTier || activeSubscription?.tier || activeBusiness?.subscriptionTier || 'free'}
               size={30}
             />
             <div className="hidden md:block text-left">
@@ -512,28 +500,17 @@ export const Header: React.FC<HeaderProps> = ({
                   {authUser?.displayName || userProfile?.displayName || activeUser?.name || 'Operator'} ({activeUser?.roleName || 'Store Owner'})
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  {authUser?.email || userProfile?.email || 'operator@velcora.com'}
+                  {authUser?.email || userProfile?.email || 'operator@avanyx.ai'}
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[10px]">
                   <span className="text-slate-400 font-medium">Subscription:</span>
                   <span className="font-bold text-indigo-600 dark:text-indigo-400 uppercase">
-                    {userProfile?.subscriptionTier || activeBusiness.subscriptionTier || 'PLUS'}
+                    {userProfile?.subscriptionTier || activeSubscription?.tier || activeBusiness.subscriptionTier || 'FREE'}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <button
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setIsOnboardingOpen(true);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-2xl text-xs text-primary hover:bg-slate-100 dark:hover:bg-slate-800 font-bold flex items-center gap-2 transition"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
-                  <span>Customize POS / Setup Wizard</span>
-                </button>
-
                 <button
                   onClick={() => {
                     setShowUserMenu(false);
@@ -554,17 +531,6 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Settings className="w-3.5 h-3.5 text-primary" />
                   <span>Store Settings</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setCurrentModule('referral_hub');
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-2xl text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 font-bold flex items-center gap-2 transition"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>Referral & Partner Hub</span>
                 </button>
 
                 <button
@@ -595,7 +561,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Voice Pilot HUD Modal */}
-      <VelcoraVoiceHudModal
+      <AvanyxVoiceHudModal
         isOpen={showVoiceModal}
         onClose={() => setShowVoiceModal(false)}
       />

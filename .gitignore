@@ -24,7 +24,7 @@ service-account*.json
 !firebase-blueprint.json
 data/.admin_jwt_secret
 data/admin_credentials.json
-data/
+/data/
 .vercel/
 deploy-out.log
 
@@ -53,4 +53,3 @@ Thumbs.db
 
 
 .vercel
-.env*

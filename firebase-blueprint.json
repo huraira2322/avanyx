@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "User Profile",
-      "description": "Represents an authenticated user profile in Velcora.",
+      "description": "Represents an authenticated user profile in Avanyx.",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
@@ -21,7 +21,7 @@
     },
     "BusinessProfile": {
       "title": "Business Profile",
-      "description": "Represents a business workspace in Velcora.",
+      "description": "Represents a business workspace in Avanyx.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },

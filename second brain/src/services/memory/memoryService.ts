@@ -217,7 +217,7 @@ export class MemoryService {
       authority: payload.authority || 'USER_PROVIDED',
       confidence: typeof payload.confidence === 'number' ? payload.confidence : 0.95,
       status: 'active',
-      source: payload.source || 'Velcora System',
+      source: payload.source || 'Avanyx System',
       provenance: payload.provenance || 'User interaction',
       expiresAt,
       createdAt: now,
@@ -438,6 +438,56 @@ export class MemoryService {
 
   public getAllForTenant(tenantId: string): MemoryItem[] {
     return Array.from(this.cache.values()).filter(item => item.tenantId === tenantId);
+  }
+
+  // Retrieve persistent foundational business, operational, and user profile memories that cross sessions
+  public getCoreProfileMemories(tenantId: string, userId?: string | null): MemoryItem[] {
+    if (!tenantId) return [];
+    const coreTopicKeys = new Set([
+      'business_identity',
+      'catalog_profile',
+      'operational_capacity',
+      'business_policy',
+      'user_project',
+      'user_goal',
+      'user_preference',
+      'system_decision',
+      'store_knowledge',
+      'explicit_note',
+      'visual_document_memory',
+    ]);
+
+    const results: MemoryItem[] = [];
+    for (const item of this.cache.values()) {
+      if (item.tenantId !== tenantId) continue;
+      if (item.tier === 'user' && item.userId && userId && item.userId !== userId) continue;
+      if (item.status === 'stale' || item.status === 'archived') continue;
+      if (item.expiresAt && new Date(item.expiresAt).getTime() < Date.now()) continue;
+
+      const topicKey = item.metadata?.topicKey || '';
+      if (
+        coreTopicKeys.has(topicKey) ||
+        item.tags.some(t =>
+          [
+            'identity',
+            'business_identity',
+            'store_type',
+            'catalog_profile',
+            'operational_capacity',
+            'staff',
+            'business_policy',
+            'user_preference',
+            'user_context',
+            'goal',
+            'system_decision',
+          ].includes(t)
+        )
+      ) {
+        results.push(item);
+      }
+    }
+    // Return newest / highest confidence core memories first
+    return results.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 10);
   }
 
   public count(tenantId?: string): number {

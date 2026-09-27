@@ -1,5 +1,5 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/components/AskVelcoraChat.tsx', 'utf8');
+let content = fs.readFileSync('src/components/AskAvanyxChat.tsx', 'utf8');
 
 // fix chatContainerRef
 content = content.replace('const [searchQuery, setSearchQuery] = useState(\'\');', 'const [searchQuery, setSearchQuery] = useState(\'\');\n  const chatContainerRef = useRef<HTMLDivElement>(null);');
@@ -12,4 +12,4 @@ content = content.replace('attachedFile.type.startsWith(\'image/\')', 'attachedF
 content = content.replace('URL.createObjectURL(attachedFile)', 'attachedFile.base64');
 content = content.replace('handleSendMessage(e as any);', 'handleSendMessage();');
 
-fs.writeFileSync('src/components/AskVelcoraChat.tsx', content);
+fs.writeFileSync('src/components/AskAvanyxChat.tsx', content);

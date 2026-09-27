@@ -1,6 +1,6 @@
 import { Product, SaleTransaction, Expense, CustomerCredit, PurchaseOrder, SystemModuleKey } from '../types';
-import { VelcoraPricingEngine } from './pricingEngine';
-import { VelcoraBusinessBrainEngine } from './brainEngine';
+import { AvanyxPricingEngine } from './pricingEngine';
+import { AvanyxBusinessBrainEngine } from './brainEngine';
 
 export interface SystemNotification {
   id: string;
@@ -28,9 +28,9 @@ function formatRelativeTime(dateStrOrTs: string | number): string {
   return `${Math.floor(diffSec / 86400)}d ago`;
 }
 
-export class VelcoraNotificationsEngine {
-  private static READ_STORAGE_KEY = 'velcora_read_notifications_ids';
-  private static CLEARED_TS_KEY = 'velcora_cleared_notifications_ts';
+export class AvanyxNotificationsEngine {
+  private static READ_STORAGE_KEY = 'avanyx_read_notifications_ids';
+  private static CLEARED_TS_KEY = 'avanyx_cleared_notifications_ts';
 
   public static getReadIds(): Set<string> {
     try {
@@ -78,7 +78,7 @@ export class VelcoraNotificationsEngine {
     expenses: Expense[];
     customerCredits?: CustomerCredit[];
     purchaseOrders?: PurchaseOrder[];
-    brainMetrics?: ReturnType<typeof VelcoraBusinessBrainEngine.computeDiagnostics>['metrics'];
+    brainMetrics?: ReturnType<typeof AvanyxBusinessBrainEngine.computeDiagnostics>['metrics'];
     currency?: string;
   }): SystemNotification[] {
     const {
@@ -136,7 +136,7 @@ export class VelcoraNotificationsEngine {
         id,
         category: 'sale',
         title: isHighValue ? `High-Value Order: ${s.invoiceNumber}` : `Sale Completed: ${s.invoiceNumber}`,
-        message: `${s.customerName || 'Walk-in Customer'} completed an order of ${itemCount} items totaling ${VelcoraPricingEngine.formatCurrency(s.grandTotal, currency)} (${tenderMethods}).`,
+        message: `${s.customerName || 'Walk-in Customer'} completed an order of ${itemCount} items totaling ${AvanyxPricingEngine.formatCurrency(s.grandTotal, currency)} (${tenderMethods}).`,
         time: formatRelativeTime(saleTs),
         timestamp: saleTs,
         isRead: readIds.has(id),
@@ -155,7 +155,7 @@ export class VelcoraNotificationsEngine {
           id,
           category: 'sale',
           title: `Return / Refund Processed`,
-          message: `Refund of ${VelcoraPricingEngine.formatCurrency(refundAmt, currency)} processed on Invoice #${s.invoiceNumber}.`,
+          message: `Refund of ${AvanyxPricingEngine.formatCurrency(refundAmt, currency)} processed on Invoice #${s.invoiceNumber}.`,
           time: formatRelativeTime(refTs),
           timestamp: refTs,
           isRead: readIds.has(id),
@@ -173,7 +173,7 @@ export class VelcoraNotificationsEngine {
           id,
           category: 'security',
           title: `Credit Receivable Due: ${cc.customerName}`,
-          message: `Outstanding customer balance of ${VelcoraPricingEngine.formatCurrency(cc.remainingBalance, currency)} due on ${cc.dueDate || 'due terms'}.`,
+          message: `Outstanding customer balance of ${AvanyxPricingEngine.formatCurrency(cc.remainingBalance, currency)} due on ${cc.dueDate || 'due terms'}.`,
           time: cc.dueDate ? `Due ${cc.dueDate}` : 'Pending Due',
           timestamp: Date.now() - 7200000,
           isRead: readIds.has(id),
@@ -191,7 +191,7 @@ export class VelcoraNotificationsEngine {
         id,
         category: 'security',
         title: `Operating Expense: ${e.category}`,
-        message: `${e.title || e.category} expense of ${VelcoraPricingEngine.formatCurrency(e.amount, currency)} recorded via ${e.paymentMethod || 'Cash'}.`,
+        message: `${e.title || e.category} expense of ${AvanyxPricingEngine.formatCurrency(e.amount, currency)} recorded via ${e.paymentMethod || 'Cash'}.`,
         time: formatRelativeTime(expTs),
         timestamp: expTs,
         isRead: readIds.has(id),
@@ -208,7 +208,7 @@ export class VelcoraNotificationsEngine {
         id,
         category: 'stock',
         title: po.status === 'received' ? `PO Delivered: ${po.poNumber}` : `Purchase Order: ${po.poNumber}`,
-        message: `PO #${po.poNumber} for ${po.supplierName} (${po.items?.length || 1} items, total ${VelcoraPricingEngine.formatCurrency(po.totalAmount, currency)}) status is ${po.status}.`,
+        message: `PO #${po.poNumber} for ${po.supplierName} (${po.items?.length || 1} items, total ${AvanyxPricingEngine.formatCurrency(po.totalAmount, currency)}) status is ${po.status}.`,
         time: formatRelativeTime(poTs),
         timestamp: poTs,
         isRead: readIds.has(id),
@@ -224,8 +224,8 @@ export class VelcoraNotificationsEngine {
         notifs.push({
           id,
           category: 'ai',
-          title: 'Velcora AI: Dead Stock Alert',
-          message: `Identified ${VelcoraPricingEngine.formatCurrency(brainMetrics.deadStockValuation, currency)} in non-moving inventory. Consider launching a clearance bundle or discount.`,
+          title: 'Avanyx AI: Dead Stock Alert',
+          message: `Identified ${AvanyxPricingEngine.formatCurrency(brainMetrics.deadStockValuation, currency)} in non-moving inventory. Consider launching a clearance bundle or discount.`,
           time: 'Live Diagnostic',
           timestamp: Date.now() - 3600000,
           isRead: readIds.has(id),
@@ -239,7 +239,7 @@ export class VelcoraNotificationsEngine {
         notifs.push({
           id,
           category: 'ai',
-          title: 'Velcora AI: Margin Warning',
+          title: 'Avanyx AI: Margin Warning',
           message: `Current profit margin is ${brainMetrics.profitMargin.toFixed(1)}%. Review high operating expenses and supplier purchase costs to protect gross margin.`,
           time: 'Live Diagnostic',
           timestamp: Date.now() - 1800000,
@@ -252,8 +252,8 @@ export class VelcoraNotificationsEngine {
         notifs.push({
           id,
           category: 'ai',
-          title: 'Velcora AI: Revenue Milestone',
-          message: `Realized gross revenue stands at ${VelcoraPricingEngine.formatCurrency(brainMetrics.totalRevenue, currency)} across ${brainMetrics.totalTransactions} transactions with a ${brainMetrics.profitMargin.toFixed(1)}% profit margin.`,
+          title: 'Avanyx AI: Revenue Milestone',
+          message: `Realized gross revenue stands at ${AvanyxPricingEngine.formatCurrency(brainMetrics.totalRevenue, currency)} across ${brainMetrics.totalTransactions} transactions with a ${brainMetrics.profitMargin.toFixed(1)}% profit margin.`,
           time: 'Live Diagnostic',
           timestamp: Date.now() - 900000,
           isRead: readIds.has(id),

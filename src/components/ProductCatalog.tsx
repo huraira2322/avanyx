@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Plus, Search, Trash2, Edit2, AlertTriangle, Tag,
   Globe, DollarSign, Package, X, Check, Barcode as BarcodeIcon, Upload, Loader2, AlertCircle, Sparkles
@@ -7,7 +7,7 @@ import {
 import { Product, ProductVariant } from '../types';
 import { DynamicCatalogFields } from './DynamicCatalogFields';
 import { getActiveCatalogSchema, isCoreFieldVisible, coreLabel } from '../lib/catalogSchema';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 import { generateBarcodeSvg } from '../utils/barcodeGenerator';
 import { processAndUploadProductImage, validateImageFile } from '../utils/imageOptimizer';
 import { resolveActivePlan, checkResourceLimit } from '../utils/planLimitsEngine';
@@ -112,7 +112,7 @@ export const ProductCatalog: React.FC = () => {
     activeSubscription,
     subscriptionPlans,
     openCheckoutModal,
-  } = useVelcora();
+  } = useAvanyx();
 
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('ALL');
@@ -513,7 +513,7 @@ export const ProductCatalog: React.FC = () => {
   };
 
   return (
-    <div id="velcora-product-catalog" className="space-y-4">
+    <div id="avanyx-product-catalog" className="space-y-4">
       {permissionError && (
         <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 p-4 rounded-2xl flex items-center justify-between gap-3 text-rose-800 dark:text-rose-200 text-xs font-semibold shadow-xs">
           <div className="flex items-center gap-2.5">
@@ -662,10 +662,10 @@ export const ProductCatalog: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-bold text-slate-500 dark:text-[#94A3B8]">
-                    {VelcoraPricingEngine.formatCurrency(p.costPrice, currency)}
+                    {AvanyxPricingEngine.formatCurrency(p.costPrice, currency)}
                   </td>
                   <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-[#F8FAFC] text-xs sm:text-sm">
-                    {VelcoraPricingEngine.formatCurrency(p.sellingPrice, currency)}
+                    {AvanyxPricingEngine.formatCurrency(p.sellingPrice, currency)}
                   </td>
                   <td className="py-3.5 px-4">
                     <span
@@ -922,7 +922,7 @@ export const ProductCatalog: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-primary animate-pulse" />
                           <span className="font-extrabold text-xs uppercase tracking-wider text-slate-700 dark:text-[#94A3B8]">
-                            Velcora Brain • {archetype.toUpperCase()} Schema
+                            Avanyx Brain • {archetype.toUpperCase()} Schema
                           </span>
                         </div>
                         <span className="text-[9px] font-bold px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full">

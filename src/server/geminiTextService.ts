@@ -1,15 +1,30 @@
 /**
- * Velcora Gemini Text Service
+ * Avanyx Gemini Text Service
  * Handles text generation using Google Gemini as the backup provider.
  * Separate from the GoogleGenAI SDK used for image/video generation.
  */
 import { GoogleGenAI } from '@google/genai';
 
-export type GeminiModelId = 'gemini-flash-lite-latest' | 'gemini-3.5-flash';
+export type GeminiModelId =
+  | 'gemini-3.5-flash'
+  | 'gemini-3.1-pro-preview'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.0-flash'
+  | 'gemini-1.5-flash'
+  | 'gemini-1.5-pro'
+  | 'gemini-flash-lite-latest'
+  | string;
+
+export interface GeminiImagePart {
+  mimeType: string;
+  data: string;
+  name?: string;
+}
 
 export interface GeminiMessage {
   role: 'user' | 'assistant';
   content: string;
+  images?: GeminiImagePart[];
 }
 
 export interface GeminiResult {
@@ -53,10 +68,23 @@ export function isGeminiTextConfigured(): boolean {
 
 // ─── Model Config ────────────────────────────────────────────────────────────
 
-const GEMINI_TEXT_MODELS: Record<GeminiModelId, { label: string; supportsThinking: boolean }> = {
-  'gemini-flash-lite-latest': { label: 'Gemini Flash-Lite (latest)', supportsThinking: false },
+export const GEMINI_TEXT_MODELS: Record<string, { label: string; supportsThinking: boolean }> = {
   'gemini-3.5-flash': { label: 'Gemini 3.5 Flash', supportsThinking: true },
+  'gemini-3.1-pro-preview': { label: 'Gemini 3.1 Pro (Deep Vision & Reasoning)', supportsThinking: true },
+  'gemini-2.5-flash': { label: 'Gemini 2.5 Flash (Multimodal Vision)', supportsThinking: true },
+  'gemini-2.0-flash': { label: 'Gemini 2.0 Flash (Fast Multimodal)', supportsThinking: true },
+  'gemini-1.5-flash': { label: 'Gemini 1.5 Flash (Multimodal)', supportsThinking: false },
+  'gemini-1.5-pro': { label: 'Gemini 1.5 Pro (Multimodal)', supportsThinking: false },
+  'gemini-flash-lite-latest': { label: 'Gemini Flash-Lite (latest)', supportsThinking: false },
 };
+
+/** Preferred model cascade for multimodal vision */
+export const VISION_MODEL_FALLBACKS: GeminiModelId[] = [
+  'gemini-3.5-flash',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-3.1-pro-preview',
+];
 
 // ─── Client ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +98,20 @@ function getGeminiTextClient(): GoogleGenAI | null {
   return geminiTextClient;
 }
 
+// ─── Helper: Normalize MIME Type ─────────────────────────────────────────────
+
+function normalizeMimeType(mime: string): string {
+  const clean = (mime || '').toLowerCase().trim();
+  if (clean.includes('png')) return 'image/png';
+  if (clean.includes('jpeg') || clean.includes('jpg')) return 'image/jpeg';
+  if (clean.includes('webp')) return 'image/webp';
+  if (clean.includes('gif')) return 'image/gif';
+  if (clean.includes('heic')) return 'image/heic';
+  if (clean.includes('heif')) return 'image/heif';
+  if (clean.includes('pdf')) return 'application/pdf';
+  return clean || 'image/jpeg';
+}
+
 // ─── API Call ────────────────────────────────────────────────────────────────
 
 async function callGeminiText(
@@ -80,27 +122,59 @@ async function callGeminiText(
   const client = getGeminiTextClient();
   if (!client) throw new GeminiError('GEMINI_API_KEY is not configured.', 401, { isRetryable: false });
 
-  // Convert messages to Gemini contents format
-  const contents = messages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
+  // Map requested model to a verified GenAI model name if legacy or alias
+  let targetModel = modelId;
+  if (targetModel === 'gemini-3.5-flash') {
+    targetModel = 'gemini-2.5-flash';
+  }
+
+  // Convert messages to Gemini contents format with real multimodal image support
+  const contents = messages.map((m) => {
+    const role = m.role === 'assistant' ? 'model' : 'user';
+    const parts: any[] = [];
+    if (m.images && Array.isArray(m.images) && m.images.length > 0) {
+      m.images.forEach((img) => {
+        if (img && img.data) {
+          const cleanData = img.data.replace(/^data:.*?;base64,/, '').trim();
+          const mimeType = normalizeMimeType(img.mimeType);
+          if (cleanData) {
+            parts.push({
+              inlineData: {
+                mimeType,
+                data: cleanData,
+              },
+            });
+          }
+        }
+      });
+    }
+    if (m.content) {
+      parts.push({ text: m.content });
+    } else if (parts.length > 0) {
+      // If user provided image without text, give standard detailed analysis directive
+      parts.push({ text: 'Analyze the attached image(s) in detail and answer any user questions or extract all key objects, text, receipts, products, or errors.' });
+    } else {
+      parts.push({ text: '' });
+    }
+    return { role, parts };
+  });
 
   const controller = new AbortController();
   const timeoutMs = opts?.timeoutMs || 60000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Hard timeout: the @google/genai SDK does not reliably honour AbortSignal,
-    // so race the call against a timer. Without this the invocation hangs until
-    // the serverless platform kills it (504).
     const response: any = await Promise.race([
       client.models.generateContent({
-        model: modelId,
+        model: targetModel,
         contents,
-        systemInstruction: opts?.systemInstruction,
-        signal: controller.signal,
-      } as any),
+        config: {
+          systemInstruction: opts?.systemInstruction,
+          temperature: opts?.temperature,
+          maxOutputTokens: opts?.maxTokens,
+          abortSignal: controller.signal,
+        },
+      }),
       new Promise((_resolve, reject) =>
         setTimeout(
           () => reject(new GeminiError(`Gemini request timed out after ${timeoutMs}ms`, 408, { isRetryable: true })),
@@ -110,11 +184,21 @@ async function callGeminiText(
     ]);
     clearTimeout(timeoutId);
 
-    const text = (response as any)?.text || (response as any)?.[0]?.text || '';
+    let text = '';
+    if (typeof response?.text === 'string') {
+      text = response.text;
+    } else if (typeof response?.text === 'function') {
+      try { text = response.text(); } catch (_) {}
+    } else if (response?.candidates?.[0]?.content?.parts) {
+      text = response.candidates[0].content.parts.map((p: any) => p.text || '').join('');
+    } else if (response?.[0]?.text) {
+      text = response[0].text;
+    }
+
     return {
       text: typeof text === 'string' ? text : '',
-      modelUsed: modelId,
-      tokensUsed: 0,
+      modelUsed: targetModel,
+      tokensUsed: response?.usageMetadata?.totalTokenCount || 0,
       finishReason: 'stop',
     };
   } catch (err: any) {
@@ -139,26 +223,48 @@ export async function generateGeminiText(
   const maxRetries = opts?.maxRetries ?? 2;
   let lastErr: GeminiError | null = null;
 
+  // Primary model attempts
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await callGeminiText(modelId, messages, opts);
     } catch (err) {
       lastErr = err instanceof GeminiError ? err : new GeminiError(String(err), 500);
-      if (!lastErr.isRetryable || lastErr.status === 401) throw lastErr;
+      if (lastErr.status === 401) throw lastErr;
+      
+      // If 404 (model not found) or unretryable, try next fallback vision model in cascade
+      if (lastErr.status === 404 || !lastErr.isRetryable) {
+        break;
+      }
       if (attempt >= maxRetries) break;
       const delay = lastErr.isRateLimit ? 2000 * (attempt + 1) : 500 * (attempt + 1);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
-  throw lastErr || new GeminiError('Gemini request failed after retries.', 500);
+
+  // If primary model failed, try fallback vision models in cascade
+  const hasImages = messages.some((m) => m.images && m.images.length > 0);
+  const cascadeCandidates = hasImages ? VISION_MODEL_FALLBACKS : ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-lite-latest'];
+
+  for (const fallbackModel of cascadeCandidates) {
+    if (fallbackModel === modelId) continue;
+    try {
+      console.info(`[Gemini Service] Trying fallback vision model: ${fallbackModel}`);
+      return await callGeminiText(fallbackModel, messages, { ...opts, maxTokens: opts?.maxTokens || 4096 });
+    } catch (fallbackErr: any) {
+      lastErr = fallbackErr instanceof GeminiError ? fallbackErr : new GeminiError(String(fallbackErr), 500);
+      if (lastErr.status === 401) throw lastErr;
+    }
+  }
+
+  throw lastErr || new GeminiError('Gemini request failed after retries and model cascade.', 500);
 }
 
 export async function checkGeminiTextHealth(): Promise<{ ok: boolean; model: GeminiModelId; latencyMs: number; error?: string }> {
   const start = Date.now();
   try {
-    await callGeminiText('gemini-flash-lite-latest', [{ role: 'user', content: 'ping' }], { maxTokens: 16, timeoutMs: 15000 });
-    return { ok: true, model: 'gemini-flash-lite-latest', latencyMs: Date.now() - start };
+    await callGeminiText('gemini-2.5-flash', [{ role: 'user', content: 'ping' }], { maxTokens: 16, timeoutMs: 15000 });
+    return { ok: true, model: 'gemini-2.5-flash', latencyMs: Date.now() - start };
   } catch (err: any) {
-    return { ok: false, model: 'gemini-flash-lite-latest', latencyMs: Date.now() - start, error: err?.message };
+    return { ok: false, model: 'gemini-2.5-flash', latencyMs: Date.now() - start, error: err?.message };
   }
 }

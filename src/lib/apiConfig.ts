@@ -1,5 +1,5 @@
 /**
- * Velcora Production API Gateway & Configuration
+ * Avanyx Production API Gateway & Configuration
  * 
  * Safely resolves base API endpoints across:
  * 1. Same-domain relative routes (Vercel Serverless / Cloud Run / Dev Server)

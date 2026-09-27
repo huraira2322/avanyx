@@ -26,7 +26,7 @@ export const ALL_PLAN_FEATURES: FeatureDefinition[] = [
   },
   {
     key: 'ai_chat',
-    label: 'Ask Velcora AI Assistant',
+    label: 'Ask Avanyx AI Assistant',
     category: 'Intelligence',
     description: 'Conversational business co-pilot for sales advice, business strategy and real-time guidance.',
   },
@@ -205,7 +205,7 @@ export const DEFAULT_FREE_RESOURCE_LIMITS: PlanResourceLimits = {
   maxStaff: 2,
   maxProducts: 500,
   maxWorkstations: 1,
-  monthlyAiCredits: 500,
+  monthlyAiCredits: 0,
   maxCustomers: 200,
   maxSuppliers: 10,
   maxWarehouses: 1,
@@ -277,20 +277,19 @@ export function sanitizePlanConfig(plan?: SubscriptionPlanConfig | null): Subscr
     return {
       id: 'tier_free',
       tier: 'free',
-      name: 'Velcora Free',
+      name: 'Avanyx Free',
       tagline: 'Essential store operations and standard analytics',
       monthlyPriceUSD: 0,
       annualPriceUSD: 0,
       currencyPricing: {},
-      tokensIncludedMonthly: 500,
+      tokensIncludedMonthly: 0,
       maxWorkstations: 1,
       maxSubusers: 2,
       maxProducts: 500,
       features: ['Universal POS', 'Standard Analytics'],
       isActive: true,
-      commissionEligible: false,
       featureAccess: DEFAULT_FREE_FEATURE_ACCESS,
-      resourceLimits: DEFAULT_FREE_RESOURCE_LIMITS,
+      resourceLimits: { ...DEFAULT_FREE_RESOURCE_LIMITS, monthlyAiCredits: 0 },
     };
   }
 
@@ -301,7 +300,7 @@ export function sanitizePlanConfig(plan?: SubscriptionPlanConfig | null): Subscr
   if (tierKey.includes('pro_max') || tierKey.includes('enterprise')) {
     defaultFeatures = DEFAULT_PRO_MAX_FEATURE_ACCESS;
     defaultLimits = DEFAULT_PRO_MAX_RESOURCE_LIMITS;
-  } else if (tierKey.includes('pro') || tierKey.includes('starter') || tierKey.includes('professional')) {
+  } else if (tierKey.includes('pro') || tierKey.includes('starter') || tierKey.includes('professional') || tierKey.includes('plus') || tierKey.includes('premium')) {
     defaultFeatures = DEFAULT_PRO_FEATURE_ACCESS;
     defaultLimits = DEFAULT_PRO_RESOURCE_LIMITS;
   }
@@ -311,38 +310,48 @@ export function sanitizePlanConfig(plan?: SubscriptionPlanConfig | null): Subscr
     ...(plan.featureAccess || {}),
   };
 
+  const rawLimits = plan.resourceLimits || {};
+  // Bidirectional resolution: if plan has top-level limits explicitly set, preserve them; otherwise use rawLimits or defaultLimits
+  const resolvedProducts = plan.maxProducts !== undefined ? plan.maxProducts : (rawLimits.maxProducts ?? defaultLimits.maxProducts);
+  const resolvedStaff = plan.maxSubusers !== undefined ? plan.maxSubusers : (rawLimits.maxStaff ?? defaultLimits.maxStaff);
+  const resolvedWorkstations = plan.maxWorkstations !== undefined ? plan.maxWorkstations : (rawLimits.maxWorkstations ?? defaultLimits.maxWorkstations);
+  const resolvedAiCredits = plan.tokensIncludedMonthly !== undefined ? plan.tokensIncludedMonthly : (rawLimits.monthlyAiCredits ?? defaultLimits.monthlyAiCredits);
+
   const mergedLimits: PlanResourceLimits = {
     ...defaultLimits,
-    ...(plan.resourceLimits || {}),
-    maxProducts: plan.resourceLimits?.maxProducts ?? plan.maxProducts ?? defaultLimits.maxProducts,
-    maxStaff: plan.resourceLimits?.maxStaff ?? plan.maxSubusers ?? defaultLimits.maxStaff,
-    maxWorkstations: plan.resourceLimits?.maxWorkstations ?? plan.maxWorkstations ?? defaultLimits.maxWorkstations,
-    monthlyAiCredits: plan.resourceLimits?.monthlyAiCredits ?? plan.tokensIncludedMonthly ?? defaultLimits.monthlyAiCredits,
+    ...rawLimits,
+    maxProducts: resolvedProducts,
+    maxStaff: resolvedStaff,
+    maxWorkstations: resolvedWorkstations,
+    monthlyAiCredits: resolvedAiCredits,
   };
 
   return {
     ...plan,
-    maxProducts: mergedLimits.maxProducts,
-    maxSubusers: mergedLimits.maxStaff,
-    maxWorkstations: mergedLimits.maxWorkstations,
-    tokensIncludedMonthly: mergedLimits.monthlyAiCredits,
+    maxProducts: resolvedProducts,
+    maxSubusers: resolvedStaff,
+    maxWorkstations: resolvedWorkstations,
+    tokensIncludedMonthly: resolvedAiCredits,
+    features: Array.isArray(plan.features) ? plan.features : [],
     featureAccess: mergedFeatures,
     resourceLimits: mergedLimits,
   };
 }
 
 /**
- * Resolves the currently active subscription plan from the user's active subscription and available plans.
+ * Resolves the currently active subscription plan from the user's active subscription, user profile, and available plans.
  */
 export function resolveActivePlan(
-  activeSubscription: SubscriptionRecord | null | undefined,
+  activeSubscription?: SubscriptionRecord | null | undefined,
   plansList?: SubscriptionPlanConfig[] | null,
-  activeBusiness?: { subscriptionTier?: string } | null
+  activeBusiness?: { subscriptionTier?: string } | null,
+  userProfile?: { subscriptionTier?: string } | null
 ): SubscriptionPlanConfig {
   const safeList = Array.isArray(plansList) ? plansList : [];
   const tier = (
     activeSubscription?.tier ||
     activeSubscription?.planId ||
+    userProfile?.subscriptionTier ||
     activeBusiness?.subscriptionTier ||
     'free'
   ).toLowerCase();
@@ -351,7 +360,7 @@ export function resolveActivePlan(
     (p.id && p.id.toLowerCase() === tier) || 
     (p.tier && p.tier.toLowerCase() === tier) ||
     (tier.includes('pro_max') && (p.tier === 'pro_max' || p.id === 'tier_pro_max')) ||
-    (tier.includes('pro') && !tier.includes('pro_max') && (p.tier === 'pro' || p.id === 'tier_pro')) ||
+    ((tier.includes('pro') || tier.includes('premium') || tier.includes('plus')) && !tier.includes('pro_max') && (p.tier === 'pro' || p.id === 'tier_pro')) ||
     (tier.includes('free') && (p.tier === 'free' || p.id === 'tier_free'))
   );
 
@@ -359,23 +368,64 @@ export function resolveActivePlan(
     return sanitizePlanConfig(found);
   }
 
+  if (tier.includes('pro_max') || tier.includes('enterprise')) {
+    const defaultProMax: SubscriptionPlanConfig = {
+      id: 'tier_pro_max',
+      tier: 'pro_max',
+      name: 'Avanyx Pro Max',
+      tagline: 'Enterprise scale, dedicated AI models and maximum capability',
+      monthlyPriceUSD: 29.0,
+      annualPriceUSD: 290.0,
+      currencyPricing: {},
+      tokensIncludedMonthly: 30000,
+      maxWorkstations: 20,
+      maxSubusers: 100,
+      maxProducts: 20000,
+      features: ['Universal POS', 'Advanced Neural Analytics', 'Unlimited Workstations'],
+      isActive: true,
+      featureAccess: DEFAULT_PRO_MAX_FEATURE_ACCESS,
+      resourceLimits: DEFAULT_PRO_MAX_RESOURCE_LIMITS,
+    };
+    return sanitizePlanConfig(defaultProMax);
+  }
+
+  if (tier.includes('pro') || tier.includes('premium') || tier.includes('plus')) {
+    const defaultPro: SubscriptionPlanConfig = {
+      id: 'tier_pro',
+      tier: 'pro',
+      name: 'Avanyx Pro',
+      tagline: 'Unlock premium neural engines, multi-terminal and higher limits',
+      monthlyPriceUSD: 10.0,
+      annualPriceUSD: 100.0,
+      currencyPricing: {},
+      tokensIncludedMonthly: 10000,
+      maxWorkstations: 5,
+      maxSubusers: 50,
+      maxProducts: 5000,
+      features: ['Universal POS', 'Pro Analytics'],
+      isActive: true,
+      featureAccess: DEFAULT_PRO_FEATURE_ACCESS,
+      resourceLimits: DEFAULT_PRO_RESOURCE_LIMITS,
+    };
+    return sanitizePlanConfig(defaultPro);
+  }
+
   const defaultFree = safeList.find(p => p.tier === 'free' || p.id === 'tier_free') || {
     id: 'tier_free',
     tier: 'free',
-    name: 'Velcora Free',
+    name: 'Avanyx Free',
     tagline: 'Essential store operations and standard analytics',
     monthlyPriceUSD: 0,
     annualPriceUSD: 0,
     currencyPricing: {},
-    tokensIncludedMonthly: 500,
+    tokensIncludedMonthly: 0,
     maxWorkstations: 1,
     maxSubusers: 2,
     maxProducts: 500,
     features: ['Universal POS', 'Standard Analytics'],
     isActive: true,
-    commissionEligible: false,
     featureAccess: DEFAULT_FREE_FEATURE_ACCESS,
-    resourceLimits: DEFAULT_FREE_RESOURCE_LIMITS,
+    resourceLimits: { ...DEFAULT_FREE_RESOURCE_LIMITS, monthlyAiCredits: 0 },
   };
 
   return sanitizePlanConfig(defaultFree);

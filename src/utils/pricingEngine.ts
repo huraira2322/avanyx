@@ -14,7 +14,7 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
   CNY: '¥',
 };
 
-export class VelcoraPricingEngine {
+export class AvanyxPricingEngine {
   public static formatCurrency(amount: number, currency: CurrencyCode | string = 'USD'): string {
     const symbol = CURRENCY_SYMBOLS[currency] || '$';
     const num = typeof amount !== 'number' || isNaN(amount) || !isFinite(amount) ? 0 : amount;
@@ -92,7 +92,7 @@ export class VelcoraPricingEngine {
 
     let loyaltyDiscount = 0;
     if (loyaltyConfig && loyaltyConfig.enabled && loyaltyRedemptionPoints > 0) {
-      const redemptionEval = VelcoraLoyaltyEngine.evaluatePointRedemption(
+      const redemptionEval = AvanyxLoyaltyEngine.evaluatePointRedemption(
         loyaltyRedemptionPoints,
         subtotal,
         loyaltyConfig
@@ -116,7 +116,7 @@ export class VelcoraPricingEngine {
   }
 }
 
-export class VelcoraLoyaltyEngine {
+export class AvanyxLoyaltyEngine {
   public static calculatePointsEarned(
     spendAmount: number,
     items: CartItem[] = [],

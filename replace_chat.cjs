@@ -1,8 +1,8 @@
 const fs = require('fs');
-const content = fs.readFileSync('src/components/AskVelcoraChat.tsx', 'utf8');
+const content = fs.readFileSync('src/components/AskAvanyxChat.tsx', 'utf8');
 const lines = content.split('\n');
 
-const startIndex = lines.findIndex(l => l.includes('return (') && l.includes('id="velcora-ask-ai-chat"') === false) - 2;
+const startIndex = lines.findIndex(l => l.includes('return (') && l.includes('id="avanyx-ask-ai-chat"') === false) - 2;
 // wait, the actual return ( is at line 566.
 const targetLineIndex = 565; // 0-indexed for 566
 
@@ -11,13 +11,13 @@ const topHalf = lines.slice(0, targetLineIndex).join('\n');
 const newRender = `
   return (
     <div
-      id="velcora-ask-ai-chat"
+      id="avanyx-ask-ai-chat"
       className="bg-white rounded-2xl border border-[#E5E5EA] flex h-[calc(100vh-140px)] sm:h-[calc(100vh-160px)] overflow-hidden font-sans text-slate-800 shadow-xs"
       style={{
-        '--velcora-accent': activePalette.hex,
-        '--velcora-accent-hover': activePalette.hoverHex,
-        '--velcora-accent-light': activePalette.lightBg,
-        '--velcora-accent-ring': activePalette.ringHex,
+        '--avanyx-accent': activePalette.hex,
+        '--avanyx-accent-hover': activePalette.hoverHex,
+        '--avanyx-accent-light': activePalette.lightBg,
+        '--avanyx-accent-ring': activePalette.ringHex,
       } as React.CSSProperties}
     >
       {/* Sidebar Navigation */}
@@ -25,12 +25,12 @@ const newRender = `
         <div className="w-72 bg-[#F9F9FB] border-r border-[#E5E5EA] flex flex-col h-full shrink-0">
           <div className="p-4 flex items-center justify-between">
             <span className="text-sm font-semibold tracking-tight text-slate-800 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[var(--velcora-accent)]" />
+              <MessageSquare className="w-4 h-4 text-[var(--avanyx-accent)]" />
               Conversations
             </span>
             <button
               onClick={handleNewSession}
-              className="p-1.5 rounded-lg bg-white border border-[#E5E5EA] text-[var(--velcora-accent)] hover:bg-slate-50 transition-colors shadow-xs"
+              className="p-1.5 rounded-lg bg-white border border-[#E5E5EA] text-[var(--avanyx-accent)] hover:bg-slate-50 transition-colors shadow-xs"
               title="New Chat"
             >
               <Plus className="w-4 h-4" />
@@ -44,7 +44,7 @@ const newRender = `
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#EFEFF4] border border-transparent rounded-lg pl-8 pr-8 py-1.5 text-[13px] text-slate-800 placeholder-slate-500 focus:outline-hidden focus:bg-white focus:border-[var(--velcora-accent)] focus:ring-2 focus:ring-[var(--velcora-accent-light)] transition-all"
+                className="w-full bg-[#EFEFF4] border border-transparent rounded-lg pl-8 pr-8 py-1.5 text-[13px] text-slate-800 placeholder-slate-500 focus:outline-hidden focus:bg-white focus:border-[var(--avanyx-accent)] focus:ring-2 focus:ring-[var(--avanyx-accent-light)] transition-all"
               />
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
               {searchQuery && (
@@ -107,7 +107,7 @@ const newRender = `
                     onClick={() => handleSelectSession(s.id)}
                     className={\`group relative flex flex-col gap-0.5 px-3 py-2.5 rounded-lg cursor-pointer transition-colors \${
                       isActive
-                        ? 'bg-[var(--velcora-accent)] text-white'
+                        ? 'bg-[var(--avanyx-accent)] text-white'
                         : 'hover:bg-[#EFEFF4] text-slate-700'
                     }\`}
                   >
@@ -143,7 +143,7 @@ const newRender = `
             </button>
             <div className="flex flex-col">
               <span className="text-[14px] font-semibold tracking-tight text-slate-900">
-                {activeSession?.title || 'Velcora Assistant'}
+                {activeSession?.title || 'Avanyx Assistant'}
               </span>
               <span className="text-[11px] text-slate-500">Unified Intelligence</span>
             </div>
@@ -167,8 +167,8 @@ const newRender = `
         <div className="flex-1 overflow-y-auto px-4 sm:px-12 xl:px-32 2xl:px-48 py-8 space-y-6" ref={chatContainerRef}>
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in max-w-lg mx-auto">
-              <div className="w-16 h-16 rounded-3xl bg-[var(--velcora-accent-light)] flex items-center justify-center border border-[var(--velcora-accent)] shadow-xs">
-                <Sparkles className="w-7 h-7 text-[var(--velcora-accent)]" />
+              <div className="w-16 h-16 rounded-3xl bg-[var(--avanyx-accent-light)] flex items-center justify-center border border-[var(--avanyx-accent)] shadow-xs">
+                <Sparkles className="w-7 h-7 text-[var(--avanyx-accent)]" />
               </div>
               <div className="space-y-2">
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-900">How can I help you today?</h1>
@@ -180,9 +180,9 @@ const newRender = `
                   <button
                     key={idx}
                     onClick={() => setInputMessage(starter.prompt)}
-                    className="p-3.5 text-left border border-[#E5E5EA] rounded-xl hover:border-[var(--velcora-accent)] hover:shadow-xs transition-all group bg-white"
+                    className="p-3.5 text-left border border-[#E5E5EA] rounded-xl hover:border-[var(--avanyx-accent)] hover:shadow-xs transition-all group bg-white"
                   >
-                    <span className="text-[13px] font-medium text-slate-800 block mb-1 group-hover:text-[var(--velcora-accent)] transition-colors">{starter.label}</span>
+                    <span className="text-[13px] font-medium text-slate-800 block mb-1 group-hover:text-[var(--avanyx-accent)] transition-colors">{starter.label}</span>
                     <span className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{starter.prompt}</span>
                   </button>
                 ))}
@@ -202,7 +202,7 @@ const newRender = `
                 
                 <div className={\`flex flex-col gap-1 max-w-[85%] \${msg.role === 'user' ? 'items-end' : 'items-start'}\`}>
                   {msg.role === 'assistant' && (
-                    <span className="text-[11px] font-medium text-slate-400 ml-1">Velcora AI</span>
+                    <span className="text-[11px] font-medium text-slate-400 ml-1">Avanyx AI</span>
                   )}
                   
                   <div
@@ -225,7 +225,7 @@ const newRender = `
                       </div>
                     )}
                     
-                    <div className={\`prose prose-sm max-w-none \${msg.role === 'user' ? 'prose-p:text-slate-900' : 'prose-slate prose-a:text-[var(--velcora-accent)] prose-a:no-underline hover:prose-a:underline prose-pre:bg-[#F9F9FB] prose-pre:border prose-pre:border-[#E5E5EA]'}\`}>
+                    <div className={\`prose prose-sm max-w-none \${msg.role === 'user' ? 'prose-p:text-slate-900' : 'prose-slate prose-a:text-[var(--avanyx-accent)] prose-a:no-underline hover:prose-a:underline prose-pre:bg-[#F9F9FB] prose-pre:border prose-pre:border-[#E5E5EA]'}\`}>
                       <Markdown>{msg.content}</Markdown>
                     </div>
 
@@ -250,7 +250,7 @@ const newRender = `
                             <div className="flex gap-2 pt-2">
                               <button
                                 onClick={() => executeAiAction(msg.actionProposal!)}
-                                className="flex-1 py-2 bg-[var(--velcora-accent)] text-white text-[12px] font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                                className="flex-1 py-2 bg-[var(--avanyx-accent)] text-white text-[12px] font-semibold rounded-lg hover:opacity-90 transition-opacity"
                               >
                                 Execute Action
                               </button>
@@ -282,7 +282,7 @@ const newRender = `
         <div className="p-4 bg-gradient-to-t from-white via-white to-transparent sticky bottom-0 z-10 w-full max-w-4xl mx-auto">
           <form
             onSubmit={handleSendMessage}
-            className="flex items-end gap-2 bg-[#F9F9FB] border border-[#E5E5EA] rounded-2xl p-2 shadow-xs focus-within:ring-2 focus-within:ring-[var(--velcora-accent-light)] focus-within:border-[var(--velcora-accent)] transition-all relative"
+            className="flex items-end gap-2 bg-[#F9F9FB] border border-[#E5E5EA] rounded-2xl p-2 shadow-xs focus-within:ring-2 focus-within:ring-[var(--avanyx-accent-light)] focus-within:border-[var(--avanyx-accent)] transition-all relative"
           >
             {attachedFile && (
               <div className="absolute -top-14 left-2 z-20">
@@ -331,7 +331,7 @@ const newRender = `
                   }
                 }
               }}
-              placeholder="Message Velcora..."
+              placeholder="Message Avanyx..."
               className="flex-1 max-h-32 bg-transparent text-[14px] text-slate-900 placeholder-slate-400 focus:outline-hidden resize-none py-2 px-1"
             />
             <button
@@ -339,7 +339,7 @@ const newRender = `
               disabled={(!inputMessage.trim() && !attachedFile) || isLoading}
               className={\`p-2 rounded-xl transition-all shadow-xs \${
                 inputMessage.trim() || attachedFile
-                  ? 'bg-[var(--velcora-accent)] text-white hover:opacity-90'
+                  ? 'bg-[var(--avanyx-accent)] text-white hover:opacity-90'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }\`}
               title="Send message"
@@ -357,4 +357,4 @@ const newRender = `
 };
 `;
 
-fs.writeFileSync('src/components/AskVelcoraChat.tsx', topHalf + '\n' + newRender);
+fs.writeFileSync('src/components/AskAvanyxChat.tsx', topHalf + '\n' + newRender);

@@ -1,7 +1,7 @@
-﻿# VELCORA POS & ENTERPRISE RETAIL OS — PROJECT STATUS
-**Repository:** `Desktop/GitHub/VELCORA`  
+﻿# AVANYX POS & ENTERPRISE RETAIL OS — PROJECT STATUS
+**Repository:** `Desktop/GitHub/AVANYX`  
 **Framework:** React 18, Vite 5, TypeScript 5, Tailwind CSS 3  
-**Database:** Cloud Firestore (`velcorapos-297c6`), IndexedDB, Supabase Adapter  
+**Database:** Cloud Firestore (`avanyxpos-297c6`), IndexedDB, Supabase Adapter  
 **Audit Date:** September 10, 2026
 
 ---
@@ -9,7 +9,7 @@
 ## 1. System Status Breakdown
 
 ### A. Core POS & Billing Engine
-* ✅ **VERIFIED WORKING** — Cart management, real-time totals, tax inclusive/exclusive calculations, discounts, split payments (Cash, Card, Crypto, Velcora Pay).
+* ✅ **VERIFIED WORKING** — Cart management, real-time totals, tax inclusive/exclusive calculations, discounts, split payments (Cash, Card, Crypto, Avanyx Pay).
 * ✅ **VERIFIED WORKING** — Barcode scanning lookup, fast SKU search, keyboard shortcuts.
 * ✅ **VERIFIED WORKING** — Multi-currency conversion and dynamic exchange rates.
 * ✅ **VERIFIED WORKING** — Product vs Service separation (service businesses cleanly hide size/color variant schemas).

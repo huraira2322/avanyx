@@ -1,18 +1,22 @@
 import React, { useState, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   FileText, Calendar, Clock, DollarSign, CheckCircle2,
   AlertCircle, ArrowRight, Plus, Search, Printer, RotateCcw,
   Eye, Download, QrCode, X, Check, ShieldCheck, Tag
 } from 'lucide-react';
 import { SaleTransaction, SaleOrder, Estimate } from '../types';
-import { VelcoraPricingEngine } from '../utils/pricingEngine';
+import { AvanyxPricingEngine } from '../utils/pricingEngine';
 import { generateBarcodeSvg } from '../utils/barcodeGenerator';
 import { printThermalReceipt, printStandardInvoice, downloadReceiptAsText } from '../utils/receiptPrinter';
 import { CustomerDigitalPassModal } from './CustomerDigitalPassModal';
 import { useTranslation } from '../context/TranslationContext';
 
-export const SalesAndOrders: React.FC = () => {
+interface SalesAndOrdersProps {
+  initialTab?: 'invoices' | 'orders' | 'estimates' | 'credit_notes' | 'delivery_notes';
+}
+
+export const SalesAndOrders: React.FC<SalesAndOrdersProps> = ({ initialTab = 'invoices' }) => {
   const {
     salesHistory,
     saleOrders,
@@ -21,10 +25,14 @@ export const SalesAndOrders: React.FC = () => {
     processSaleReturnOrExchange,
     currency,
     activeBusiness,
-    activeSubuser} = useVelcora();
+    activeSubuser} = useAvanyx();
   const { t, locale, setLocale } = useTranslation();
 
-  const [activeTab, setActiveTab] = useState<'invoices' | 'orders' | 'estimates'>('invoices');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'orders' | 'estimates' | 'credit_notes' | 'delivery_notes'>(initialTab);
+
+  React.useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
   const [search, setSearch] = useState('');
   const [selectedSaleForView, setSelectedSaleForView] = useState<SaleTransaction | null>(null);
   const [showDigitalPass, setShowDigitalPass] = useState(false);
@@ -121,7 +129,7 @@ export const SalesAndOrders: React.FC = () => {
   }, [estimates, search]);
 
   return (
-    <div id="velcora-sales-orders-view" className="space-y-4">
+    <div id="avanyx-sales-orders-view" className="space-y-4">
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#111C30] p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-[#1F2E4D] shadow-2xs">
         <div className="flex items-center gap-3">
@@ -244,10 +252,10 @@ export const SalesAndOrders: React.FC = () => {
                     </div>
                   </td>
                   <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-[#F8FAFC] text-sm">
-                    {VelcoraPricingEngine.formatCurrency(sale.grandTotal, currency)}
+                    {AvanyxPricingEngine.formatCurrency(sale.grandTotal, currency)}
                     {sale.refundedAmount ? (
                       <div className="text-[10px] text-rose-500 dark:text-rose-400 font-semibold">
-                        Refunded: -{VelcoraPricingEngine.formatCurrency(sale.refundedAmount, currency)}
+                        Refunded: -{AvanyxPricingEngine.formatCurrency(sale.refundedAmount, currency)}
                       </div>
                     ) : null}
                   </td>
@@ -324,11 +332,11 @@ export const SalesAndOrders: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-3.5 px-4 text-slate-700 dark:text-[#94A3B8] font-bold">
-                    {VelcoraPricingEngine.formatCurrency(so.advanceDeposit || 0, currency)} /{' '}
-                    {VelcoraPricingEngine.formatCurrency(so.grandTotal, currency)}
+                    {AvanyxPricingEngine.formatCurrency(so.advanceDeposit || 0, currency)} /{' '}
+                    {AvanyxPricingEngine.formatCurrency(so.grandTotal, currency)}
                   </td>
                   <td className="py-3.5 px-4 text-right font-extrabold text-rose-600 dark:text-rose-400">
-                    {VelcoraPricingEngine.formatCurrency(so.grandTotal - (so.advanceDeposit || 0), currency)}
+                    {AvanyxPricingEngine.formatCurrency(so.grandTotal - (so.advanceDeposit || 0), currency)}
                   </td>
                 </tr>
               ))}
@@ -362,7 +370,7 @@ export const SalesAndOrders: React.FC = () => {
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-[#F8FAFC]">{est.customerName}</td>
                   <td className="py-3.5 px-4 text-slate-500 dark:text-[#94A3B8]">{new Date(est.validUntil).toLocaleDateString()}</td>
                   <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-[#F8FAFC]">
-                    {VelcoraPricingEngine.formatCurrency(est.grandTotal, currency)}
+                    {AvanyxPricingEngine.formatCurrency(est.grandTotal, currency)}
                   </td>
                   <td className="py-3.5 px-4">
                     <span className="font-bold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] uppercase">
@@ -458,9 +466,9 @@ export const SalesAndOrders: React.FC = () => {
                         <div className="text-[10px] text-slate-400 font-mono">SKU: {it.sku}</div>
                       </td>
                       <td className="p-2.5 text-center">{it.quantity}</td>
-                      <td className="p-2.5 text-right">{VelcoraPricingEngine.formatCurrency(it.unitPrice, currency)}</td>
+                      <td className="p-2.5 text-right">{AvanyxPricingEngine.formatCurrency(it.unitPrice, currency)}</td>
                       <td className="p-2.5 text-right font-bold text-slate-900 dark:text-[#F8FAFC]">
-                        {VelcoraPricingEngine.formatCurrency(it.unitPrice * it.quantity - (it.discount || 0), currency)}
+                        {AvanyxPricingEngine.formatCurrency(it.unitPrice * it.quantity - (it.discount || 0), currency)}
                       </td>
                     </tr>
                   ))}
@@ -472,23 +480,23 @@ export const SalesAndOrders: React.FC = () => {
             <div className="bg-slate-50 dark:bg-[#0B1220] p-3 rounded-2xl border border-slate-200 dark:border-[#1F2E4D] text-xs space-y-1">
               <div className="flex justify-between text-slate-600 dark:text-[#94A3B8]">
                 <span>Subtotal:</span>
-                <span>{VelcoraPricingEngine.formatCurrency(selectedSaleForView.subtotal, currency)}</span>
+                <span>{AvanyxPricingEngine.formatCurrency(selectedSaleForView.subtotal, currency)}</span>
               </div>
               {selectedSaleForView.discountTotal > 0 && (
                 <div className="flex justify-between text-rose-600 dark:text-rose-400">
                   <span>Discount:</span>
-                  <span>-{VelcoraPricingEngine.formatCurrency(selectedSaleForView.discountTotal, currency)}</span>
+                  <span>-{AvanyxPricingEngine.formatCurrency(selectedSaleForView.discountTotal, currency)}</span>
                 </div>
               )}
               {selectedSaleForView.taxTotal > 0 && (
                 <div className="flex justify-between text-slate-600 dark:text-[#94A3B8]">
                   <span>Tax / VAT:</span>
-                  <span>{VelcoraPricingEngine.formatCurrency(selectedSaleForView.taxTotal, currency)}</span>
+                  <span>{AvanyxPricingEngine.formatCurrency(selectedSaleForView.taxTotal, currency)}</span>
                 </div>
               )}
               <div className="flex justify-between font-black text-sm text-slate-900 dark:text-[#F8FAFC] pt-1 border-t border-slate-200 dark:border-[#1F2E4D]">
                 <span>Grand Total:</span>
-                <span>{VelcoraPricingEngine.formatCurrency(selectedSaleForView.grandTotal, currency)}</span>
+                <span>{AvanyxPricingEngine.formatCurrency(selectedSaleForView.grandTotal, currency)}</span>
               </div>
             </div>
 
@@ -562,6 +570,7 @@ export const SalesAndOrders: React.FC = () => {
           sale={selectedSaleForView}
           businessName={activeBusiness.name}
           currency={currency}
+          business={activeBusiness}
         />
       )}
 
@@ -643,7 +652,7 @@ export const SalesAndOrders: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-slate-900 dark:text-[#F8FAFC] truncate">{it.name}</div>
                         <div className="text-[11px] text-slate-400 font-mono">
-                          Purchased: {it.quantity} @ {VelcoraPricingEngine.formatCurrency(it.unitPrice, currency)}
+                          Purchased: {it.quantity} @ {AvanyxPricingEngine.formatCurrency(it.unitPrice, currency)}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -706,7 +715,7 @@ export const SalesAndOrders: React.FC = () => {
               return (
                 <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-200">
                   <span>Total Calculated Refund:</span>
-                  <span className="text-sm font-extrabold">{VelcoraPricingEngine.formatCurrency(totalRefundEst, currency)}</span>
+                  <span className="text-sm font-extrabold">{AvanyxPricingEngine.formatCurrency(totalRefundEst, currency)}</span>
                 </div>
               );
             })()}

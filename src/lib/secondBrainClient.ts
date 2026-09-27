@@ -1,9 +1,9 @@
 /**
- * Velcora Second Brain Client & Adapter
+ * Avanyx Second Brain Client & Adapter
  *
  * Provides typed, non-blocking, fail-soft communication between
- * the real Velcora application (Chatbot, Business Brain, Studio)
- * and the standalone Velcora Second Brain service.
+ * the real Avanyx application (Chatbot, Business Brain, Studio)
+ * and the standalone Avanyx Second Brain service.
  */
 
 import { getApiUrl } from './apiConfig';
@@ -105,7 +105,7 @@ class SecondBrainClient {
   /**
    * Retrieve grounding reasoning context for AI Chatbot, Business Brain, or Studio
    */
-  public async getContext(query: string, tenantId: string = 'velcora-default-store', userId?: string | null): Promise<BrainReasoningContext | null> {
+  public async getContext(query: string, tenantId: string = 'avanyx-default-store', userId?: string | null): Promise<BrainReasoningContext | null> {
     if (!query || !query.trim()) return null;
     const res = await this.fetchSafe<{ success: boolean; context: BrainReasoningContext }>(
       `/memory/context?query=${encodeURIComponent(query)}`,
@@ -166,7 +166,7 @@ class SecondBrainClient {
   /**
    * Search unified Brain documents and memories
    */
-  public async search(query: string, tenantId: string = 'velcora-default-store') {
+  public async search(query: string, tenantId: string = 'avanyx-default-store') {
     return this.fetchSafe<{ success: boolean; memories: any[]; wikiDocuments: any[]; contradictions: any[] }>(
       `/memory/search?query=${encodeURIComponent(query)}`,
       {

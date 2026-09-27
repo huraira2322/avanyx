@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import { PromotionCampaign } from '../types';
 import {
   Tag, Plus, CheckCircle, Percent,
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 export const PromotionsDiscounts: React.FC = () => {
-  const { promotions, addPromotion, updatePromotion, deletePromotion, activeBusiness, setCurrentModule, salesHistory } = useVelcora();
+  const { promotions, addPromotion, updatePromotion, deletePromotion, activeBusiness, setCurrentModule, salesHistory } = useAvanyx();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'active' | 'percentage' | 'fixed_amount'>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -108,7 +108,7 @@ export const PromotionsDiscounts: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Header Banner */}
-      <div className="velcora-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="avanyx-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-xl bg-primary-light text-primary flex items-center justify-center">
@@ -127,7 +127,7 @@ export const PromotionsDiscounts: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="velcora-btn-primary flex items-center gap-2"
+            className="avanyx-btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
             <span>Create Campaign</span>
@@ -137,7 +137,7 @@ export const PromotionsDiscounts: React.FC = () => {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>TOTAL CAMPAIGNS</span>
             <Tag className="w-4 h-4 text-primary" />
@@ -146,7 +146,7 @@ export const PromotionsDiscounts: React.FC = () => {
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Across all categories</div>
         </div>
 
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>ACTIVE DEALS</span>
             <CheckCircle className="w-4 h-4 text-emerald-500" />
@@ -157,7 +157,7 @@ export const PromotionsDiscounts: React.FC = () => {
           <div className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mt-1">Ready for checkout</div>
         </div>
 
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>TOTAL REDEMPTIONS</span>
             <Sparkles className="w-4 h-4 text-amber-500" />
@@ -168,7 +168,7 @@ export const PromotionsDiscounts: React.FC = () => {
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Customer uses to date</div>
         </div>
 
-        <div className="velcora-card p-4">
+        <div className="avanyx-card p-4">
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
             <span>EST. DISCOUNT VALUE</span>
             <Percent className="w-4 h-4 text-primary" />
@@ -184,7 +184,7 @@ export const PromotionsDiscounts: React.FC = () => {
         {/* Left 2 Cols: Campaigns List */}
         <div className="lg:col-span-2 space-y-4">
           {/* Filter Bar */}
-          <div className="velcora-card p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="avanyx-card p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -221,7 +221,7 @@ export const PromotionsDiscounts: React.FC = () => {
             {filteredPromos.map((promo) => (
               <div
                 key={promo.id}
-                className={`velcora-card p-5 transition-all duration-200 ${
+                className={`avanyx-card p-5 transition-all duration-200 ${
                   promo.isActive ? 'hover:border-primary/40' : 'opacity-60 bg-slate-50 dark:bg-slate-900/40'
                 }`}
               >
@@ -309,7 +309,7 @@ export const PromotionsDiscounts: React.FC = () => {
             ))}
 
             {filteredPromos.length === 0 && (
-              <div className="velcora-card p-12 text-center text-slate-400">
+              <div className="avanyx-card p-12 text-center text-slate-400">
                 <Tag className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
                 <p className="font-semibold text-slate-700 dark:text-slate-300">No campaigns found</p>
                 <p className="text-xs text-slate-500">Create a discount deal to incentivize more customer sales.</p>
@@ -321,7 +321,7 @@ export const PromotionsDiscounts: React.FC = () => {
         {/* Right Col: Instant Calculator & Live POS Applicator */}
         <div className="space-y-4">
           {/* Coupon Tester Card */}
-          <div className="velcora-card p-5 space-y-4">
+          <div className="avanyx-card p-5 space-y-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
               <h3 className="font-bold text-slate-900 dark:text-white text-sm">Instant Discount Tester</h3>
@@ -395,7 +395,7 @@ export const PromotionsDiscounts: React.FC = () => {
       {/* Create Promotion Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="velcora-card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in">
+          <div className="avanyx-card w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-primary-light text-primary flex items-center justify-center">
@@ -510,7 +510,7 @@ export const PromotionsDiscounts: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="velcora-btn-primary"
+                  className="avanyx-btn-primary"
                 >
                   Create Campaign
                 </button>

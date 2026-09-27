@@ -1,8 +1,8 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/App.tsx', 'utf8');
 
-// We are inside VelcoraAppContent component.
-// Find const { activeBusiness, ... } = useVelcora();
+// We are inside AvanyxAppContent component.
+// Find const { activeBusiness, ... } = useAvanyx();
 // or const { t, locale, setLocale } = useTranslation();
 
 const injectCode = `

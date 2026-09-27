@@ -21,7 +21,7 @@ export function createSecondBrainRouter(): Router {
       (req.headers['x-tenant-id'] as string) ||
       (req.query.tenantId as string) ||
       (req.body?.tenantId as string) ||
-      'velcora-default-store';
+      'avanyx-default-store';
     const userId =
       (req.headers['x-user-id'] as string) ||
       (req.query.userId as string) ||
@@ -36,7 +36,7 @@ export function createSecondBrainRouter(): Router {
     const lint = healthLintService.runLint(tenantId);
     res.json({
       status: 'healthy',
-      service: 'Velcora Second Brain',
+      service: 'Avanyx Second Brain',
       version: '1.0.0',
       timestamp: new Date().toISOString(),
       stats: {
@@ -292,6 +292,6 @@ export function startStandaloneServer(port: number = 3001) {
   const app = express();
   app.use(createSecondBrainRouter());
   app.listen(port, '0.0.0.0', () => {
-    console.log(`[Velcora Second Brain] Standalone Server running on http://0.0.0.0:${port}`);
+    console.log(`[Avanyx Second Brain] Standalone Server running on http://0.0.0.0:${port}`);
   });
 }

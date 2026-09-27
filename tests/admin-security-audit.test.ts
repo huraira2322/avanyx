@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { authenticateAdmin, getJwtSecret } from '../src/server/adminRouter';
-import { VelcoraCreditSystem } from '../src/server/creditManager';
+import { AvanyxCreditSystem } from '../src/server/creditManager';
 import fs from 'fs';
 import path from 'path';
 
@@ -78,11 +78,11 @@ export async function runAdminSecurityAuditTests(): Promise<{
   }
 
   // -------------------------------------------------------------
-  // Test 2: Normal Velcora user (Valid token but unauthorized email)
+  // Test 2: Normal Avanyx user (Valid token but unauthorized email)
   // -------------------------------------------------------------
   try {
     const normalUserToken = jwt.sign(
-      { email: 'alexander@velcora.com', role: 'admin' },
+      { email: 'alexander@avanyx.com', role: 'admin' },
       activeSecret,
       { expiresIn: '1h' }
     );
@@ -116,7 +116,7 @@ export async function runAdminSecurityAuditTests(): Promise<{
 
     const isSecure = responseStatus === 403 && responseJson?.success === false && !nextCalled;
     recordResult(
-      'Normal Velcora User Access Blocked',
+      'Normal Avanyx User Access Blocked',
       isSecure,
       isSecure 
         ? `Status: ${responseStatus}, Msg: ${responseJson?.error}. Correctly denied administrative access to normal user.`
@@ -124,7 +124,7 @@ export async function runAdminSecurityAuditTests(): Promise<{
       'Double-check email comparison inside authenticateAdmin middleware.'
     );
   } catch (err: any) {
-    recordResult('Normal Velcora User Access Blocked', false, `Error: ${err.message}`, 'Check email validation.');
+    recordResult('Normal Avanyx User Access Blocked', false, `Error: ${err.message}`, 'Check email validation.');
   }
 
   // -------------------------------------------------------------
@@ -330,9 +330,9 @@ export async function runAdminSecurityAuditTests(): Promise<{
     const testUserId = 'audit-test-user-suspended-id';
     
     // Suspend the wallet
-    await VelcoraCreditSystem.toggleUserWalletSuspension(testUserId, true);
+    await AvanyxCreditSystem.toggleUserWalletSuspension(testUserId, true);
 
-    const wallet = await VelcoraCreditSystem.getWallet(testUserId);
+    const wallet = await AvanyxCreditSystem.getWallet(testUserId);
     const isSuspended = wallet.isSuspended === true;
 
     recordResult(

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Users, UserCheck, Shield, Key, Plus, Trash2, Edit2, Check,
   X, AlertCircle, Eye, EyeOff, Lock, Unlock, CheckCircle2,
@@ -10,6 +10,7 @@ import {
 import { SubUser, UserRole, PermissionKey, AuditLogEntry, Workstation } from '../types';
 import { PERMISSION_DEFINITIONS } from '../data/mockInitialData';
 import { getOrCreateDeviceId, getDeviceName } from '../lib/deviceManager';
+import { getApiUrl } from '../lib/apiConfig';
 import { resolveActivePlan, checkResourceLimit } from '../utils/planLimitsEngine';
 
 export const SubuserManagement: React.FC = () => {
@@ -31,7 +32,7 @@ export const SubuserManagement: React.FC = () => {
     activeSubscription,
     subscriptionPlans,
     openCheckoutModal,
-  } = useVelcora();
+  } = useAvanyx();
 
   // Dynamic Plan Limits Enforcer
   const currentPlan = resolveActivePlan(activeSubscription, subscriptionPlans, activeBusiness);
@@ -83,7 +84,7 @@ export const SubuserManagement: React.FC = () => {
     setIsLoadingLogs(true);
     try {
       const bizId = activeBusiness?.id || 'biz-clothing-01';
-      const res = await fetch(`/api/audit-logs?businessId=${bizId}`);
+      const res = await fetch(getApiUrl(`/api/audit-logs?businessId=${bizId}`));
       if (res.ok) {
         const data = await res.json();
         if (data.logs && Array.isArray(data.logs)) {
@@ -182,14 +183,14 @@ export const SubuserManagement: React.FC = () => {
         setQuotaWarning(staffQuota.errorMessage || `You have reached your ${currentPlan.name} limit of ${staffQuota.limit} staff accounts. Upgrade your plan to add more.`);
         return;
       }
-      const bizName = (activeBusiness?.name || 'velcora').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const bizName = (activeBusiness?.name || 'avanyx').toLowerCase().replace(/[^a-z0-9]/g, '');
       const newUserId = `user-${Date.now().toString().slice(-4)}`;
       const newUser: SubUser = {
         id: newUserId,
         businessId: activeBusiness?.id || 'biz-clothing-01',
         staffId: finalStaffId,
         name: userName.trim(),
-        email: userEmail.trim() || `${userName.toLowerCase().replace(/\s+/g, '.')}@${bizName || 'velcora'}.com`,
+        email: userEmail.trim() || `${userName.toLowerCase().replace(/\s+/g, '.')}@${bizName || 'avanyx'}.com`,
         roleId: userRoleId,
         roleName: roleNameStr,
         pinCode: userPin,
@@ -202,7 +203,7 @@ export const SubuserManagement: React.FC = () => {
 
       // Register staff password on backend server
       try {
-        await fetch('/api/staff/create', {
+        await fetch(getApiUrl('/api/staff/create'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -226,7 +227,7 @@ export const SubuserManagement: React.FC = () => {
   // Open Reset Password Modal
   const handleOpenResetPasswordModal = (user: SubUser) => {
     setResetTargetUser(user);
-    setNewPassword('Velcora2026!');
+    setNewPassword('Avanyx2026!');
     setShowNewPassword(false);
     setResetStatusMsg(null);
     setIsResetPasswordModalOpen(true);
@@ -238,7 +239,7 @@ export const SubuserManagement: React.FC = () => {
     if (!resetTargetUser || !newPassword.trim()) return;
 
     try {
-      const response = await fetch('/api/staff/reset-password', {
+      const response = await fetch(getApiUrl('/api/staff/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -275,7 +276,7 @@ export const SubuserManagement: React.FC = () => {
     });
 
     try {
-      await fetch('/api/staff/update-status', {
+      await fetch(getApiUrl('/api/staff/update-status'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -382,7 +383,7 @@ export const SubuserManagement: React.FC = () => {
   ];
 
   return (
-    <div id="velcora-subuser-management" className="space-y-6">
+    <div id="avanyx-subuser-management" className="space-y-6">
       {/* Top Banner */}
       <div className="bg-white dark:bg-[#111C30] border border-slate-200 dark:border-[#1F2E4D] rounded-3xl p-6 relative overflow-hidden shadow-2xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

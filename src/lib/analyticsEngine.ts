@@ -1,11 +1,11 @@
-﻿import { collection, addDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { getDevicePlatform, getOrCreateDeviceId } from './deviceManager';
 
 export interface SystemActivityEvent {
   id?: string;
   timestamp: string;
-  type: 'AUTH' | 'FEATURE_USAGE' | 'TRANSACTION' | 'REFERRAL' | 'SYSTEM_ERROR' | 'SECURITY';
+  type: 'AUTH' | 'FEATURE_USAGE' | 'TRANSACTION' | 'SYSTEM_ERROR' | 'SECURITY';
   action: string;
   userId?: string;
   userEmail?: string;
@@ -77,7 +77,7 @@ export async function logSystemActivity(event: Omit<SystemActivityEvent, 'timest
 
     // 2. Also keep a lightweight local buffer for offline/immediate access
     try {
-      const LOCAL_LOGS_KEY = 'velcora_activity_buffer';
+      const LOCAL_LOGS_KEY = 'avanyx_activity_buffer';
       const existing = localStorage.getItem(LOCAL_LOGS_KEY);
       const list: SystemActivityEvent[] = existing ? JSON.parse(existing) : [];
       list.unshift(fullEvent);

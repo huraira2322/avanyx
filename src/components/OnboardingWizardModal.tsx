@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { useVelcora } from '../context/VelcoraContext';
+import { useAvanyx } from '../context/AvanyxContext';
 import {
   Sparkles, Check, ArrowRight, ArrowLeft, Store, ShieldCheck,
   Percent, Globe, Layers, Wand2, X, RefreshCw, Smartphone,
-  ShoppingBag, Utensils, Pill, Wrench, Package, Scissors, Box
+  ShoppingBag, Utensils, Pill, Wrench, Package, Scissors, Box,
+  CheckCircle2, Circle
 } from 'lucide-react';
 import { IndustryType, SystemModuleKey, CurrencyCode, LocaleCode, CatalogSchema } from '../types';
-import { VELCORA_COLOR_PALETTES } from '../constants/themeColors';
+import { AVANYX_COLOR_PALETTES } from '../constants/themeColors';
 import { getApiUrl } from '../lib/apiConfig';
 import { deriveOnboardingFromSchema, applyModulesToSchema, buildPresetCatalogSchema, presetModulesForIndustry } from '../lib/catalogSchema';
 
@@ -100,7 +101,7 @@ const MODULE_DEFINITIONS: {
   { key: 'suppliers', label: 'Suppliers & Vendors CRM', category: 'Sales & Fulfillment', description: 'Vendor directory, contact ledgers, payables, and payment terms.' },
   { key: 'purchases', label: 'Purchase Orders & Stock Receiving', category: 'Sales & Fulfillment', description: 'Automated PO drafting, goods received notes, and landed cost recalculation.' },
   { key: 'financial_reports', label: 'Financial Reports & P&L', category: 'Sales & Fulfillment', description: 'Net profit margins, tax summaries, revenue trends, and CSV/PDF export.' },
-  { key: 'business_brain', label: 'Velcora Business Brain AI', category: 'Intelligence & Marketing', description: 'Deterministic health diagnostics, root-cause leak detection, and executive plans.' },
+  { key: 'business_brain', label: 'Avanyx Business Brain AI', category: 'Intelligence & Marketing', description: 'Deterministic health diagnostics, root-cause leak detection, and executive plans.' },
   { key: 'online_store', label: 'Online Store Beta E-Commerce', category: 'Intelligence & Marketing', description: 'Instant consumer-facing digital catalog with live stock sync and web orders.' },
   { key: 'credit_notes', label: 'Credit Notes & Refunds', category: 'Sales & Fulfillment', description: 'Issue credit notes for returns and exchanges, linked to the original invoice.' },
   { key: 'delivery_notes', label: 'Delivery Notes & Dispatch', category: 'Sales & Fulfillment', description: 'Generate dispatch notes for orders leaving the store or warehouse.' },
@@ -115,7 +116,7 @@ const MODULE_DEFINITIONS: {
   { key: 'notifications', label: 'Notifications Center', category: 'Core Register', description: 'Low-stock, expiry and system alerts collected in one inbox.' },
   { key: 'appointments', label: 'Service Appointments & Duration', category: 'Intelligence & Marketing', description: 'Duration, assigned staff and booking fields for service items.' },
   { key: 'promotions', label: 'Promotions & Discount Rules', category: 'Intelligence & Marketing', description: 'Campaigns, coupon codes and automatic discount rules for the register.' },
-  { key: 'ask_velcora', label: 'Chat with Velcora AI', category: 'Intelligence & Marketing', description: 'Ask business questions and get answers grounded in your own live store data.' },
+  { key: 'ask_avanyx', label: 'Chat with Avanyx AI', category: 'Intelligence & Marketing', description: 'Ask business questions and get answers grounded in your own live store data.' },
   { key: 'settings', label: 'Store Settings & Cloud Sync', category: 'Intelligence & Marketing', description: 'Business profile, receipt details, data sync and workspace preferences.' },
   { key: 'help', label: 'Help & Keyboard Shortcuts', category: 'Intelligence & Marketing', description: 'Shortcut reference and support guidance for daily operations.' },
 ];
@@ -144,7 +145,7 @@ const COUNTRY_CURRENCY_PRESETS = [
 ];
 
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ isOpen, onClose, isInitialSetup = false }) => {
-  const { completeOnboarding } = useVelcora();
+  const { completeOnboarding } = useAvanyx();
 
   const [step, setStep] = useState<number>(1);
   const [businessName, setBusinessName] = useState<string>('');
@@ -163,6 +164,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
   // AI Prompt Builder
   const [aiPrompt, setAiPrompt] = useState<string>('');
   const [isAnalyzingAi, setIsAnalyzingAi] = useState<boolean>(false);
+  const [aiProgressSteps, setAiProgressSteps] = useState<string[]>([]);
+  const [aiProgressIndex, setAiProgressIndex] = useState<number>(-1);
   const [aiRationale, setAiRationale] = useState<string | null>(null);
   const [aiCatalogSchema, setAiCatalogSchema] = useState<CatalogSchema | null>(null);
 
@@ -348,16 +351,32 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
   const handleAiConfigure = async () => {
     if (!aiPrompt.trim()) return;
     setIsAnalyzingAi(true);
+    setAiRationale(null);
+    setAiProgressSteps([
+      'Understanding your business...',
+      'Analyzing products and services...',
+      'Designing your product catalog...',
+      'Selecting the right POS modules...',
+      'Finalizing your Avanyx POS...'
+    ]);
+    setAiProgressIndex(0);
+
+    const progressTimer = setInterval(() => {
+      setAiProgressIndex(prev => {
+        if (prev < 3) return prev + 1;
+        return prev;
+      });
+    }, 5000);
+
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
 
       const cRes = await fetch(getApiUrl('/api/ai/catalog-schema'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessRequirements: aiPrompt,
-          industry,
           businessName,
           country,
           currency,
@@ -367,6 +386,10 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       clearTimeout(timeoutId);
 
       const cData = await cRes.json();
+      
+      clearInterval(progressTimer);
+      setAiProgressIndex(4);
+      
       if (cData.success && cData.schema && Array.isArray(cData.schema.fields) && cData.schema.fields.length > 0) {
         const schema = cData.schema as CatalogSchema;
         setAiCatalogSchema(schema);
@@ -387,6 +410,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
         setIndustry(derivation.industry);
       }
     } catch (err) {
+      clearInterval(progressTimer);
       console.warn('[AI Config] Falling back to instant local schema analysis:', err);
       const fallbackSchema = generateLocalAiCatalogSchema(aiPrompt);
       setAiCatalogSchema(fallbackSchema);
@@ -396,7 +420,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       setEnabledModules(derivation.enabledModules);
       setIndustry(derivation.industry);
     } finally {
-      setIsAnalyzingAi(false);
+      setTimeout(() => setIsAnalyzingAi(false), 1500); // give time for final success animation
     }
   };
 
@@ -441,7 +465,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
             </div>
             <div>
               <h2 className="font-extrabold text-base text-slate-900 dark:text-[#F8FAFC]">
-                {isInitialSetup ? 'VELCORA — Universal Business Setup & POS Customizer' : 'Velcora Business Setup & POS Customizer'}
+                {isInitialSetup ? 'Avanyx — Universal Business Setup & POS Customizer' : 'Avanyx Business Setup & POS Customizer'}
               </h2>
               <p className="text-xs text-slate-500 dark:text-[#94A3B8] font-medium">Step {step} of 4 — {
                 step === 1 ? 'Business Identity & Localization' :
@@ -607,7 +631,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
                 </div>
 
                 <div className="grid grid-cols-3 sm:grid-cols-9 gap-2 pt-1">
-                  {VELCORA_COLOR_PALETTES.map(palette => {
+                  {AVANYX_COLOR_PALETTES.map(palette => {
                     const isSelected = primaryColor.toLowerCase() === palette.hex.toLowerCase();
                     return (
                       <button
@@ -628,7 +652,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
                           {isSelected && '✓'}
                         </span>
                         <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate w-full text-center">
-                          {palette.name.replace('Velcora ', '').replace('Electric ', '')}
+                          {palette.name.replace('Avanyx ', '').replace('Electric ', '')}
                         </span>
                       </button>
                     );
@@ -681,7 +705,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#0B1220] border border-slate-200 dark:border-[#1F2E4D] space-y-3">
                 <div className="flex items-center gap-2 text-primary font-extrabold text-xs">
                   <Wand2 className="w-4 h-4" />
-                  <span>Ask Velcora AI to configure your store from a sentence</span>
+                  <span>Ask Avanyx AI to configure your store from a sentence</span>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -701,10 +725,43 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
                     <span>Auto-Configure</span>
                   </button>
                 </div>
-                {aiRationale && (
+                {aiRationale && !isAnalyzingAi && (
                   <p className="text-[11px] text-primary bg-primary-light p-2.5 rounded-xl border border-primary/20 font-medium">
                     💡 <strong>AI Analysis:</strong> {aiRationale}
                   </p>
+                )}
+                {isAnalyzingAi && aiProgressSteps.length > 0 && (
+                  <div className="mt-4 p-4 rounded-xl bg-white dark:bg-[#0B1220] border border-primary/20 shadow-2xs">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-extrabold text-slate-900 dark:text-[#F8FAFC]">Avanyx AI</span>
+                    </div>
+                    <p className="text-xs font-semibold text-primary mb-4 animate-pulse">Analyzing your business...</p>
+                    <div className="space-y-2.5 mb-4">
+                      {aiProgressSteps.map((stepStr, idx) => {
+                        let statusIcon;
+                        let textClass;
+                        if (idx < aiProgressIndex) {
+                          statusIcon = <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+                          textClass = "text-slate-700 dark:text-[#94A3B8]";
+                        } else if (idx === aiProgressIndex) {
+                          statusIcon = <RefreshCw className="w-4 h-4 text-primary animate-spin" />;
+                          textClass = "text-primary font-semibold";
+                        } else {
+                          statusIcon = <Circle className="w-4 h-4 text-slate-300 dark:text-slate-700" />;
+                          textClass = "text-slate-400 dark:text-slate-600";
+                        }
+                        
+                        return (
+                          <div key={idx} className="flex items-center gap-2.5">
+                            {statusIcon}
+                            <span className={`text-xs ${textClass}`}>{stepStr}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">This may take a few moments...</p>
+                  </div>
                 )}
               </div>
 
@@ -878,7 +935,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
               className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-2 shadow-2xs transition active:scale-98"
             >
               <Check className="w-4 h-4" />
-              <span>Launch Velcora Workspace</span>
+              <span>Launch Avanyx Workspace</span>
             </button>
           )}
         </div>

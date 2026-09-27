@@ -1,5 +1,5 @@
 /**
- * Velcora Unified AI Router — High-Availability Dual-Provider System
+ * Avanyx Unified AI Router — High-Availability Dual-Provider System
  * PRIMARY: DeepSeek | FALLBACK: Google Gemini
  */
 import { resolveEngineRoute, generateWithRetry, DeepSeekMessage, DeepSeekResult } from './deepSeekService';
@@ -7,9 +7,20 @@ import { generateGeminiText, GeminiMessage, GeminiResult, isGeminiTextConfigured
 
 export type ProviderId = 'deepseek' | 'gemini';
 
+export interface NormalizedImageAttachment {
+  mimeType: string;
+  data: string; // raw base64 without data URI prefix
+  name?: string;
+}
+
 export interface NormalizedRequest {
   engineId: string;
-  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+  messages: {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+    images?: NormalizedImageAttachment[];
+  }[];
+  images?: NormalizedImageAttachment[];
   temperature?: number;
   maxTokens?: number;
   /** Per-provider call timeout. Defaults to 60000ms. */
@@ -88,19 +99,19 @@ export function getProviderHealthStatus() {
 // ─── Model Mapping ────────────────────────────────────────────────────────────
 
 const GEMINI_FALLBACK_MODELS: Record<string, GeminiModelId> = {
-  NORMAL_CHAT: 'gemini-flash-lite-latest',
-  FLASH: 'gemini-3.5-flash',
-  OMNI: 'gemini-3.5-flash',
-  FINANCIAL_AGENT: 'gemini-3.5-flash',
+  NORMAL_CHAT: 'gemini-2.5-flash',
+  FLASH: 'gemini-2.5-flash',
+  OMNI: 'gemini-3.1-pro-preview',
+  FINANCIAL_AGENT: 'gemini-2.5-flash',
 };
 
 function getEngineKind(engineId: string): string {
   const map: Record<string, string> = {
-    chat: 'NORMAL_CHAT', 'velcora-chat': 'NORMAL_CHAT',
-    flash: 'FLASH', 'velcora-neural-flash': 'FLASH', 'flash-omni-1': 'FLASH',
-    omni: 'OMNI', 'velcora-omni': 'OMNI', 'velcora-brain': 'OMNI',
-    axiom: 'FINANCIAL_AGENT', 'velcora-axiom': 'FINANCIAL_AGENT', 'velcora-financial': 'FINANCIAL_AGENT',
-    'financial-axiom': 'FINANCIAL_AGENT', 'velcora-fashion-dealer': 'OMNI',
+    chat: 'NORMAL_CHAT', 'avanyx-chat': 'NORMAL_CHAT',
+    flash: 'FLASH', 'avanyx-neural-flash': 'FLASH', 'flash-omni-1': 'FLASH',
+    omni: 'OMNI', 'avanyx-omni': 'OMNI', 'avanyx-brain': 'OMNI',
+    axiom: 'FINANCIAL_AGENT', 'avanyx-axiom': 'FINANCIAL_AGENT', 'avanyx-financial': 'FINANCIAL_AGENT',
+    'financial-axiom': 'FINANCIAL_AGENT', 'avanyx-fashion-dealer': 'OMNI',
   };
   return map[engineId] || 'NORMAL_CHAT';
 }
@@ -126,9 +137,9 @@ async function callDeepSeek(messages: DeepSeekMessage[], engineId: string, maxTo
   };
 }
 
-// ─── Gemini Fallback Call ────────────────────────────────────────────────────
+// ─── Gemini Fallback & Multimodal Vision Call ────────────────────────────────
 
-async function callGemini(messages: GeminiMessage[], engineId: string, maxTokens: number, systemInstruction?: string, timeoutMs = 60000, maxRetries = 1): Promise<NormalizedResponse> {
+async function callGemini(messages: GeminiMessage[], engineId: string, maxTokens: number, systemInstruction?: string, timeoutMs = 60000, maxRetries = 1, isMultimodalPrimary = false): Promise<NormalizedResponse> {
   const kind = getEngineKind(engineId);
   const modelId = GEMINI_FALLBACK_MODELS[kind] || 'gemini-flash-lite-latest';
   const startTime = Date.now();
@@ -141,7 +152,8 @@ async function callGemini(messages: GeminiMessage[], engineId: string, maxTokens
     model: result.modelUsed,
     tokensUsed: result.tokensUsed,
     finishReason: result.finishReason,
-    failover: true,
+    failover: !isMultimodalPrimary,
+    failoverReason: isMultimodalPrimary ? 'Multimodal Vision Provider' : 'DeepSeek provider failover',
     retries: 0,
     latencyMs: Date.now() - startTime,
   };
@@ -156,10 +168,57 @@ export async function routeAIRequest(req: NormalizedRequest & { userId?: string;
   const reqMaxRetries = typeof req.maxRetries === 'number' ? Math.max(0, req.maxRetries) : 1;
   const systemMsg = req.messages.find((m) => m.role === 'system');
   const chatMessages = req.messages.filter((m) => m.role !== 'system');
-  const deepSeekMsgs: DeepSeekMessage[] = req.messages as DeepSeekMessage[];
-  const geminiMsgs: GeminiMessage[] = chatMessages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-  // ── Try DeepSeek (Primary) ──────────────────────────────────────────────────
+  // Check if any message or top-level request contains image attachments
+  const reqImages = Array.isArray(req.images) && req.images.length > 0 ? req.images : [];
+  const hasMessageImages = chatMessages.some((m) => Array.isArray(m.images) && m.images.length > 0);
+  const hasImages = hasMessageImages || reqImages.length > 0;
+
+  const geminiMsgs: GeminiMessage[] = chatMessages.map((m, idx) => {
+    let images = m.images;
+    if ((!images || images.length === 0) && reqImages.length > 0 && (m.role === 'user' && idx === chatMessages.length - 1)) {
+      images = reqImages;
+    }
+    return {
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      images,
+    };
+  });
+
+  // ── MULTIMODAL PATHWAY: When images are attached, route to Gemini Vision Engine ─────────
+  if (hasImages) {
+    const geminiAvailable = isProviderAvailable('gemini') && isGeminiTextConfigured();
+    if (geminiAvailable) {
+      try {
+        const result = await callGemini(geminiMsgs, req.engineId, maxTokens, systemMsg?.content, reqTimeoutMs, reqMaxRetries, true);
+        return result;
+      } catch (geminiErr: any) {
+        recordProviderFailure('gemini');
+        console.warn(`[Router] Multimodal Gemini call failed (${geminiErr?.message}).`);
+      }
+    }
+    // If Gemini fails or is unconfigured on an image request, return clean descriptive error
+    return {
+      success: false,
+      content: '',
+      provider: 'none',
+      model: '',
+      tokensUsed: 0,
+      finishReason: 'unavailable',
+      failover: false,
+      retries: 0,
+      latencyMs: Date.now() - startTime,
+      error: isGeminiTextConfigured() ? 'Image analysis failed due to a provider timeout or error. Please try again.' : 'Multimodal image analysis requires Google Gemini API key to be configured in server environment.',
+    };
+  }
+
+  // ── TEXT-ONLY PATHWAY: DeepSeek (Primary) → Gemini (Fallback) ───────────────────
+  const deepSeekMsgs: DeepSeekMessage[] = req.messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
   const deepSeekAvailable = isProviderAvailable('deepseek');
   if (deepSeekAvailable) {
     try {
@@ -185,7 +244,7 @@ export async function routeAIRequest(req: NormalizedRequest & { userId?: string;
   const geminiAvailable = isProviderAvailable('gemini') && isGeminiTextConfigured();
   if (geminiAvailable) {
     try {
-      const result = await callGemini(geminiMsgs, req.engineId, maxTokens, systemMsg?.content, reqTimeoutMs, reqMaxRetries);
+      const result = await callGemini(geminiMsgs, req.engineId, maxTokens, systemMsg?.content, reqTimeoutMs, reqMaxRetries, false);
       const failoverReason = deepSeekAvailable
         ? 'DeepSeek provider error — auto-failed over to Gemini'
         : 'DeepSeek not configured — using Gemini';

@@ -28,7 +28,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { VelcoraUserProfile, BusinessProfile } from '../types';
+import { AvanyxUserProfile, BusinessProfile } from '../types';
 
 // Dynamic config resolution supporting custom project or default config consistently
 const hasCustomEnvKey = Boolean(
@@ -320,7 +320,7 @@ export async function verifyPhoneOtp(otpCode: string, fallbackPhone?: string): P
   const simulatedUid = `phone-${cleanPhone.replace(/[^0-9]/g, '')}`;
   return createFallbackUser({
     uid: simulatedUid,
-    email: `${cleanPhone.replace(/[^0-9]/g, '') || 'store'}@phone.velcora.local`,
+    email: `${cleanPhone.replace(/[^0-9]/g, '') || 'store'}@phone.avanyx.local`,
     displayName: `Owner (${cleanPhone})`,
     isGoogle: false,
   });
@@ -329,14 +329,40 @@ export async function verifyPhoneOtp(otpCode: string, fallbackPhone?: string): P
 
 // User Profile & Business Relationship Sync Engine
 export async function syncUserProfileAndBusiness(fbUser: User): Promise<{
-  profile: VelcoraUserProfile;
+  profile: AvanyxUserProfile;
   activeBizId: string;
   businesses: BusinessProfile[];
+  hasRealBusiness: boolean;
 }> {
-  const defaultBizId = `biz-${fbUser.uid.substring(0, 10)}`;
-  const defaultBusiness: BusinessProfile = {
+  // 1. Check local storage cache first for resilience
+  let cachedBusinesses: BusinessProfile[] = [];
+  let cachedActiveBizId = '';
+  let cachedOnboardingCompleted = false;
+  let cachedProfile: AvanyxUserProfile | null = null;
+  let cachedSubscription: any = null;
+
+  try {
+    const rawBizs = localStorage.getItem('avanyx_businesses');
+    if (rawBizs) {
+      cachedBusinesses = JSON.parse(rawBizs);
+    }
+    cachedActiveBizId = localStorage.getItem('avanyx_active_business_id') || '';
+    cachedOnboardingCompleted = localStorage.getItem('avanyx_onboarding_completed') === 'true';
+
+    const rawProfile = localStorage.getItem('avanyx_user_profile');
+    if (rawProfile) {
+      cachedProfile = JSON.parse(rawProfile);
+    }
+    const rawSub = localStorage.getItem('avanyx_active_subscription');
+    if (rawSub) {
+      cachedSubscription = JSON.parse(rawSub);
+    }
+  } catch {}
+
+  const defaultBizId = `biz-${fbUser.uid}`;
+  const defaultBusiness: BusinessProfile = cachedBusinesses.find(b => b.id === defaultBizId) || cachedBusinesses[0] || {
     id: defaultBizId,
-    name: fbUser.displayName ? `${fbUser.displayName}'s Store` : 'Velcora Store',
+    name: fbUser.displayName ? `${fbUser.displayName}'s Store` : 'Avanyx Store',
     ownerUid: fbUser.uid,
     memberUids: [fbUser.uid],
     industry: 'retail',
@@ -349,7 +375,7 @@ export async function syncUserProfileAndBusiness(fbUser: User): Promise<{
     phone: '',
     email: fbUser.email || '',
     address: '',
-    enabledModules: ['pos', 'products', 'inventory', 'customers', 'sales_orders', 'expenses', 'financial_reports', 'business_brain', 'ai_router'],
+    enabledModules: ['pos', 'products', 'inventory', 'customers', 'sales_orders', 'expenses', 'financial_reports', 'business_brain'],
     customFields: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -360,63 +386,58 @@ export async function syncUserProfileAndBusiness(fbUser: User): Promise<{
   let isOffline = false;
 
   try {
-    userSnap = await getDocWithTimeout(userRef, 1000);
+    userSnap = await getDoc(userRef);
   } catch (err: any) {
     isOffline = true;
     console.warn('Firestore user profile offline/unavailable:', err?.message || err);
   }
 
-  let profile: VelcoraUserProfile;
+  let profile: AvanyxUserProfile;
   let activeBizId = '';
 
   if (userSnap && userSnap.exists()) {
-    const data = userSnap.data() as VelcoraUserProfile;
+    const data = userSnap.data() as AvanyxUserProfile & { activeSubscription?: any };
     profile = {
       ...data,
       email: fbUser.email || data.email,
       displayName: fbUser.displayName || data.displayName,
       photoURL: fbUser.photoURL || data.photoURL,
-      availableCredits: data.availableCredits ?? data.aiTokensBalance ?? 500,
-      includedCredits: data.includedCredits ?? 500,
-      purchasedCredits: data.purchasedCredits ?? 0,
-      usedCredits: data.usedCredits ?? 0,
-      subscriptionTier: data.subscriptionTier || 'free',
-      subscriptionStatus: data.subscriptionStatus || 'ACTIVE',
+      availableCredits: data.availableCredits ?? data.aiTokensBalance ?? cachedProfile?.availableCredits ?? 0,
+      includedCredits: data.includedCredits ?? cachedProfile?.includedCredits ?? 0,
+      purchasedCredits: data.purchasedCredits ?? cachedProfile?.purchasedCredits ?? 0,
+      usedCredits: data.usedCredits ?? cachedProfile?.usedCredits ?? 0,
+      subscriptionTier: data.subscriptionTier || cachedProfile?.subscriptionTier || 'free',
+      subscriptionStatus: data.subscriptionStatus || cachedProfile?.subscriptionStatus || 'ACTIVE',
       isSuspended: Boolean(data.isSuspended),
+      hasCompletedOnboarding: true,
       updatedAt: new Date().toISOString(),
     };
+    activeBizId = profile.ownerBusinessId || defaultBizId;
+    if (activeBizId === 'biz-clothing-01') {
+      activeBizId = defaultBizId;
+      profile.ownerBusinessId = defaultBizId;
+      profile.authorizedBusinessIds = [defaultBizId];
+    }
     setDoc(userRef, profile, { merge: true }).catch(() => {});
-    activeBizId = profile.ownerBusinessId || (profile.authorizedBusinessIds && profile.authorizedBusinessIds[0]) || defaultBizId;
+  } else if (cachedProfile && cachedProfile.uid === fbUser.uid) {
+    // Retain cached profile data when offline or pending server response
+    profile = {
+      ...cachedProfile,
+      email: fbUser.email || cachedProfile.email,
+      displayName: fbUser.displayName || cachedProfile.displayName,
+      photoURL: fbUser.photoURL || cachedProfile.photoURL,
+      hasCompletedOnboarding: true,
+      updatedAt: new Date().toISOString(),
+    };
+    activeBizId = profile.ownerBusinessId || defaultBizId;
+    if (activeBizId === 'biz-clothing-01') {
+      activeBizId = defaultBizId;
+      profile.ownerBusinessId = defaultBizId;
+      profile.authorizedBusinessIds = [defaultBizId];
+    }
   } else {
-    // New User Setup or Offline Fallback
-    let assignedBizId = '';
-    if (!isOffline) {
-      const demoBizRef = doc(db, 'businesses', 'biz-clothing-01');
-      try {
-        const demoBizSnap = await getDocWithTimeout(demoBizRef, 1000);
-        if (demoBizSnap.exists()) {
-          const demoData = demoBizSnap.data();
-          if (!demoData.ownerUid || demoData.ownerUid === fbUser.uid) {
-            assignedBizId = 'biz-clothing-01';
-            await setDoc(demoBizRef, {
-              ownerUid: fbUser.uid,
-              memberUids: arrayUnion(fbUser.uid),
-              updatedAt: new Date().toISOString(),
-            }, { merge: true }).catch(() => {});
-          }
-        }
-      } catch (err) {
-        console.warn('Demo business check skipped:', err);
-      }
-    }
-
-    if (!assignedBizId) {
-      assignedBizId = defaultBizId;
-      if (!isOffline) {
-        const newBizRef = doc(db, 'businesses', assignedBizId);
-        setDoc(newBizRef, defaultBusiness, { merge: true }).catch(() => {});
-      }
-    }
+    // New User Setup
+    let assignedBizId = defaultBizId;
 
     profile = {
       uid: fbUser.uid,
@@ -425,52 +446,86 @@ export async function syncUserProfileAndBusiness(fbUser: User): Promise<{
       photoURL: fbUser.photoURL,
       ownerBusinessId: assignedBizId,
       authorizedBusinessIds: [assignedBizId],
-      hasCompletedOnboarding: false,
+      hasCompletedOnboarding: true,
       subscriptionTier: 'free',
       subscriptionStatus: 'ACTIVE',
       isSuspended: false,
-      aiTokensBalance: 500,
-      availableCredits: 500,
-      includedCredits: 500,
+      aiTokensBalance: 0,
+      availableCredits: 0,
+      includedCredits: 0,
       purchasedCredits: 0,
       usedCredits: 0,
-      points: 500,
+      points: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     
-    setDoc(userRef, profile).catch(() => {});
+    if (!isOffline) {
+      setDoc(userRef, profile, { merge: true }).catch(() => {});
+    }
     activeBizId = assignedBizId;
   }
 
+  // Persist user profile and active subscription locally
+  try {
+    localStorage.setItem('avanyx_user_profile', JSON.stringify(profile));
+    if ((profile as any).activeSubscription) {
+      localStorage.setItem('avanyx_active_subscription', JSON.stringify((profile as any).activeSubscription));
+    }
+  } catch {}
+
   // Load all authorized businesses
-  const authorizedIds = profile.authorizedBusinessIds && profile.authorizedBusinessIds.length > 0 
-    ? profile.authorizedBusinessIds 
-    : [activeBizId || defaultBizId];
+  const authorizedIds = [defaultBizId];
+  if (profile.ownerBusinessId && profile.ownerBusinessId !== 'biz-clothing-01' && !authorizedIds.includes(profile.ownerBusinessId)) {
+    authorizedIds.push(profile.ownerBusinessId);
+  }
 
   const loadedBusinesses: BusinessProfile[] = [];
   if (!isOffline) {
     for (const bId of authorizedIds) {
-      if (!bId) continue;
+      if (!bId || bId === 'biz-clothing-01') continue;
       try {
-        const bSnap = await getDocWithTimeout(doc(db, 'businesses', bId), 1000);
+        const bSnap = await getDoc(doc(db, 'businesses', bId));
         if (bSnap.exists()) {
           const bData = bSnap.data() as BusinessProfile;
-          if (!bData.ownerUid || bData.ownerUid === fbUser.uid || (bData.memberUids && bData.memberUids.includes(fbUser.uid))) {
-            loadedBusinesses.push({ ...bData, id: bSnap.id });
-          }
+          loadedBusinesses.push({ ...bData, id: bSnap.id });
         }
       } catch (err: any) {
         console.warn(`Notice loading business ${bId}:`, err?.message || err);
       }
     }
+
+    // If business doesn't exist yet, initialize it cleanly with default settings without overwriting
+    if (loadedBusinesses.length === 0) {
+      try {
+        await setDoc(doc(db, 'businesses', defaultBizId), defaultBusiness, { merge: true });
+        loadedBusinesses.push({ ...defaultBusiness, id: defaultBizId });
+      } catch (err: any) {
+        console.warn('Notice creating initial business:', err?.message || err);
+      }
+    }
   }
 
-  if (loadedBusinesses.length === 0) {
-    loadedBusinesses.push(defaultBusiness);
+  // Merge with locally cached businesses so offline / freshly edited businesses are never lost
+  const mergedBusinesses: BusinessProfile[] = [...loadedBusinesses];
+  for (const cached of cachedBusinesses) {
+    if (cached.id !== 'biz-clothing-01' && !mergedBusinesses.some(b => b.id === cached.id)) {
+      mergedBusinesses.push(cached);
+    }
   }
 
-  return { profile, activeBizId: loadedBusinesses[0].id, businesses: loadedBusinesses };
+  if (mergedBusinesses.length === 0) {
+    mergedBusinesses.push(defaultBusiness);
+  }
+
+  const finalActiveBizId = defaultBizId;
+  try {
+    localStorage.setItem('avanyx_businesses', JSON.stringify(mergedBusinesses));
+    localStorage.setItem('avanyx_active_business_id', finalActiveBizId);
+    localStorage.setItem('avanyx_onboarding_completed', 'true');
+  } catch {}
+
+  return { profile, activeBizId: finalActiveBizId, businesses: mergedBusinesses, hasRealBusiness: true };
 }
 
 // Connection Validation Helper (from skill guidelines)
@@ -529,10 +584,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   // Check if error is missing permissions or transient network unavailability
   const isPermissionError = errMsg.includes('Missing or insufficient permissions') || errMsg.includes('permission-denied');
   if (isPermissionError) {
-    console.error('Velcora Firestore Permission Error:', JSON.stringify(errInfo));
+    console.error('Avanyx Firestore Permission Error:', JSON.stringify(errInfo));
   } else {
     // Log transient connection / offline events cleanly
-    console.warn('Velcora Firestore Connection Notice:', errMsg);
+    console.warn('Avanyx Firestore Connection Notice:', errMsg);
   }
   return errInfo;
 }

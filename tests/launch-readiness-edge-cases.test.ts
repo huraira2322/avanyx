@@ -1,44 +1,44 @@
-﻿import { describe, it, expect } from 'vitest';
-import { VelcoraPricingEngine, VelcoraLoyaltyEngine } from '../src/utils/pricingEngine';
+import { describe, it, expect } from 'vitest';
+import { AvanyxPricingEngine, AvanyxLoyaltyEngine } from '../src/utils/pricingEngine';
 import { resolveActivePlan, isFeatureAllowed, checkResourceLimit, sanitizePlanConfig } from '../src/utils/planLimitsEngine';
 import { generateBarcodeSvg } from '../src/utils/barcodeGenerator';
 import { generateQrCodeSvg } from '../src/utils/qrCodeGenerator';
-import { VelcoraBusinessBrainEngine } from '../src/utils/brainEngine';
+import { AvanyxBusinessBrainEngine } from '../src/utils/brainEngine';
 import { CartItem, LoyaltyRuleConfig, Product, SaleTransaction } from '../src/types';
 
 describe('Launch Readiness & Edge-Case Verification Suite', () => {
   // 1. PRICING & CURRENCY ENGINE
-  describe('VelcoraPricingEngine - Edge Cases & Robustness', () => {
+  describe('AvanyxPricingEngine - Edge Cases & Robustness', () => {
     it('handles null, undefined, NaN, and Infinity in formatCurrency without crashing', () => {
-      expect(() => VelcoraPricingEngine.formatCurrency(null as any)).not.toThrow();
-      expect(VelcoraPricingEngine.formatCurrency(null as any)).toContain('0.00');
+      expect(() => AvanyxPricingEngine.formatCurrency(null as any)).not.toThrow();
+      expect(AvanyxPricingEngine.formatCurrency(null as any)).toContain('0.00');
 
-      expect(() => VelcoraPricingEngine.formatCurrency(undefined as any)).not.toThrow();
-      expect(VelcoraPricingEngine.formatCurrency(undefined as any)).toContain('0.00');
+      expect(() => AvanyxPricingEngine.formatCurrency(undefined as any)).not.toThrow();
+      expect(AvanyxPricingEngine.formatCurrency(undefined as any)).toContain('0.00');
 
-      expect(() => VelcoraPricingEngine.formatCurrency(NaN)).not.toThrow();
-      expect(VelcoraPricingEngine.formatCurrency(NaN)).toContain('0.00');
+      expect(() => AvanyxPricingEngine.formatCurrency(NaN)).not.toThrow();
+      expect(AvanyxPricingEngine.formatCurrency(NaN)).toContain('0.00');
 
-      expect(VelcoraPricingEngine.formatCurrency(1250.5, 'USD')).toBe('$1,250.50');
-      expect(VelcoraPricingEngine.formatCurrency(1250.5, 'PKR')).toBe('Rs. 1,250.50');
-      expect(VelcoraPricingEngine.formatCurrency(100, 'UNKNOWN_CURRENCY')).toBe('$100.00');
+      expect(AvanyxPricingEngine.formatCurrency(1250.5, 'USD')).toBe('$1,250.50');
+      expect(AvanyxPricingEngine.formatCurrency(1250.5, 'PKR')).toBe('Rs. 1,250.50');
+      expect(AvanyxPricingEngine.formatCurrency(100, 'UNKNOWN_CURRENCY')).toBe('$100.00');
     });
 
     it('clamps line item discount so it never exceeds item raw total', () => {
       // Unit price $10, Qty 1, Discount $50 -> discount must not exceed $10
-      const calc = VelcoraPricingEngine.calculateLineItem(10, 1, 50, 0.1, false);
+      const calc = AvanyxPricingEngine.calculateLineItem(10, 1, 50, 0.1, false);
       expect(calc.lineNet).toBe(0);
       expect(calc.lineDiscount).toBeLessThanOrEqual(10);
       expect(calc.lineGross).toBe(0);
     });
 
     it('handles inclusive tax without division by zero when taxRate is 0 or negative', () => {
-      const calcZero = VelcoraPricingEngine.calculateLineItem(100, 1, 0, 0, true);
+      const calcZero = AvanyxPricingEngine.calculateLineItem(100, 1, 0, 0, true);
       expect(calcZero.lineNet).toBe(100);
       expect(calcZero.lineTax).toBe(0);
       expect(calcZero.lineGross).toBe(100);
 
-      const calcNeg = VelcoraPricingEngine.calculateLineItem(100, 1, 0, -0.05, true);
+      const calcNeg = AvanyxPricingEngine.calculateLineItem(100, 1, 0, -0.05, true);
       expect(Number.isFinite(calcNeg.lineNet)).toBe(true);
       expect(calcNeg.lineGross).toBe(100);
     });
@@ -75,7 +75,7 @@ describe('Launch Readiness & Edge-Case Verification Suite', () => {
 
       // Customer tries to redeem 1,000 points ($100 value).
       // On a $100 order with max 40% cap, maximum discount MUST be $40.
-      const result = VelcoraPricingEngine.evaluateCart(items, 0, 1000, config);
+      const result = AvanyxPricingEngine.evaluateCart(items, 0, 1000, config);
       expect(result.subtotal).toBe(100);
       expect(result.loyaltyDiscount).toBeLessThanOrEqual(40);
       expect(result.grandTotal).toBeGreaterThanOrEqual(60);
@@ -112,7 +112,7 @@ describe('Launch Readiness & Edge-Case Verification Suite', () => {
       // Item 1 total is $10. Discount $50 should be capped at $10.
       // Item 2 total is $100.
       // Cart total should be: ($10 - $10) + $100 = $100. (NOT 110 - 50 = $60)
-      const result = VelcoraPricingEngine.evaluateCart(items, 0, 0);
+      const result = AvanyxPricingEngine.evaluateCart(items, 0, 0);
       expect(result.subtotal).toBe(110);
       expect(result.grandTotal).toBe(100);
     });
@@ -136,7 +136,80 @@ describe('Launch Readiness & Edge-Case Verification Suite', () => {
       expect(() => sanitizePlanConfig(null as any)).not.toThrow();
       const sanitized = sanitizePlanConfig(null as any);
       expect(sanitized.tier).toBe('free');
+      expect(sanitized.tokensIncludedMonthly).toBe(0);
       expect(sanitized.maxProducts).toBeGreaterThan(0);
+    });
+
+    it('resolves active plan from userProfile when activeSubscription is null (simulating page reload)', () => {
+      const resolved = resolveActivePlan(null, null, null, { subscriptionTier: 'pro' });
+      expect(resolved.tier).toBe('pro');
+      expect(resolved.tokensIncludedMonthly).toBe(10000);
+      expect(resolved.maxProducts).toBe(5000);
+    });
+
+    it('resolves active plan from activeSubscription with correct limits', () => {
+      const activeSub: any = {
+        subscriptionId: 'sub-test-999',
+        tier: 'pro_max',
+        planId: 'tier_pro_max',
+        tokensIncludedMonthly: 30000,
+        status: 'active',
+      };
+      const resolved = resolveActivePlan(activeSub, null);
+      expect(resolved.tier).toBe('pro_max');
+      expect(resolved.tokensIncludedMonthly).toBe(30000);
+      expect(resolved.maxProducts).toBe(20000);
+    });
+
+    it('strictly isolates Pro (tier_pro) and Pro Max (tier_pro_max) plan mutations', () => {
+      const isTargetPlan = (p: any, targetTierOrId: string) => {
+        if (targetTierOrId === 'tier_pro_max' || targetTierOrId === 'pro_max') {
+          return p.id === 'tier_pro_max' || p.tier === 'pro_max';
+        }
+        if (targetTierOrId === 'tier_pro' || targetTierOrId === 'pro') {
+          return (p.id === 'tier_pro' || p.tier === 'pro') && p.id !== 'tier_pro_max' && p.tier !== 'pro_max';
+        }
+        if (targetTierOrId === 'tier_free' || targetTierOrId === 'free') {
+          return p.id === 'tier_free' || p.tier === 'free';
+        }
+        return p.id === targetTierOrId;
+      };
+
+      const plans = [
+        { id: 'tier_free', tier: 'free', maxProducts: 50, maxStaff: 2 },
+        { id: 'tier_pro', tier: 'pro', maxProducts: 5000, maxStaff: 10 },
+        { id: 'tier_pro_max', tier: 'pro_max', maxProducts: 20000, maxStaff: 50 },
+      ];
+
+      // Mutate only Pro plan
+      const updatedProPlans = plans.map((p) => {
+        if (!isTargetPlan(p, 'tier_pro')) return p;
+        return { ...p, maxProducts: 8000, maxStaff: 15 };
+      });
+
+      const proPlan = updatedProPlans.find((p) => isTargetPlan(p, 'tier_pro'));
+      const proMaxPlan = updatedProPlans.find((p) => isTargetPlan(p, 'tier_pro_max'));
+
+      expect(proPlan?.maxProducts).toBe(8000);
+      expect(proPlan?.maxStaff).toBe(15);
+      // Pro Max MUST NOT be changed
+      expect(proMaxPlan?.maxProducts).toBe(20000);
+      expect(proMaxPlan?.maxStaff).toBe(50);
+
+      // Mutate only Pro Max plan
+      const updatedProMaxPlans = plans.map((p) => {
+        if (!isTargetPlan(p, 'tier_pro_max')) return p;
+        return { ...p, maxProducts: 50000, maxStaff: 100 };
+      });
+
+      const proPlanAfter = updatedProMaxPlans.find((p) => isTargetPlan(p, 'tier_pro'));
+      const proMaxPlanAfter = updatedProMaxPlans.find((p) => isTargetPlan(p, 'tier_pro_max'));
+
+      // Pro MUST NOT be changed
+      expect(proPlanAfter?.maxProducts).toBe(5000);
+      expect(proPlanAfter?.maxStaff).toBe(10);
+      expect(proMaxPlanAfter?.maxProducts).toBe(50000);
+      expect(proMaxPlanAfter?.maxStaff).toBe(100);
     });
   });
 
@@ -157,18 +230,18 @@ describe('Launch Readiness & Edge-Case Verification Suite', () => {
     it('generates valid QR Code SVG without crashing on edge cases', () => {
       expect(() => generateQrCodeSvg(null as any)).not.toThrow();
       expect(() => generateQrCodeSvg('')).not.toThrow();
-      expect(() => generateQrCodeSvg('https://velcora.app/checkout?id=12345&store=main')).not.toThrow();
+      expect(() => generateQrCodeSvg('https://avanyx.app/checkout?id=12345&store=main')).not.toThrow();
 
-      const qrSvg = generateQrCodeSvg('VELCORA-LAUNCH-TEST');
+      const qrSvg = generateQrCodeSvg('AVANYX-LAUNCH-TEST');
       expect(qrSvg).toContain('<svg');
       expect(qrSvg).toContain('<path');
     });
   });
 
   // 4. BUSINESS BRAIN & FINANCIAL REPORTING
-  describe('VelcoraBusinessBrainEngine - Valuation & Zero-Division Safety', () => {
+  describe('AvanyxBusinessBrainEngine - Valuation & Zero-Division Safety', () => {
     it('does not produce NaN or Infinity with empty input data', () => {
-      const diag = VelcoraBusinessBrainEngine.computeDiagnostics({
+      const diag = AvanyxBusinessBrainEngine.computeDiagnostics({
         products: [],
         sales: [],
         expenses: [],
@@ -216,7 +289,7 @@ describe('Launch Readiness & Edge-Case Verification Suite', () => {
         status: 'cancelled',
       };
 
-      const diag = VelcoraBusinessBrainEngine.computeDiagnostics({
+      const diag = AvanyxBusinessBrainEngine.computeDiagnostics({
         products: [],
         sales: [activeSale, cancelledSale],
         expenses: [],
@@ -228,5 +301,126 @@ describe('Launch Readiness & Edge-Case Verification Suite', () => {
       expect(diag.metrics.totalRevenue).toBe(100);
       expect(diag.metrics.totalTransactions).toBe(1);
     });
+
+    it('correctly updates tokensIncludedMonthly and synchronizes with resourceLimits.monthlyAiCredits', () => {
+      const originalPlan: any = {
+        id: 'tier_pro',
+        tier: 'pro',
+        name: 'Avanyx Pro',
+        tagline: 'Standard pro tier',
+        monthlyPriceUSD: 10,
+        annualPriceUSD: 100,
+        currencyPricing: {},
+        tokensIncludedMonthly: 10000,
+        maxWorkstations: 5,
+        maxSubusers: 50,
+        maxProducts: 5000,
+        features: ['Feature 1', 'Feature 2'],
+        isActive: true,
+        commissionEligible: true,
+        resourceLimits: { monthlyAiCredits: 10000, maxWorkstations: 5, maxProducts: 5000, maxStaff: 50 },
+      };
+
+      // User updates limits in Super Admin
+      const updatedPlan = {
+        ...originalPlan,
+        tokensIncludedMonthly: 25000,
+        maxWorkstations: 12,
+        maxProducts: 8000,
+        maxSubusers: 35,
+      };
+
+      const sanitized = sanitizePlanConfig(updatedPlan);
+
+      expect(sanitized.tokensIncludedMonthly).toBe(25000);
+      expect(sanitized.resourceLimits.monthlyAiCredits).toBe(25000);
+      expect(sanitized.maxWorkstations).toBe(12);
+      expect(sanitized.resourceLimits.maxWorkstations).toBe(12);
+      expect(sanitized.maxProducts).toBe(8000);
+      expect(sanitized.resourceLimits.maxProducts).toBe(8000);
+      expect(sanitized.maxSubusers).toBe(35);
+      expect(sanitized.resourceLimits.maxStaff).toBe(35);
+    });
+
+    it('preserves newly added plan details and features in sanitizePlanConfig', () => {
+      const plan: any = {
+        id: 'tier_custom_1',
+        tier: 'custom_1',
+        name: 'Retail VIP Enterprise',
+        tagline: 'Special package',
+        monthlyPriceUSD: 49,
+        annualPriceUSD: 490,
+        currencyPricing: {},
+        tokensIncludedMonthly: 50000,
+        maxWorkstations: 10,
+        maxSubusers: 25,
+        maxProducts: 15000,
+        features: ['Automated Inventory Restock', 'Multi-Terminal Sync'],
+        isActive: true,
+        commissionEligible: true,
+      };
+
+      const addedDetail = '24/7 Dedicated Account Manager';
+      const bulkDetail = 'Custom Barcode Printing Engine';
+      const updatedFeatures = [...plan.features, addedDetail, bulkDetail];
+
+      const updatedPlan = {
+        ...plan,
+        features: updatedFeatures,
+      };
+
+      const sanitized = sanitizePlanConfig(updatedPlan);
+
+      expect(sanitized.features).toHaveLength(4);
+      expect(sanitized.features).toContain('Automated Inventory Restock');
+      expect(sanitized.features).toContain('Multi-Terminal Sync');
+      expect(sanitized.features).toContain(addedDetail);
+      expect(sanitized.features).toContain(bulkDetail);
+    });
+
+    it('dynamically adapts when plans are added or removed, omitting deleted plans', () => {
+      // Suppose founder deletes tier_pro and tier_pro_max, and adds custom tier_starter
+      const customPlans = [
+        {
+          id: 'tier_free',
+          tier: 'free',
+          name: 'Avanyx Free',
+          monthlyPriceUSD: 0,
+          annualPriceUSD: 0,
+          tokensIncludedMonthly: 0,
+          maxWorkstations: 1,
+          maxSubusers: 2,
+          maxProducts: 500,
+          features: ['POS Only'],
+          isActive: true,
+        },
+        {
+          id: 'tier_starter',
+          tier: 'starter',
+          name: 'Avanyx Starter',
+          monthlyPriceUSD: 19,
+          annualPriceUSD: 190,
+          tokensIncludedMonthly: 15000,
+          maxWorkstations: 3,
+          maxSubusers: 10,
+          maxProducts: 2500,
+          features: ['Online Store', 'AI Assistant'],
+          isActive: true,
+        },
+      ];
+
+      // Sanitizing these plans must include tier_starter and omit tier_pro / tier_pro_max
+      const sanitizedList = customPlans.map((p: any) => sanitizePlanConfig(p));
+      expect(sanitizedList).toHaveLength(2);
+      expect(sanitizedList.some((p) => p.id === 'tier_pro')).toBe(false);
+      expect(sanitizedList.some((p) => p.id === 'tier_pro_max')).toBe(false);
+      expect(sanitizedList.some((p) => p.id === 'tier_starter')).toBe(true);
+
+      // Resolving user on starter tier resolves correctly
+      const resolved = resolveActivePlan({ planId: 'tier_starter' } as any, sanitizedList);
+      expect(resolved.name).toBe('Avanyx Starter');
+      expect(resolved.tokensIncludedMonthly).toBe(15000);
+    });
   });
 });
+

@@ -30,7 +30,7 @@ for (const file of files) {
        if (!relativePath.startsWith('.')) relativePath = './' + relativePath;
        content = content.replace(lastImport, lastImport + `\nimport { useTranslation } from '${relativePath}';`);
     }
-    content = content.replace(/const\s+\{([^}]*)\}\s*=\s*useVelcora\(\);/g, `const {$1} = useVelcora();\n  const { t, locale, setLocale } = useTranslation();`);
+    content = content.replace(/const\s+\{([^}]*)\}\s*=\s*useAvanyx\(\);/g, `const {$1} = useAvanyx();\n  const { t, locale, setLocale } = useTranslation();`);
   }
 
   // Also fix PosBillingScreen where t might be redeclared.

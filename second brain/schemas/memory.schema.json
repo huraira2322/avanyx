@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "VelcoraSecondBrainMemory",
+  "title": "AvanyxSecondBrainMemory",
   "type": "object",
   "required": ["id", "tenantId", "content", "tier", "classification", "authority", "confidence", "createdAt"],
   "properties": {

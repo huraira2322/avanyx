@@ -30,10 +30,10 @@ const translationKeys = {
     'Purchases & Suppliers': 'purchases',
     'Financial Management': 'finance',
     'Reports & Intelligence': 'reports',
-    'Velcora Business Brain': 'business_brain',
-    'Ask Velcora AI': 'ask_ai',
+    'Avanyx Business Brain': 'business_brain',
+    'Ask Avanyx AI': 'ask_ai',
     'Multi-Model AI Router': 'ai_router',
-    'Velcora Creative Studio': 'studio',
+    'Avanyx Creative Studio': 'studio',
     'Online Store Beta': 'online_store',
     'Platform Settings': 'settings',
     'Health Score': 'health_score',
@@ -51,11 +51,11 @@ for (const file of files) {
   let content = fs.readFileSync(filePath, 'utf8');
   let originalContent = content;
 
-  // Add tStr to useVelcora destructuring if not present
-  if (content.includes('useVelcora()') && !content.includes('tStr')) {
-    content = content.replace(/const {([^}]+)} = useVelcora\(\);/g, (match, p1) => {
+  // Add tStr to useAvanyx destructuring if not present
+  if (content.includes('useAvanyx()') && !content.includes('tStr')) {
+    content = content.replace(/const {([^}]+)} = useAvanyx\(\);/g, (match, p1) => {
         if (!p1.includes('tStr')) {
-            return `const {${p1}, tStr} = useVelcora();`;
+            return `const {${p1}, tStr} = useAvanyx();`;
         }
         return match;
     });

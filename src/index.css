@@ -14,7 +14,7 @@
 
 @layer base {
   :root {
-    /* VELCORA OFFICIAL DESIGN TOKENS */
+    /* AVANYX OFFICIAL DESIGN TOKENS */
     --color-primary: #5b5ce2;
     --color-primary-dark: #4647c7;
     --color-ai: #4f8cff;
@@ -41,18 +41,18 @@
     --text-secondary: #475569;
     --text-muted: #94a3b8;
 
-    --velcora-primary: #5b5ce2;
-    --velcora-primary-dark: #4647c7;
-    --velcora-primary-light: #eef2ff;
+    --avanyx-primary: #5b5ce2;
+    --avanyx-primary-dark: #4647c7;
+    --avanyx-primary-light: #eef2ff;
 
-    --velcora-success: #10b981;
-    --velcora-success-light: #ecfdf5;
-    --velcora-warning: #f59e0b;
-    --velcora-warning-light: #fffbeb;
-    --velcora-danger: #ef4444;
-    --velcora-danger-light: #fef2f2;
-    --velcora-info: #3b82f6;
-    --velcora-info-light: #eff6ff;
+    --avanyx-success: #10b981;
+    --avanyx-success-light: #ecfdf5;
+    --avanyx-warning: #f59e0b;
+    --avanyx-warning-light: #fffbeb;
+    --avanyx-danger: #ef4444;
+    --avanyx-danger-light: #fef2f2;
+    --avanyx-info: #3b82f6;
+    --avanyx-info-light: #eff6ff;
   }
 
   .dark {
@@ -81,18 +81,23 @@
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
 
-    --velcora-primary: #6366f1;
-    --velcora-primary-dark: #4f46e5;
-    --velcora-primary-light: #1e1b4b;
+    --avanyx-primary: #6366f1;
+    --avanyx-primary-dark: #4f46e5;
+    --avanyx-primary-light: #1e1b4b;
 
-    --velcora-success: #10b981;
-    --velcora-success-light: #064e3b;
-    --velcora-warning: #f59e0b;
-    --velcora-warning-light: #451a03;
-    --velcora-danger: #ef4444;
-    --velcora-danger-light: #450a0a;
-    --velcora-info: #3b82f6;
-    --velcora-info-light: #172554;
+    --avanyx-success: #10b981;
+    --avanyx-success-light: #064e3b;
+    --avanyx-warning: #f59e0b;
+    --avanyx-warning-light: #451a03;
+    --avanyx-danger: #ef4444;
+    --avanyx-danger-light: #450a0a;
+    --avanyx-info: #3b82f6;
+    --avanyx-info-light: #172554;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
@@ -115,7 +120,6 @@
     transition:
       background-color 0.2s ease,
       color 0.2s ease;
-    /* Prevent horizontal page-jank from stray fixed-width elements on small screens */
     overflow-x: hidden;
   }
 
@@ -125,8 +129,8 @@
       padding-left: env(safe-area-inset-left);
       padding-right: env(safe-area-inset-right);
     }
-    #velcora-main-header,
-    #velcora-pos-billing-screen {
+    #avanyx-main-header,
+    #avanyx-pos-billing-screen {
       padding-bottom: max(0px, env(safe-area-inset-bottom));
     }
   }
@@ -208,7 +212,7 @@
     cursor: pointer;
   }
 
-  /* Custom Velcora scrollbar */
+  /* Custom Avanyx scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -248,11 +252,11 @@
 }
 
 /* ========================================================
-   VELCORA LIVING MOTION DESIGN SYSTEM
+   AVANYX LIVING MOTION DESIGN SYSTEM
    Thin luminous signal lines, subtle wave motion, premium rings
 ======================================================== */
 
-@keyframes velcora-wave-ambient {
+@keyframes avanyx-wave-ambient {
   0% {
     stroke-dashoffset: 400;
     opacity: 0.7;
@@ -267,7 +271,7 @@
   }
 }
 
-@keyframes velcora-wave-pulse {
+@keyframes avanyx-wave-pulse {
   0%,
   100% {
     filter: drop-shadow(0 0 2px rgba(109, 93, 251, 0.4));
@@ -279,7 +283,7 @@
   }
 }
 
-@keyframes velcora-rotate-slow {
+@keyframes avanyx-rotate-slow {
   0% {
     transform: rotate(0deg);
   }
@@ -288,7 +292,7 @@
   }
 }
 
-@keyframes velcora-pulse-gentle {
+@keyframes avanyx-pulse-gentle {
   0%,
   100% {
     opacity: 0.6;
@@ -300,82 +304,82 @@
   }
 }
 
-.velcora-living-wave-ambient {
+.avanyx-living-wave-ambient {
   stroke-dasharray: 80 120;
   animation:
-    velcora-wave-ambient 6s linear infinite,
-    velcora-wave-pulse 4s ease-in-out infinite;
+    avanyx-wave-ambient 6s linear infinite,
+    avanyx-wave-pulse 4s ease-in-out infinite;
 }
 
-.velcora-living-wave-medium {
+.avanyx-living-wave-medium {
   stroke-dasharray: 100 100;
   animation:
-    velcora-wave-ambient 3s linear infinite,
-    velcora-wave-pulse 2.5s ease-in-out infinite;
+    avanyx-wave-ambient 3s linear infinite,
+    avanyx-wave-pulse 2.5s ease-in-out infinite;
 }
 
-.velcora-living-wave-fast {
+.avanyx-living-wave-fast {
   stroke-dasharray: 120 80;
   animation:
-    velcora-wave-ambient 1.8s linear infinite,
-    velcora-wave-pulse 1.5s ease-in-out infinite;
+    avanyx-wave-ambient 1.8s linear infinite,
+    avanyx-wave-pulse 1.5s ease-in-out infinite;
 }
 
-.velcora-living-wave-routing {
+.avanyx-living-wave-routing {
   stroke-dasharray: 140 100;
   animation:
-    velcora-wave-ambient 2.4s linear infinite,
-    velcora-wave-pulse 2s ease-in-out infinite;
+    avanyx-wave-ambient 2.4s linear infinite,
+    avanyx-wave-pulse 2s ease-in-out infinite;
 }
 
-.velcora-living-particle-ambient {
-  animation: velcora-pulse-gentle 3s ease-in-out infinite;
+.avanyx-living-particle-ambient {
+  animation: avanyx-pulse-gentle 3s ease-in-out infinite;
 }
 
-.velcora-living-particle-medium {
-  animation: velcora-pulse-gentle 1.8s ease-in-out infinite;
+.avanyx-living-particle-medium {
+  animation: avanyx-pulse-gentle 1.8s ease-in-out infinite;
 }
 
-.velcora-living-particle-fast {
-  animation: velcora-pulse-gentle 1.2s ease-in-out infinite;
+.avanyx-living-particle-fast {
+  animation: avanyx-pulse-gentle 1.2s ease-in-out infinite;
 }
 
 /* Google Account & Premium Aura Rings */
-.velcora-google-ring {
+.avanyx-google-ring {
   background: conic-gradient(from 0deg, #4285f4 0deg, #ea4335 90deg, #fbbc05 180deg, #34a853 270deg, #4285f4 360deg);
-  animation: velcora-rotate-slow 12s linear infinite;
+  animation: avanyx-rotate-slow 12s linear infinite;
 }
 
-.velcora-plus-ring {
+.avanyx-plus-ring {
   background: conic-gradient(from 0deg, #6d5dfb 0deg, #8b5cf6 120deg, #22d3ee 240deg, #6d5dfb 360deg);
-  animation: velcora-rotate-slow 10s linear infinite;
+  animation: avanyx-rotate-slow 10s linear infinite;
 }
 
-.velcora-premium-ring {
+.avanyx-premium-ring {
   background: conic-gradient(from 0deg, #6d5dfb 0deg, #a855f7 90deg, #ec4899 180deg, #22d3ee 270deg, #6d5dfb 360deg);
-  animation: velcora-rotate-slow 8s linear infinite;
+  animation: avanyx-rotate-slow 8s linear infinite;
 }
 
 /* Accessibility: Prefers-reduced-motion fallback */
 @media (prefers-reduced-motion: reduce) {
-  .velcora-living-wave-ambient,
-  .velcora-living-wave-medium,
-  .velcora-living-wave-fast,
-  .velcora-living-wave-routing,
-  .velcora-living-particle-ambient,
-  .velcora-living-particle-medium,
-  .velcora-living-particle-fast,
-  .velcora-google-ring,
-  .velcora-plus-ring,
-  .velcora-premium-ring {
+  .avanyx-living-wave-ambient,
+  .avanyx-living-wave-medium,
+  .avanyx-living-wave-fast,
+  .avanyx-living-wave-routing,
+  .avanyx-living-particle-ambient,
+  .avanyx-living-particle-medium,
+  .avanyx-living-particle-fast,
+  .avanyx-google-ring,
+  .avanyx-plus-ring,
+  .avanyx-premium-ring {
     animation: none !important;
     stroke-dashoffset: 0 !important;
     opacity: 0.85 !important;
   }
 }
 
-/* Velcora Primary Brand Glow & Highlights */
-@keyframes velcora-glow {
+/* Avanyx Primary Brand Glow & Highlights */
+@keyframes avanyx-glow {
   0%,
   100% {
     box-shadow: 0 0 12px 2px rgba(91, 45, 232, 0.25);
@@ -385,12 +389,12 @@
   }
 }
 
-.velcora-brand-glow {
-  animation: velcora-glow 4s ease-in-out infinite;
+.avanyx-brand-glow {
+  animation: avanyx-glow 4s ease-in-out infinite;
 }
 
 /* Glassmorphism & Card Utilities */
-.velcora-card {
+.avanyx-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 1.25rem;
@@ -400,25 +404,25 @@
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dark .velcora-card {
+.dark .avanyx-card {
   background: #111c30;
   border: 1px solid #1f2e4d;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
 }
 
-.velcora-card:hover {
+.avanyx-card:hover {
   box-shadow:
     0 4px 14px 0 rgba(15, 23, 42, 0.05),
     0 2px 4px 0 rgba(15, 23, 42, 0.02);
   border-color: #cbd5e1;
 }
 
-.dark .velcora-card:hover {
+.dark .avanyx-card:hover {
   box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.35);
   border-color: #2d416b;
 }
 
-.velcora-card-interactive {
+.avanyx-card-interactive {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 1.25rem;
@@ -427,7 +431,7 @@
   cursor: pointer;
 }
 
-.velcora-card-interactive:hover {
+.avanyx-card-interactive:hover {
   transform: translateY(-1px);
   box-shadow:
     0 6px 16px -2px rgba(15, 23, 42, 0.06),
@@ -435,14 +439,14 @@
   border-color: var(--color-primary, #5b5ce2);
 }
 
-.velcora-glass-card {
+.avanyx-glass-card {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid #e2e8f0;
 }
 
-.dark .velcora-glass-card {
+.dark .avanyx-glass-card {
   background: rgba(17, 28, 48, 0.9);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -450,7 +454,7 @@
 }
 
 /* Premium Button & Input States */
-.velcora-input {
+.avanyx-input {
   background-color: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #0f172a;
@@ -462,20 +466,20 @@
   transition: all 0.15s ease;
 }
 
-.dark .velcora-input {
+.dark .avanyx-input {
   background-color: #0b101d;
   border-color: #1f2e4d;
   color: #f8fafc;
 }
 
-.velcora-input:focus {
+.avanyx-input:focus {
   outline: none;
   background-color: #ffffff;
   border-color: var(--color-primary, #5b5ce2);
   box-shadow: 0 0 0 3px rgba(91, 92, 226, 0.15);
 }
 
-.dark .velcora-input:focus {
+.dark .avanyx-input:focus {
   background-color: #111c30;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
 }
@@ -504,10 +508,10 @@
   }
 
   /* Hide app shells and chrome when printing */
-  #velcora-header,
-  #velcora-main-header,
+  #avanyx-header,
+  #avanyx-main-header,
   #floating-ai-assistant,
-  #velcora-nav-tabs,
+  #avanyx-nav-tabs,
   nav,
   header,
   aside,
@@ -518,8 +522,8 @@
 
   /* Isolate printable receipt and invoice modals */
   .printable-area,
-  #velcora-printable-receipt,
-  #velcora-printable-invoice {
+  #avanyx-printable-receipt,
+  #avanyx-printable-invoice {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -569,3 +573,59 @@ html.rtl-active {
 [dir='rtl'] svg.barcode {
   direction: ltr !important;
 }
+
+/* ========================================================
+   MODERN UI / UX ELEVATION (Glassmorphism, Micro-interactions)
+======================================================== */
+.avanyx-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.avanyx-card:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+}
+.dark .avanyx-card {
+  background: linear-gradient(135deg, rgba(15, 20, 36, 0.85) 0%, rgba(11, 16, 29, 0.95) 100%);
+  border: 1px solid rgba(31, 46, 77, 0.75);
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+}
+
+.avanyx-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+.dark .avanyx-glass {
+  background: rgba(15, 20, 36, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(31, 46, 77, 0.6);
+}
+
+/* Smooth Interactive Physics */
+button, input, select, textarea {
+  transition-property: color, background-color, border-color, transform, box-shadow, opacity;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-duration: 200ms;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Subtle Shimmer & Glow */
+@keyframes avanyx-soft-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-soft-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  background-size: 200% 100%;
+  animation: avanyx-soft-shimmer 3s infinite ease-in-out;
+}
+

@@ -1,11 +1,11 @@
 import { masterPaymentEngine, DEFAULT_TOKEN_PACKAGES } from '../src/server/masterPaymentEngine';
 import { paymentProviderAdapter } from '../src/server/paymentProviderAdapter';
-import { VelcoraCreditSystem } from '../src/server/creditManager';
+import { AvanyxCreditSystem } from '../src/server/creditManager';
 import { referralStore } from '../src/server/referralEngine';
 import crypto from 'crypto';
 
 async function runPaymentSystemTests() {
-  console.log('=== RUNNING VOLCORA AUTHORITATIVE PAYMENT & WEBHOOK SYSTEM AUDIT TESTS ===\n');
+  console.log('=== RUNNING AVANYX AUTHORITATIVE PAYMENT & WEBHOOK SYSTEM AUDIT TESTS ===\n');
   let passed = 0;
   let total = 0;
 
@@ -42,7 +42,7 @@ async function runPaymentSystemTests() {
   const testUserId = `test_user_${Date.now()}`;
   const checkoutIntent = masterPaymentEngine.createCheckoutIntent({
     userId: testUserId,
-    userEmail: 'test@volcora.com',
+    userEmail: 'test@AVANYX.com',
     itemType: 'TOKEN_PURCHASE',
     itemId: 'token_pack_5usd',
     currency: 'USD',
@@ -52,7 +52,7 @@ async function runPaymentSystemTests() {
   assert(checkoutIntent.success && !!checkoutIntent.checkoutSession?.serverSignature && !!checkoutIntent.checkoutSession?.orderId, 'Test 5: Checkout intent creation with server signature & order ID');
 
   // Initial Wallet Balance
-  const initialWallet = await VelcoraCreditSystem.getWallet(testUserId);
+  const initialWallet = await AvanyxCreditSystem.getWallet(testUserId);
   const initialBalance = initialWallet.availableCredits;
 
   // ----------------------------------------------------
@@ -61,7 +61,7 @@ async function runPaymentSystemTests() {
   const extTxId = `test_ext_${Date.now()}`;
   const payResult = await masterPaymentEngine.processVerifiedPayment({
     userId: testUserId,
-    userEmail: 'test@volcora.com',
+    userEmail: 'test@AVANYX.com',
     transactionType: 'TOKEN_PURCHASE',
     packageId: 'token_pack_5usd',
     amount: 5.0,
@@ -77,7 +77,7 @@ async function runPaymentSystemTests() {
   assert(payResult.success && payResult.tokensCredited === 25000, 'Test 6: Succeeded payment credits exact 25,000 tokens');
   assert(!payResult.commissionRecord && payResult.transaction?.commissionEligible === false, 'Test 7: Token package strictly generated $0.00 referral commission');
 
-  const updatedWallet = await VelcoraCreditSystem.getWallet(testUserId);
+  const updatedWallet = await AvanyxCreditSystem.getWallet(testUserId);
   assert(updatedWallet.availableCredits === initialBalance + 25000, 'Test 8: Wallet balance increased by 25,000 credits');
 
   // ----------------------------------------------------
@@ -85,7 +85,7 @@ async function runPaymentSystemTests() {
   // ----------------------------------------------------
   const dupResult = await masterPaymentEngine.processVerifiedPayment({
     userId: testUserId,
-    userEmail: 'test@volcora.com',
+    userEmail: 'test@AVANYX.com',
     transactionType: 'TOKEN_PURCHASE',
     packageId: 'token_pack_5usd',
     amount: 5.0,
@@ -97,7 +97,7 @@ async function runPaymentSystemTests() {
     status: 'succeeded',
   });
 
-  const dupWallet = await VelcoraCreditSystem.getWallet(testUserId);
+  const dupWallet = await AvanyxCreditSystem.getWallet(testUserId);
   assert(dupResult.success && dupWallet.availableCredits === updatedWallet.availableCredits, 'Test 9: Duplicate payment idempotency rejected duplicate credit additions');
 
   // ----------------------------------------------------
@@ -106,7 +106,7 @@ async function runPaymentSystemTests() {
   const failTxId = `test_fail_${Date.now()}`;
   const failResult = await masterPaymentEngine.processVerifiedPayment({
     userId: testUserId,
-    userEmail: 'test@volcora.com',
+    userEmail: 'test@AVANYX.com',
     transactionType: 'TOKEN_PURCHASE',
     packageId: 'token_pack_5usd',
     amount: 5.0,
@@ -117,13 +117,13 @@ async function runPaymentSystemTests() {
     status: 'failed',
   });
 
-  const walletAfterFail = await VelcoraCreditSystem.getWallet(testUserId);
+  const walletAfterFail = await AvanyxCreditSystem.getWallet(testUserId);
   assert(!failResult.success && failResult.tokensCredited === 0 && walletAfterFail.availableCredits === updatedWallet.availableCredits, 'Test 10: Failed payment status correctly granted 0 tokens');
 
   // Price underpayment / tampering check
   const tamperedResult = await masterPaymentEngine.processVerifiedPayment({
     userId: testUserId,
-    userEmail: 'test@volcora.com',
+    userEmail: 'test@AVANYX.com',
     transactionType: 'TOKEN_PURCHASE',
     packageId: 'token_pack_60usd',
     amount: 1.0, // Attempted tampering: $1 for a $60 pack
@@ -171,10 +171,10 @@ async function runPaymentSystemTests() {
     payResult.transaction!.transactionId,
     'Customer requested refund test',
     'admin_test',
-    'admin@volcora.com'
+    'admin@AVANYX.com'
   );
 
-  const walletAfterRefund = await VelcoraCreditSystem.getWallet(testUserId);
+  const walletAfterRefund = await AvanyxCreditSystem.getWallet(testUserId);
   assert(refundResult.success && walletAfterRefund.availableCredits === initialBalance, 'Test 14: Refund transaction deducted credited tokens back to initial balance');
 
   // ----------------------------------------------------
@@ -184,7 +184,7 @@ async function runPaymentSystemTests() {
   const subTxId = `sub_tx_${Date.now()}`;
   const subResult = await masterPaymentEngine.processVerifiedPayment({
     userId: subUserId,
-    userEmail: 'subscriber@volcora.com',
+    userEmail: 'subscriber@AVANYX.com',
     transactionType: 'SUBSCRIPTION',
     planId: 'tier_pro',
     amount: 10.0,

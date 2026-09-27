@@ -314,7 +314,7 @@ export function authenticateStaff(
     businessId: record.businessId,
     staffId: record.staffId,
     name: record.name,
-    email: `${record.staffId.toLowerCase()}@${normalizedBizId}.velcora.pos`,
+    email: `${record.staffId.toLowerCase()}@${normalizedBizId}.avanyx.pos`,
     roleId: record.roleId,
     roleName: record.roleName,
     pinCode: record.pinCode,
@@ -377,8 +377,8 @@ export function registerStaffCredentials(
   const existing = staffCredentialsMap.get(key);
 
   const salt = existing ? existing.passwordSalt : generateSalt();
-  const passToHash = password || (existing ? null : 'Velcora2026!');
-  const passwordHash = passToHash ? hashPasswordWithSalt(passToHash, salt) : (existing?.passwordHash || hashPasswordWithSalt('Velcora2026!', salt));
+  const passToHash = password || (existing ? null : 'Avanyx2026!');
+  const passwordHash = passToHash ? hashPasswordWithSalt(passToHash, salt) : (existing?.passwordHash || hashPasswordWithSalt('Avanyx2026!', salt));
 
   staffCredentialsMap.set(key, {
     businessId: normalizedBizId,

@@ -1,7 +1,7 @@
 {
-  "name": "velcora-second-brain",
+  "name": "avanyx-second-brain",
   "version": "1.0.0",
-  "description": "Velcora Second Brain — Standalone Persistent Knowledge & Memory Architecture",
+  "description": "Avanyx Second Brain — Standalone Persistent Knowledge & Memory Architecture",
   "main": "dist/api/server.js",
   "scripts": {
     "dev": "tsx src/api/server.ts",

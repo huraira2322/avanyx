@@ -1,5 +1,5 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/context/VelcoraContext.tsx', 'utf8');
+let content = fs.readFileSync('src/context/AvanyxContext.tsx', 'utf8');
 
 content = content.replace(
   'updateBusinessProfile({ language: loc });',
@@ -10,4 +10,4 @@ content = content.replace(
     }`
 );
 
-fs.writeFileSync('src/context/VelcoraContext.tsx', content);
+fs.writeFileSync('src/context/AvanyxContext.tsx', content);

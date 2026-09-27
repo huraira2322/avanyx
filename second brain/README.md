@@ -1,6 +1,6 @@
-# VELCORA SECOND BRAIN
+# AVANYX SECOND BRAIN
 
-A standalone, production-grade persistent knowledge, reasoning, and memory architecture for the Velcora Retail & POS Ecosystem.
+A standalone, production-grade persistent knowledge, reasoning, and memory architecture for the Avanyx Retail & POS Ecosystem.
 
 ```text
 SOURCE

@@ -2,8 +2,8 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { Workstation } from '../types';
 
-const DEVICE_ID_KEY = 'velcora_device_id';
-const DEVICE_NAME_KEY = 'velcora_device_name';
+const DEVICE_ID_KEY = 'avanyx_device_id';
+const DEVICE_NAME_KEY = 'avanyx_device_name';
 
 export function getOrCreateDeviceId(): string {
   let devId = localStorage.getItem(DEVICE_ID_KEY);
@@ -36,7 +36,7 @@ export function setCustomDeviceName(name: string): void {
   localStorage.setItem(DEVICE_NAME_KEY, name);
 }
 
-const LOCAL_DEVICE_CACHE_KEY = 'velcora_device_cache';
+const LOCAL_DEVICE_CACHE_KEY = 'avanyx_device_cache';
 
 export async function syncAndRegisterDevice(
   businessId: string,

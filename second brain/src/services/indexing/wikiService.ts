@@ -186,7 +186,7 @@ export class WikiService {
       authority: metadata.authority || 'PRIMARY',
       confidence: metadata.confidence ?? 1.0,
       status: metadata.status || 'active',
-      source: metadata.source || 'Velcora Brain Ingestion',
+      source: metadata.source || 'Avanyx Brain Ingestion',
       provenance: metadata.provenance || 'Second Brain Wiki Engine',
       createdAt: metadata.createdAt || now,
       updatedAt: now,

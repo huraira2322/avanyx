@@ -1,0 +1,32 @@
+{
+  "id": "b92b633b-5469-4aca-9022-d08ff1eec1d5",
+  "tenantId": "tenant-gold-jewelers",
+  "userId": "user-owner-1",
+  "tier": "permanent",
+  "classification": "decision",
+  "content": "Our secret supplier discount is 35% on all gold wholesale orders from Apex Bullion.",
+  "summary": "Store Policy: Our secret supplier discount is 35% on all gold wholesale orders from Apex Bullion.",
+  "tags": [
+    "decision",
+    "policy",
+    "business_policy",
+    "operations",
+    "business_rules"
+  ],
+  "entities": [
+    "Store Policy"
+  ],
+  "concepts": [],
+  "authority": "USER_PROVIDED",
+  "confidence": 0.96,
+  "status": "active",
+  "source": "LearningEngine [user]",
+  "provenance": "Chat interaction",
+  "expiresAt": null,
+  "createdAt": "2026-09-25T14:44:39.524Z",
+  "updatedAt": "2026-09-25T14:44:39.524Z",
+  "metadata": {
+    "topicKey": "policy_pricing",
+    "speakerRole": "user"
+  }
+}

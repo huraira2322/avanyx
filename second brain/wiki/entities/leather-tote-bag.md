@@ -11,10 +11,10 @@ aliases: []
 authority: PRIMARY
 confidence: 1
 status: active
-source: Velcora Brain Ingestion
+source: Avanyx Brain Ingestion
 provenance: Second Brain Wiki Engine
-createdAt: '2026-09-08T14:54:43.910Z'
-updatedAt: '2026-09-08T14:54:43.910Z'
+createdAt: '2026-09-25T14:44:38.099Z'
+updatedAt: '2026-09-25T14:44:38.099Z'
 relatedWikilinks:
   - Leather Tote Bag
 ---

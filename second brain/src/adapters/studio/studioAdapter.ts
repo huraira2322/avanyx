@@ -22,7 +22,7 @@ export interface StudioContextResponse {
 export class StudioAdapter {
   public getStudioContext(request: StudioContextRequest): StudioContextResponse {
     const { tenantId, userId, productOrTopic, assetType, businessName } = request;
-    const tId = tenantId || 'velcora-default-store';
+    const tId = tenantId || 'avanyx-default-store';
 
     // 1. Search Wiki and Memories for this product / brand
     const searchQuery = `${productOrTopic} ${businessName || ''} brand style colors audience`;

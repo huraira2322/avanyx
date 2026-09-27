@@ -33,11 +33,11 @@ export const UserAvatarRing: React.FC<UserAvatarRingProps> = ({
   // Determine ring styling classes
   let ringClass = '';
   if (isGoogle) {
-    ringClass = 'velcora-google-ring';
+    ringClass = 'avanyx-google-ring';
   } else if (isPremium) {
-    ringClass = 'velcora-premium-ring';
+    ringClass = 'avanyx-premium-ring';
   } else if (isPlus) {
-    ringClass = 'velcora-plus-ring';
+    ringClass = 'avanyx-plus-ring';
   }
 
   const ringPadding = hasAnimatedRing ? 2 : 0;

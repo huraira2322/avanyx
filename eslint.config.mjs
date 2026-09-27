@@ -1,5 +1,5 @@
 // @ts-check
-// Velcora ESLint flat config (ESLint 9).
+// Avanyx ESLint flat config (ESLint 9).
 // NOTE: this project's authoritative "lint" is `tsc --noEmit` (npm run lint).
 // ESLint here adds style/correctness rules; everything is warn-only so it can
 // never block a build or change existing behaviour.

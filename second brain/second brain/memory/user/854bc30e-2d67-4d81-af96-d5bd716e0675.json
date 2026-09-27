@@ -4,8 +4,8 @@
   "userId": "user-alex-1",
   "tier": "user",
   "classification": "knowledge",
-  "content": "I'm building Velcora as my main software project.",
-  "summary": "User Project: I'm building Velcora as my main software project.",
+  "content": "I'm building Avanyx as my main software project.",
+  "summary": "User Project: I'm building Avanyx as my main software project.",
   "tags": [
     "knowledge",
     "project",
@@ -14,7 +14,7 @@
     "identity"
   ],
   "entities": [
-    "Velcora"
+    "Avanyx"
   ],
   "concepts": [],
   "authority": "USER_PROVIDED",

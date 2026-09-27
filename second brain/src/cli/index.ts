@@ -9,8 +9,8 @@ import { synthesisService } from '../services/synthesis/synthesisService';
 const program = new Command();
 
 program
-  .name('velcora-brain')
-  .description('Velcora Second Brain Standalone CLI Management Tool')
+  .name('avanyx-brain')
+  .description('Avanyx Second Brain Standalone CLI Management Tool')
   .version('1.0.0');
 
 // Store memory
@@ -18,7 +18,7 @@ program
   .command('store')
   .description('Store a verified memory item')
   .requiredOption('-c, --content <text>', 'Memory content')
-  .option('-t, --tenant <id>', 'Tenant ID', 'velcora-default-store')
+  .option('-t, --tenant <id>', 'Tenant ID', 'avanyx-default-store')
   .option('-k, --classification <type>', 'Classification', 'knowledge')
   .option('--tier <tier>', 'Tier', 'contextual')
   .action((options) => {
@@ -36,7 +36,7 @@ program
   .command('context')
   .description('Retrieve reasoning context for a query')
   .argument('<query>', 'Search query')
-  .option('-t, --tenant <id>', 'Tenant ID', 'velcora-default-store')
+  .option('-t, --tenant <id>', 'Tenant ID', 'avanyx-default-store')
   .action((query, options) => {
     const ctx = reasoningEngine.buildContext({
       query,
@@ -54,7 +54,7 @@ program
   .option('-t, --tenant <id>', 'Tenant ID')
   .action((options) => {
     const report = healthLintService.runLint(options.tenant);
-    console.log('📋 Velcora Second Brain Health Report:');
+    console.log('📋 Avanyx Second Brain Health Report:');
     console.log(`Valid: ${report.valid ? '✅ YES' : '❌ NO'}`);
     console.log(`Errors: ${report.errors.length}`);
     console.log(`Warnings: ${report.warnings.length}`);
@@ -69,7 +69,7 @@ program
   .command('synthesize')
   .description('Synthesize memories into a strategic wiki document')
   .argument('<topic>', 'Topic to synthesize')
-  .option('-t, --tenant <id>', 'Tenant ID', 'velcora-default-store')
+  .option('-t, --tenant <id>', 'Tenant ID', 'avanyx-default-store')
   .action((topic, options) => {
     const doc = synthesisService.synthesizeTopic(options.tenant, topic);
     console.log(`✨ Synthesized Wiki Document: ${doc.title} (${doc.slug})`);

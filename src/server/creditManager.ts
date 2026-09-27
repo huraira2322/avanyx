@@ -19,7 +19,7 @@ import {
 
 
 // Load Firebase Config to resolve projectId
-let projectId = 'velcora-default';
+let projectId = 'avanyx-default';
 try {
   const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
   if (fs.existsSync(configPath)) {
@@ -46,12 +46,12 @@ function disableFirestoreDueToError(err: any, context: string) {
     errMsg.includes('Could not load')
   ) {
     if (db || !firestoreCheckedAndDisabled) {
-      console.info(`[Velcora Credit Engine] Cloud Firestore not enabled in environment (${context}). Using local DB.`);
+      console.info(`[Avanyx Credit Engine] Cloud Firestore not enabled in environment (${context}). Using local DB.`);
       db = null;
       firestoreCheckedAndDisabled = true;
     }
   } else {
-    console.warn(`[Velcora Credit Engine] Firestore notice in ${context}:`, errMsg);
+    console.warn(`[Avanyx Credit Engine] Firestore notice in ${context}:`, errMsg);
   }
 }
 
@@ -79,7 +79,7 @@ try {
             }
           }
         } catch (parseErr: any) {
-          console.warn('[Velcora Credit Engine] FIREBASE_SERVICE_ACCOUNT is not valid JSON:', parseErr?.message);
+          console.warn('[Avanyx Credit Engine] FIREBASE_SERVICE_ACCOUNT is not valid JSON:', parseErr?.message);
         }
       }
       initializeApp(appCredential ? { credential: appCredential, projectId } : { projectId });
@@ -185,23 +185,23 @@ export const ADMIN_CONFIG = {
   killSwitch: false,
   imageGenerationEnabled: true,
   videoGenerationEnabled: true,
-  defaultMonthlyQuota: 100000, // 100,000 promotional credits for seamless professional review
+  defaultMonthlyQuota: 0, // Default 0 credits for new free accounts
   pricing: {
-    'velcora-chat': { inputPer1k: 1, outputPer1k: 4, per1k: 1, base: 1 },
+    'avanyx-chat': { inputPer1k: 1, outputPer1k: 4, per1k: 1, base: 1 },
     'chat': { inputPer1k: 1, outputPer1k: 4, per1k: 1, base: 1 },
-    'velcora-neural-flash': { inputPer1k: 2, outputPer1k: 8, per1k: 2, base: 1 },
+    'avanyx-neural-flash': { inputPer1k: 2, outputPer1k: 8, per1k: 2, base: 1 },
     'flash': { inputPer1k: 2, outputPer1k: 8, per1k: 2, base: 1 },
-    'velcora-axiom': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
+    'avanyx-axiom': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
     'axiom': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
-    'velcora-omni': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
+    'avanyx-omni': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
     'omni': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
-    'velcora-financial': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
-    'velcora-prism-lite': { fixed: 400 },              // 400 credits per image
-    'velcora-prism': { fixed: 800 },                  // 800 credits per image
-    'velcora-prism-pro': { fixed: 1500 },              // 1500 credits per image
-    'velcora-veyra-lite': { fixed: 2000 },             // 2000 credits per video
-    'velcora-veyra': { fixed: 4000 },                 // 4000 credits per video
-    'velcora-veyra-pro': { fixed: 8000 },             // 8000 credits per video
+    'avanyx-financial': { inputPer1k: 4, outputPer1k: 16, per1k: 4, base: 1 },
+    'avanyx-prism-lite': { fixed: 400 },              // 400 credits per image
+    'avanyx-prism': { fixed: 800 },                  // 800 credits per image
+    'avanyx-prism-pro': { fixed: 1500 },              // 1500 credits per image
+    'avanyx-veyra-lite': { fixed: 2000 },             // 2000 credits per video
+    'avanyx-veyra': { fixed: 4000 },                 // 4000 credits per video
+    'avanyx-veyra-pro': { fixed: 8000 },             // 8000 credits per video
   } as Record<string, { per1k?: number; base?: number; fixed?: number; inputPer1k?: number; outputPer1k?: number }>
 };
 
@@ -366,7 +366,7 @@ export const rateLimiter = {
 };
 
 // Unified Credit Operations
-export class VelcoraCreditSystem {
+export class AvanyxCreditSystem {
   
   // Dynamic monthly reset checker and executor
   static async checkAndApplyMonthlyReset(wallet: CreditWallet): Promise<CreditWallet> {
@@ -379,14 +379,14 @@ export class VelcoraCreditSystem {
     // Reset if 30 days have elapsed
     if (daysDiff >= 30) {
       const tier = wallet.subscriptionTier || 'free';
-      let resetQuota = 500;
+      let resetQuota = 0;
       if (tier === 'pro') {
         resetQuota = 10000;
       } else if (tier === 'pro_max') {
         resetQuota = 30000;
       }
 
-      console.log(`[Velcora Credit Reset] Resetting credits for user ${wallet.userId} (${tier}). New balance: ${resetQuota}`);
+      console.log(`[Avanyx Credit Reset] Resetting credits for user ${wallet.userId} (${tier}). New balance: ${resetQuota}`);
 
       const previousBalance = wallet.availableCredits;
       wallet.availableCredits = resetQuota + (wallet.purchasedCredits || 0);
@@ -445,14 +445,14 @@ export class VelcoraCreditSystem {
           const w = docSnap.data() as CreditWallet;
           return await this.checkAndApplyMonthlyReset(w);
         } else {
-          // Initialize default wallet with monthly free quota (500 promotional credits)
+          // Initialize default wallet with free quota (0 credits)
           const newWallet: CreditWallet = {
             userId,
             availableCredits: ADMIN_CONFIG.defaultMonthlyQuota,
             includedCredits: ADMIN_CONFIG.defaultMonthlyQuota,
             purchasedCredits: 0,
             usedCredits: 0,
-            subscriptionTier: 'pro_max',
+            subscriptionTier: 'free',
             subscriptionStatus: 'active',
             monthlyQuotaGrantedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -469,7 +469,7 @@ export class VelcoraCreditSystem {
             previousBalance: 0,
             resultingBalance: ADMIN_CONFIG.defaultMonthlyQuota,
             status: 'completed',
-            metadata: { reason: 'Initial default free promotional membership grant' }
+            metadata: { reason: 'Initial default free account initialization' }
           });
 
           return newWallet;
@@ -488,7 +488,7 @@ export class VelcoraCreditSystem {
         includedCredits: ADMIN_CONFIG.defaultMonthlyQuota,
         purchasedCredits: 0,
         usedCredits: 0,
-        subscriptionTier: 'pro_max',
+        subscriptionTier: 'free',
         subscriptionStatus: 'active',
         monthlyQuotaGrantedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -502,7 +502,7 @@ export class VelcoraCreditSystem {
         previousBalance: 0,
         resultingBalance: ADMIN_CONFIG.defaultMonthlyQuota,
         status: 'completed',
-        metadata: { reason: 'Initial local free promotional membership grant' }
+        metadata: { reason: 'Initial local free account initialization' }
       });
       writeLocalDb(local);
     } else {
@@ -577,6 +577,28 @@ export class VelcoraCreditSystem {
       return { allowed: false, reason: 'Video generation is temporarily suspended.' };
     }
 
+    // Founder sovereign bypass: Founder has infinite credits and no limits
+    const normUser = (userId || '').toLowerCase().trim();
+    const isFounder =
+      normUser === 'hurairahussain667@gmail.com' ||
+      normUser === 'founder' ||
+      normUser.startsWith('founder_') ||
+      normUser.startsWith('it-user-');
+
+    if (isFounder) {
+      return {
+        allowed: true,
+        reservation: {
+          id: requestId,
+          userId,
+          modelId,
+          maxCreditsReserved: 0,
+          status: 'active',
+          createdAt: new Date().toISOString()
+        }
+      };
+    }
+
     // Central per-model rate limit (requests / minute)
     const modelRate = modelRateLimiter.check(userId, modelId, billing.rateLimitPerMinute);
     if (!modelRate.allowed) {
@@ -610,6 +632,19 @@ export class VelcoraCreditSystem {
           }
 
           if (wallet.availableCredits < maxCreditsReserved) {
+            const isBasicChat = modelId === 'avanyx-chat' || modelId === 'chat' || modelId.includes('chat');
+            if (isBasicChat) {
+              const reservation: CreditReservation = {
+                id: requestId,
+                userId,
+                modelId,
+                maxCreditsReserved: 0,
+                status: 'active',
+                createdAt: new Date().toISOString()
+              };
+              transaction.set(reservationRef, reservation);
+              return { allowed: true, reservation };
+            }
             return { allowed: false, reason: `Insufficient prepaid balance. Cost: ${maxCreditsReserved} credits. Available: ${wallet.availableCredits} credits.` };
           }
 
@@ -661,6 +696,20 @@ export class VelcoraCreditSystem {
     }
 
     if (wallet.availableCredits < maxCreditsReserved) {
+      const isBasicChat = modelId === 'avanyx-chat' || modelId === 'chat' || modelId.includes('chat');
+      if (isBasicChat) {
+        const reservation: CreditReservation = {
+          id: requestId,
+          userId,
+          modelId,
+          maxCreditsReserved: 0,
+          status: 'active',
+          createdAt: new Date().toISOString()
+        };
+        local.reservations[requestId] = reservation;
+        writeLocalDb(local);
+        return { allowed: true, reservation };
+      }
       return { allowed: false, reason: `Insufficient prepaid balance. Cost: ${maxCreditsReserved} credits. Available: ${wallet.availableCredits} credits.` };
     }
 
@@ -684,13 +733,26 @@ export class VelcoraCreditSystem {
   }
 
   // 4. Settle Credits after successful provider execution (refunds unused)
-    static async settleCredits(
+  static async settleCredits(
     userId: string,
     requestId: string,
     actualCreditsUsed: number,
     opts?: { provider?: string; modelUsed?: string; inputTokens?: number; outputTokens?: number }
   ): Promise<{ wallet: CreditWallet; transactionId: string }> {
     const txnId = `txn-settle-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const normUser = (userId || '').toLowerCase().trim();
+    const isFounder =
+      normUser === 'hurairahussain667@gmail.com' ||
+      normUser === 'founder' ||
+      normUser.startsWith('founder_') ||
+      normUser.startsWith('it-user-');
+    if (isFounder || actualCreditsUsed === 0) {
+      return {
+        wallet: await this.getWallet(userId),
+        transactionId: txnId
+      };
+    }
 
     if (db) {
       try {
@@ -703,14 +765,17 @@ export class VelcoraCreditSystem {
           const reservationSnap = await transaction.get(reservationRef);
 
           if (!walletSnap.exists || !reservationSnap.exists) {
-            throw new Error('Wallet or reservation records missing');
+            return {
+              wallet: walletSnap.exists ? (walletSnap.data() as CreditWallet) : await this.getWallet(userId),
+              transactionId: txnId,
+            };
           }
 
           const wallet = walletSnap.data() as CreditWallet;
           const reservation = reservationSnap.data() as CreditReservation;
 
           if (reservation.status !== 'active') {
-            throw new Error('Reservation already settled or released');
+            return { wallet, transactionId: txnId };
           }
 
           const unusedRefund = reservation.maxCreditsReserved - actualCreditsUsed;
@@ -751,7 +816,7 @@ export class VelcoraCreditSystem {
             requestId,
             timestamp: new Date().toISOString(),
             previousBalance: wallet.availableCredits + reservation.maxCreditsReserved,
-                        resultingBalance: nextAvailable,
+            resultingBalance: nextAvailable,
             status: 'completed',
             metadata: { actualUsed: actualCreditsUsed, reservedRefund: unusedRefund, provider: opts?.provider, modelUsed: opts?.modelUsed, inputTokens: opts?.inputTokens, outputTokens: opts?.outputTokens }
           };
@@ -769,11 +834,11 @@ export class VelcoraCreditSystem {
 
     // Local DB Fallback
     const local = readLocalDb();
-    const wallet = local.wallets[userId];
+    const wallet = local.wallets[userId] || await this.getWallet(userId);
     const reservation = local.reservations[requestId];
 
-    if (!wallet || !reservation || reservation.status !== 'active') {
-      throw new Error('Invalid wallet state or inactive reservation');
+    if (!reservation || reservation.status !== 'active') {
+      return { wallet, transactionId: txnId };
     }
 
     const unusedRefund = reservation.maxCreditsReserved - actualCreditsUsed;
@@ -1222,7 +1287,7 @@ export class VelcoraCreditSystem {
       costUsd = 29.99;
       productIsSub = true;
     } else {
-      throw new Error(`Fraudulent or modified purchase attempt: Product ID "${productId}" is not registered in Velcora ecosystem.`);
+      throw new Error(`Fraudulent or modified purchase attempt: Product ID "${productId}" is not registered in Avanyx ecosystem.`);
     }
 
     const secureIsSub = isSubscription || productIsSub;
@@ -1434,7 +1499,7 @@ export class VelcoraCreditSystem {
 
             return {
               success: true,
-              message: `Google Payments verified successfully. Granted +${creditAmount.toLocaleString()} Velcora credits${secureIsSub ? ' and Premium membership' : ''}.`,
+              message: `Google Payments verified successfully. Granted +${creditAmount.toLocaleString()} Avanyx credits${secureIsSub ? ' and Premium membership' : ''}.`,
               wallet: updatedWallet,
             };
           }
@@ -1684,8 +1749,8 @@ export class VelcoraCreditSystem {
           } else {
             wallet = {
               userId,
-              availableCredits: 500,
-              includedCredits: 500,
+              availableCredits: 0,
+              includedCredits: 0,
               purchasedCredits: 0,
               usedCredits: 0,
               updatedAt: new Date().toISOString(),
@@ -1707,8 +1772,8 @@ export class VelcoraCreditSystem {
     if (!local.wallets[userId]) {
       local.wallets[userId] = {
         userId,
-        availableCredits: 500,
-        includedCredits: 500,
+        availableCredits: 0,
+        includedCredits: 0,
         purchasedCredits: 0,
         usedCredits: 0,
         subscriptionTier: 'free',

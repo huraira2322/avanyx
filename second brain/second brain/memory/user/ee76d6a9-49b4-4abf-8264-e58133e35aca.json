@@ -4,8 +4,8 @@
   "userId": "user-001",
   "tier": "user",
   "classification": "knowledge",
-  "content": "I'm building Velcora as my main software project and my goal is $50,000 monthly revenue.",
-  "summary": "User Project: I'm building Velcora as my main software project and my goal is $50,000 monthly revenue.",
+  "content": "I'm building Avanyx as my main software project and my goal is $50,000 monthly revenue.",
+  "summary": "User Project: I'm building Avanyx as my main software project and my goal is $50,000 monthly revenue.",
   "tags": [
     "knowledge",
     "General",
@@ -15,7 +15,7 @@
     "identity"
   ],
   "entities": [
-    "Velcora"
+    "Avanyx"
   ],
   "concepts": [],
   "authority": "SYSTEM_GENERATED",

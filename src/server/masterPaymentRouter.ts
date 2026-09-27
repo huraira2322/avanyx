@@ -2,8 +2,7 @@ import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import { masterPaymentEngine, DEFAULT_SUBSCRIPTION_PLANS, DEFAULT_TOKEN_PACKAGES } from './masterPaymentEngine';
 import { paymentProviderAdapter } from './paymentProviderAdapter';
-import { referralStore } from './referralEngine';
-import { VelcoraCreditSystem } from './creditManager';
+import { AvanyxCreditSystem } from './creditManager';
 import { authenticateAdmin, AdminRequest } from './adminRouter';
 
 export function createMasterPaymentRouter(): express.Router {
@@ -112,7 +111,6 @@ export function createMasterPaymentRouter(): express.Router {
         billingInterval,
         currency,
         provider,
-        referralCode,
         successUrl,
         cancelUrl,
       } = req.body;
@@ -127,7 +125,7 @@ export function createMasterPaymentRouter(): express.Router {
       // Step 1: Create Authoritative Internal Checkout Intent
       const intentResult = masterPaymentEngine.createCheckoutIntent({
         userId,
-        userEmail: userEmail || `${userId}@velcora.user`,
+        userEmail: userEmail || `${userId}@avanyx.user`,
         userName,
         businessId,
         businessName,
@@ -136,7 +134,6 @@ export function createMasterPaymentRouter(): express.Router {
         billingInterval: billingInterval || 'monthly',
         currency: currency || 'USD',
         provider: provider || 'stripe',
-        referralCode,
       });
 
       if (!intentResult.success || !intentResult.checkoutSession) {
@@ -148,7 +145,7 @@ export function createMasterPaymentRouter(): express.Router {
       // Step 2: Create Gateway Session via Provider Adapter (Stripe, Safepay, etc.)
       const gatewaySession = await paymentProviderAdapter.createCheckoutSession({
         userId,
-        userEmail: userEmail || `${userId}@velcora.user`,
+        userEmail: userEmail || `${userId}@avanyx.user`,
         userName,
         itemType,
         itemId,
@@ -159,7 +156,6 @@ export function createMasterPaymentRouter(): express.Router {
         orderId: session.orderId,
         successUrl: successUrl || `${req.protocol}://${req.get('host')}/?payment_success=true&order_id=${session.orderId}`,
         cancelUrl: cancelUrl || `${req.protocol}://${req.get('host')}/?payment_cancelled=true&order_id=${session.orderId}`,
-        referralCode: session.referralCodeApplied,
         metadata: {
           internalSessionId: session.sessionId,
           serverSignature: session.serverSignature,
@@ -308,7 +304,6 @@ export function createMasterPaymentRouter(): express.Router {
         externalTransactionId,
         paymentMethodDetails,
         idempotencyKey,
-        referralCode,
       } = req.body;
 
       if (!userId || !transactionType || !amount || !provider) {
@@ -321,7 +316,7 @@ export function createMasterPaymentRouter(): express.Router {
       // Process payment with backend authority
       const result = await masterPaymentEngine.processVerifiedPayment({
         userId,
-        userEmail: userEmail || `${userId}@velcora.user`,
+        userEmail: userEmail || `${userId}@avanyx.user`,
         userName,
         businessId,
         businessName,
@@ -336,7 +331,6 @@ export function createMasterPaymentRouter(): express.Router {
         externalTransactionId: externalTransactionId || `ext_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
         paymentMethodDetails,
         idempotencyKey,
-        referralCode,
         signatureVerified: true, // Processed authoritatively by backend
       });
 
@@ -357,8 +351,8 @@ export function createMasterPaymentRouter(): express.Router {
       if (req.path.includes('safepay')) provider = 'safepay';
       if (req.path.includes('stripe')) provider = 'stripe';
 
-      const signatureHeader = (req.headers['x-velcora-signature'] ||
-                               req.headers['x-volcora-signature'] || 
+      const signatureHeader = (req.headers['x-avanyx-signature'] ||
+                               req.headers['x-AVANYX-signature'] || 
                                req.headers['stripe-signature'] || 
                                req.headers['x-safepay-signature']) as string | undefined;
       
@@ -390,7 +384,7 @@ export function createMasterPaymentRouter(): express.Router {
 
       const eventType = body.type || body.eventType || body.event || 'payment_intent.succeeded';
       const userId = body.userId || metadata.userId || stripeObj.client_reference_id || 'webhook-user';
-      const userEmail = body.userEmail || metadata.userEmail || stripeObj.customer_email || stripeObj.customer_details?.email || 'user@velcora.com';
+      const userEmail = body.userEmail || metadata.userEmail || stripeObj.customer_email || stripeObj.customer_details?.email || 'user@avanyx.com';
       const userName = body.userName || metadata.userName || stripeObj.customer_details?.name;
       const businessId = body.businessId || metadata.businessId;
       const transactionType = body.transactionType || metadata.transactionType || (metadata.planId ? 'SUBSCRIPTION' : 'TOKEN_PURCHASE');
@@ -402,7 +396,6 @@ export function createMasterPaymentRouter(): express.Router {
       const currency = (body.currency || stripeObj.currency || 'USD').toUpperCase();
       const externalTransactionId = body.externalTransactionId || stripeObj.payment_intent || stripeObj.id || `wh_${Date.now()}`;
       const idempotencyKey = body.idempotencyKey || `wh_idem_${externalTransactionId}`;
-      const referralCode = body.referralCode || metadata.referralCode;
       const paymentMethodDetails = body.paymentMethodDetails || `${provider.toUpperCase()} Webhook Verified`;
       const status = body.status || (eventType.includes('failed') ? 'failed' : eventType.includes('canceled') ? 'cancelled' : 'succeeded');
 
@@ -412,7 +405,7 @@ export function createMasterPaymentRouter(): express.Router {
           externalTransactionId || orderId,
           'Webhook refund event received from payment provider',
           'webhook-system',
-          'webhooks@velcora.com'
+          'webhooks@avanyx.com'
         );
         return res.json({ success: true, refund: refundResult });
       }
@@ -434,7 +427,6 @@ export function createMasterPaymentRouter(): express.Router {
           provider: provider as any,
           externalTransactionId,
           idempotencyKey,
-          referralCode,
           paymentMethodDetails,
           signatureVerified: true,
           status: status === 'cancelled' ? 'cancelled' : 'failed',
@@ -458,7 +450,6 @@ export function createMasterPaymentRouter(): express.Router {
         provider: provider as any,
         externalTransactionId,
         idempotencyKey,
-        referralCode,
         paymentMethodDetails,
         signatureVerified: true,
         status: 'succeeded',
@@ -507,7 +498,7 @@ export function createMasterPaymentRouter(): express.Router {
   });
 
   // ----------------------------------------------------
-  // GLOBAL REFERRAL PAYOUTS (USER/PARTNER ENDPOINTS)
+  // GLOBAL PAYOUTS (MERCHANT/VENDOR ENDPOINTS)
   // ----------------------------------------------------
 
   router.get('/payout/accounts', (req: Request, res: Response) => {
@@ -578,8 +569,8 @@ export function createMasterPaymentRouter(): express.Router {
       const result = masterPaymentEngine.requestPayout({
         partnerId,
         userId: userId || 'partner-user',
-        userEmail: userEmail || 'partner@velcora.com',
-        userName: userName || 'Referral Partner',
+        userEmail: userEmail || 'partner@avanyx.com',
+        userName: userName || 'Payout Recipient',
         payoutAccountId,
       });
 
@@ -611,12 +602,10 @@ export function createMasterPaymentRouter(): express.Router {
   router.get('/admin/overview', authenticateAdmin, (req: AdminRequest, res: Response) => {
     try {
       const telemetry = masterPaymentEngine.getSuperAdminTelemetry();
-      const referralOverview = referralStore.getAdminOverview();
 
       res.json({
         success: true,
         telemetry,
-        referralOverview,
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err?.message || 'Failed to fetch admin overview.' });
@@ -626,7 +615,7 @@ export function createMasterPaymentRouter(): express.Router {
   router.post('/admin/plans/update', authenticateAdmin, (req: AdminRequest, res: Response) => {
     try {
       const plans = req.body?.plans || (Array.isArray(req.body) ? req.body : null);
-      const adminEmail = req.admin?.email || 'founder@velcora.com';
+      const adminEmail = req.admin?.email || 'founder@avanyx.com';
 
       if (!Array.isArray(plans)) {
         return res.status(400).json({ success: false, error: 'Plans array is required.' });
@@ -642,7 +631,7 @@ export function createMasterPaymentRouter(): express.Router {
   router.post('/admin/token-packages/update', authenticateAdmin, (req: AdminRequest, res: Response) => {
     try {
       const packages = req.body?.packages || (Array.isArray(req.body) ? req.body : null);
-      const adminEmail = req.admin?.email || 'founder@velcora.com';
+      const adminEmail = req.admin?.email || 'founder@avanyx.com';
 
       if (!Array.isArray(packages)) {
         return res.status(400).json({ success: false, error: 'Packages array is required.' });
@@ -658,7 +647,7 @@ export function createMasterPaymentRouter(): express.Router {
   router.post('/admin/config/update', authenticateAdmin, (req: AdminRequest, res: Response) => {
     try {
       const patch = req.body;
-      const adminEmail = req.admin?.email || 'founder@velcora.com';
+      const adminEmail = req.admin?.email || 'founder@avanyx.com';
 
       const updated = masterPaymentEngine.updateConfig(patch, 'founder-compat', adminEmail);
       res.json({ success: true, config: updated });
@@ -670,7 +659,7 @@ export function createMasterPaymentRouter(): express.Router {
   router.post('/admin/payouts/process', authenticateAdmin, (req: AdminRequest, res: Response) => {
     try {
       const { payoutId, action, notes, transactionRef } = req.body;
-      const adminEmail = req.admin?.email || 'founder@velcora.com';
+      const adminEmail = req.admin?.email || 'founder@avanyx.com';
 
       if (!payoutId || !action) {
         return res.status(400).json({ success: false, error: 'payoutId and action (APPROVE/COMPLETE/FAIL/CANCEL) are required.' });
@@ -686,7 +675,7 @@ export function createMasterPaymentRouter(): express.Router {
   router.post('/admin/refund', authenticateAdmin, async (req: AdminRequest, res: Response) => {
     try {
       const { transactionId, reason } = req.body;
-      const adminEmail = req.admin?.email || 'founder@velcora.com';
+      const adminEmail = req.admin?.email || 'founder@avanyx.com';
 
       if (!transactionId) {
         return res.status(400).json({ success: false, error: 'transactionId is required.' });
