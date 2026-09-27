@@ -145,7 +145,7 @@ const COUNTRY_CURRENCY_PRESETS = [
 ];
 
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ isOpen, onClose, isInitialSetup = false }) => {
-  const { completeOnboarding } = useAvanyx();
+  const { completeOnboarding, getAuthHeaders } = useAvanyx();
 
   const [step, setStep] = useState<number>(1);
   const [businessName, setBusinessName] = useState<string>('');
@@ -372,9 +372,17 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
 
+      let reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        if (typeof getAuthHeaders === 'function') {
+          const authH = await getAuthHeaders();
+          reqHeaders = { ...reqHeaders, ...authH };
+        }
+      } catch (_) {}
+
       const cRes = await fetch(getApiUrl('/api/ai/catalog-schema'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: reqHeaders,
         body: JSON.stringify({
           businessRequirements: aiPrompt,
           businessName,

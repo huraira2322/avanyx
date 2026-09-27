@@ -80,15 +80,71 @@ export const AiDemandForecaster: React.FC = () => {
   }
 
   if (!forecast || forecast.hasEnoughData === false) {
+    const handleSimulateBenchmark = () => {
+      const topP = (products && products.length > 0) ? products.slice(0, 4) : [
+        { id: 'sample-1', name: 'Primary Store SKU', stock: 12 },
+        { id: 'sample-2', name: 'Featured Product', stock: 4 }
+      ];
+      setForecast({
+        hasEnoughData: true,
+        isSimulatedBenchmark: true,
+        forecastDays: [
+          { day: 'Monday', expectedRevenue: 180, confidence: 88 },
+          { day: 'Tuesday', expectedRevenue: 155, confidence: 84 },
+          { day: 'Wednesday', expectedRevenue: 210, confidence: 89 },
+          { day: 'Thursday', expectedRevenue: 245, confidence: 91 },
+          { day: 'Friday', expectedRevenue: 320, confidence: 94 },
+          { day: 'Saturday', expectedRevenue: 390, confidence: 96 },
+          { day: 'Sunday', expectedRevenue: 280, confidence: 90 },
+        ],
+        hourlyRush: [
+          { time: '09:00 - 12:00', label: 'Morning Open', probability: 25 },
+          { time: '12:00 - 15:00', label: 'Lunch / Mid-Day', probability: 48 },
+          { time: '15:00 - 18:00', label: 'Afternoon', probability: 32 },
+          { time: '18:00 - 21:00', label: 'Evening Peak', probability: 42 },
+        ],
+        projectedOutcome: {
+          projectedRev: 1780,
+          projectedMargin: 38,
+        },
+        stockoutRisks: topP.map((p: any, i: number) => ({
+          id: p.id,
+          name: p.name,
+          stock: p.stock ?? 8,
+          daysRemaining: Math.max(2, (p.stock ?? 8) - i * 2),
+        })),
+      });
+    };
+
     return (
-      <div className="w-full bg-white dark:bg-[#111C30] border border-slate-200 dark:border-[#1F2E4D] rounded-3xl p-8 flex flex-col items-center justify-center text-center">
-        <div className="w-16 h-16 bg-slate-100 dark:bg-[#0B1220] rounded-2xl flex items-center justify-center mb-4">
-          <Info className="w-8 h-8 text-slate-400" />
+      <div className="w-full bg-white dark:bg-[#111C30] border border-slate-200 dark:border-[#1F2E4D] rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4">
+        <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/40 rounded-2xl flex items-center justify-center">
+          <Sparkles className="w-8 h-8 text-blue-500 animate-pulse" />
         </div>
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Not enough data to forecast yet</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md">
-          {forecast?.reason || 'Avanyx Brain requires more historical sales data (minimum 3 real transactions) to accurately predict demand and calculate stockout risks. We do not invent fake numbers.'}
-        </p>
+        <div className="max-w-md space-y-2">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Store Telemetry Gathering</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {forecast?.reason || 'Avanyx Brain requires at least 3 completed sales transactions in your store to build a high-confidence predictive model.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleSimulateBenchmark}
+            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Generate Forecast Benchmark Preview</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentModule('pos')}
+            className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#152644] dark:hover:bg-[#1E2E4A] text-slate-800 dark:text-white font-bold text-xs flex items-center gap-2 border border-slate-200 dark:border-[#1F2E4D] transition cursor-pointer"
+          >
+            <Package className="w-4 h-4 text-emerald-500" />
+            <span>Open POS Register to Record Sales</span>
+          </button>
+        </div>
       </div>
     );
   }

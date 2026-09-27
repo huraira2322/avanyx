@@ -185,7 +185,7 @@ export const ADMIN_CONFIG = {
   killSwitch: false,
   imageGenerationEnabled: true,
   videoGenerationEnabled: true,
-  defaultMonthlyQuota: 0, // Default 0 credits for new free accounts
+  defaultMonthlyQuota: 1000, // 1000 complimentary starter credits for all accounts
   pricing: {
     'avanyx-chat': { inputPer1k: 1, outputPer1k: 4, per1k: 1, base: 1 },
     'chat': { inputPer1k: 1, outputPer1k: 4, per1k: 1, base: 1 },
