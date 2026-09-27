@@ -1,5 +1,5 @@
 @echo off
-cd /d "C:\Users\Huraira\Desktop\huraira box\1-AVANYX-POS"
+cd /d "C:\Users\Huraira\Desktop\huraira box\1-VELCORA-POS"
 echo === LOCAL REBUILD (dist/server.cjs with brain+gemini fixes) ===
 call npm run build
 echo BUILD_EXIT=%ERRORLEVEL%
