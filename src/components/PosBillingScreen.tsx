@@ -144,6 +144,7 @@ export const PosBillingScreen: React.FC = () => {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [mockScanInput, setMockScanInput] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scanSuccessMessage, setScanSuccessMessage] = useState<string | null>(null);
@@ -242,8 +243,14 @@ export const PosBillingScreen: React.FC = () => {
         }
       } catch (err: any) {
         console.warn('Camera access unavailable or declined:', err);
-        setCameraError(err?.message || 'Camera permission denied or camera device unavailable.');
-        setCameraActive(false);
+          const errMsg = err?.message || err?.name || '';
+          if (errMsg.toLowerCase().includes('denied') || errMsg.toLowerCase().includes('notallowed') || err?.name === 'NotAllowedError') {
+            setCameraPermissionDenied(true);
+            setCameraError('Camera access permanently blocked by browser. Please click the lock icon in the URL bar to allow it, then reload.');
+          } else {
+            setCameraError(errMsg || 'Camera permission denied or camera device unavailable.');
+          }
+          setCameraActive(false);
       }
     }
 
@@ -344,7 +351,7 @@ export const PosBillingScreen: React.FC = () => {
           break;
         case 'barcode_scan':
           setShowScannerModal(true);
-          setCameraActive(true);
+                if (!cameraPermissionDenied) setCameraActive(true);
           break;
         case 'void_cart':
           if (cart.length > 0) {
@@ -558,7 +565,7 @@ export const PosBillingScreen: React.FC = () => {
           <button
             onClick={() => {
               setShowScannerModal(true);
-              setCameraActive(true);
+                if (!cameraPermissionDenied) setCameraActive(true);
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#152644] hover:bg-slate-200 dark:hover:bg-[#1E2E4A] text-slate-800 dark:text-[#F8FAFC] border border-slate-200 dark:border-[#1F2E4D] text-xs font-bold transition shadow-2xs cursor-pointer"
             title={`Barcode Scanner (${getShortcutDisplay('barcode_scan', 'F9')})`}
@@ -1396,14 +1403,21 @@ export const PosBillingScreen: React.FC = () => {
                     <span className="text-[11px] font-mono text-slate-400 font-medium">
                       USB / Bluetooth Hardware Scanner Ready
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setCameraActive(true)}
-                      className="mt-1 px-3 py-1 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary font-bold text-xs flex items-center gap-1.5 transition"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>Start Camera Scanner</span>
-                    </button>
+                    {!cameraPermissionDenied ? (
+                        <button
+                          type="button"
+                          onClick={() => setCameraActive(true)}
+                          className="mt-1 px-3 py-1 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Start Camera Scanner</span>
+                        </button>
+                      ) : (
+                        <div className="mt-1 px-3 py-1.5 rounded-xl bg-rose-100/50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 font-bold text-[10px] flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Camera Blocked (Check URL bar)</span>
+                        </div>
+                      )}
                   </div>
                 )}
               </div>
