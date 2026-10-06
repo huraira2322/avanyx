@@ -6,7 +6,7 @@ import {
   Zap, Paperclip, X, CheckCircle2, FileText, ShoppingCart, MessageSquare,
   Plus, Trash2, Menu, Pin, Archive, Search, Sliders, Play, Info,
   ChevronDown, ChevronRight, AlertTriangle, UserCheck, ShieldCheck,
-  RefreshCw, Clock, Bot, Cpu, History
+  RefreshCw, Clock, Bot, Cpu, History, Download
 } from 'lucide-react';
 import { AiActionProposal } from '../types';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
@@ -27,6 +27,8 @@ interface ChatMessage {
   content: string;
   timestamp: string;
   modelUsed?: string;
+  finishReason?: string;
+  isTruncated?: boolean;
   attachmentPreview?: string;
   attachmentsPreview?: string[];
   actionProposal?: AiActionProposal;
@@ -314,6 +316,23 @@ export const AskAvanyxChat: React.FC = () => {
       await deleteDoc(docRef);
     } catch (err) {
       console.warn('Failed to delete session from cloud database:', err);
+    }
+  };
+
+  const handleExportMarkdown = (content: string, title?: string) => {
+    try {
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      const cleanTitle = (title || 'avanyx-document').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+      link.setAttribute('download', `${cleanTitle}-${Date.now()}.md`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Failed to export markdown file:', e);
     }
   };
 
@@ -762,6 +781,8 @@ export const AskAvanyxChat: React.FC = () => {
             content: `⚠️ **${data.error || 'AI Provider Error'}**\n\n${data.message || 'Unable to complete request with selected model.'}`,
             timestamp: new Date().toISOString(),
             modelUsed: data.modelUsed || activeModelId,
+            finishReason: 'error',
+            isTruncated: false,
             isProcessing: false,
           };
         } else if (data && data.reply) {
@@ -771,6 +792,8 @@ export const AskAvanyxChat: React.FC = () => {
             content: data.reply,
             timestamp: new Date().toISOString(),
             modelUsed: data.modelUsed || activeModelId,
+            finishReason: data.finishReason || 'stop',
+            isTruncated: data.isTruncated || data.finishReason === 'length',
             actionProposal: data.actionProposal || undefined,
             isProcessing: false,
           };
@@ -781,6 +804,8 @@ export const AskAvanyxChat: React.FC = () => {
             content: 'No response was returned by the AI engine. Please verify the query and try again.',
             timestamp: new Date().toISOString(),
             modelUsed: data?.modelUsed || activeModelId,
+            finishReason: 'error',
+            isTruncated: false,
             isProcessing: false,
           };
         }
@@ -1449,9 +1474,28 @@ export const AskAvanyxChat: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Copy & TTS actions */}
+                      {/* Continuation Widget for Truncated or Long Responses */}
+                      {msg.role === 'assistant' && (msg.isTruncated || msg.finishReason === 'length') && (
+                        <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-300">
+                            <Zap className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+                            <span>Response reached output token limit. Click to continue seamlessly:</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSendMessage("Please continue generating seamlessly from where you stopped, preserving the exact same document structure, narrative, depth, and style.")}
+                            className="px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow-xs hover:opacity-95 transition flex items-center gap-1.5 shrink-0 cursor-pointer"
+                            style={{ backgroundColor: activePalette.hex }}
+                          >
+                            <Zap className="w-3.5 h-3.5 fill-white" />
+                            <span>⚡ Continue Generating</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Copy, Export & TTS actions */}
                       {msg.role === 'assistant' && (
-                        <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-slate-400">
+                        <div className="flex flex-wrap items-center gap-2 mt-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-slate-400">
                           <button
                             type="button"
                             onClick={() => handleCopy(msg.id, msg.content)}
@@ -1469,6 +1513,22 @@ export const AskAvanyxChat: React.FC = () => {
                               </>
                             )}
                           </button>
+
+                          {msg.content.length > 500 && (
+                            <>
+                              <span className="text-slate-300 dark:text-slate-700 text-[10px]">•</span>
+                              <button
+                                type="button"
+                                onClick={() => handleExportMarkdown(msg.content, currentSession?.title)}
+                                className="flex items-center gap-1 text-[10px] font-bold hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                                title="Download Document as Markdown file"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Export Markdown</span>
+                              </button>
+                            </>
+                          )}
+
                           <span className="text-slate-300 dark:text-slate-700 text-[10px]">•</span>
                           <button
                             type="button"

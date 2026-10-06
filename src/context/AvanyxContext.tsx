@@ -511,6 +511,11 @@ interface AvanyxContextType {
   deleteShortcut: (id: string) => void;
   resetShortcuts: () => void;
 
+  // Multi-tenant and Security Identifiers
+  tenantId: string;
+  userId: string;
+  getAuthHeaders: () => Promise<Record<string, string>>;
+
   // Helper Translation
 }
 
@@ -652,9 +657,30 @@ export const AvanyxProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setActiveUser(ownerSub);
         }
       } else {
+        const savedSessionType = localStorage.getItem('avanyx_session_type');
+        const savedSessionUser = localStorage.getItem('avanyx_session_user');
+        const savedToken = localStorage.getItem('avanyx_session_token');
+
+        if ((savedSessionType === 'demo' || savedSessionType === 'staff') && savedToken && savedSessionUser) {
+          try {
+            const parsedUser = JSON.parse(savedSessionUser);
+            if (parsedUser && parsedUser.id) {
+              setIsAuthenticated(true);
+              setAuthSessionType(savedSessionType as any);
+              setActiveUser(parsedUser);
+              setHasCompletedOnboarding(true);
+              setIsOnboardingOpen(false);
+              setAuthLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('Failed to restore local session:', e);
+          }
+        }
+
         setIsAuthenticated(false);
         setAuthUser(null);
-        setActiveUser(null);
+        setActiveUser(DEFAULT_SUBUSERS[0]);
         setHasCompletedOnboarding(false);
         localStorage.removeItem('avanyx_session_token');
         localStorage.removeItem('avanyx_session_type');
@@ -985,8 +1011,69 @@ if (hasBiz) {
   };
 
   const quickLoginAsDemo = async (role: 'owner' | 'manager' | 'cashier' | 'inventory' | 'accountant') => {
-    console.warn("Demo login disabled for security");
-    return Promise.resolve();
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const roleMap: Record<string, string> = {
+        owner: 'role-owner',
+        manager: 'role-manager',
+        cashier: 'role-cashier',
+        inventory: 'role-inventory',
+        accountant: 'role-accountant',
+      };
+      const targetRoleId = roleMap[role] || 'role-owner';
+      const demoUser = DEFAULT_SUBUSERS.find((u) => u.roleId === targetRoleId) || {
+        id: `demo-${role}-${Date.now()}`,
+        businessId: INITIAL_BUSINESSES[0].id,
+        staffId: `${role.substring(0, 3).toUpperCase()}-001`,
+        name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
+        email: `demo.${role}@avanyx.io`,
+        roleId: targetRoleId,
+        roleName: role.charAt(0).toUpperCase() + role.slice(1),
+        pinCode: '1234',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (!businesses || businesses.length === 0) {
+        setBusinesses(INITIAL_BUSINESSES);
+      }
+      if (!activeBusinessId || !businesses.some((b) => b.id === activeBusinessId)) {
+        setActiveBusinessId(INITIAL_BUSINESSES[0].id);
+      }
+
+      setAuthUser(null);
+      setIsAuthenticated(true);
+      setAuthSessionType('demo');
+      setActiveUser(demoUser);
+      setHasCompletedOnboarding(true);
+      setIsOnboardingOpen(false);
+
+      if (role === 'cashier') {
+        setCurrentModule('pos');
+        setActiveMode('pos');
+      } else {
+        setCurrentModule('business_brain');
+        setActiveMode('business');
+      }
+
+      try {
+        localStorage.setItem('avanyx_session_token', `token-demo-${role}-${Date.now()}`);
+        localStorage.setItem('avanyx_session_type', 'demo');
+        localStorage.setItem('avanyx_session_user', JSON.stringify(demoUser));
+        localStorage.setItem('avanyx_onboarding_completed', 'true');
+        if (!localStorage.getItem('avanyx_active_business_id')) {
+          localStorage.setItem('avanyx_active_business_id', INITIAL_BUSINESSES[0].id);
+        }
+      } catch (storageErr) {
+        console.warn('Could not save demo session to localStorage:', storageErr);
+      }
+    } catch (err: any) {
+      console.error('Demo login error:', err);
+      setAuthError(err?.message || 'Failed to start demo session.');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   const logout = async () => {
@@ -1000,6 +1087,7 @@ if (hasBiz) {
     localStorage.removeItem('avanyx_session_type');
     localStorage.removeItem('avanyx_onboarding_completed');
     localStorage.removeItem('avanyx_active_business_id');
+    localStorage.removeItem('avanyx_businesses');
     localStorage.removeItem('avanyx_sales');
     localStorage.removeItem('avanyx_products');
     localStorage.removeItem('avanyx_customers');
@@ -1013,6 +1101,10 @@ if (hasBiz) {
     setHasCompletedOnboarding(false);
     setIsOnboardingOpen(false);
     setActiveUser(DEFAULT_SUBUSERS[0]);
+    
+    // Hard clear all in-memory React state by forcing a browser reload.
+    // This absolutely guarantees no cross-tenant data leakage if another account logs in.
+    window.location.href = '/';
   };
 
   const handleSetCurrentModule = (mod: SystemModuleKey | 'settings' | 'subusers') => {
@@ -3253,16 +3345,11 @@ if (hasBiz) {
     initialRoleName?: string;
     catalogSchema?: CatalogSchema;
   }) => {
-    // 1. Enforce One Account = One POS logically on the frontend
-    if (businesses.length > 0 || (authUser && businesses.some(b => b.ownerUid === authUser.uid))) {
-      console.warn('Account already has a POS. Refusing to create a duplicate to protect existing data.');
-      setIsOnboardingOpen(false);
-      setHasCompletedOnboarding(true);
-      return;
-    }
-
-    // 2. Lock the Business ID to the User's UID to prevent duplicate POS documents
-    const newBizId = authUser?.uid ? `biz-${authUser.uid}` : `biz-${config.industry}-${Date.now().toString().slice(-4)}`;
+    // Determine target business: update existing user business or assign permanent biz-{uid}
+    const existingBiz = authUser
+      ? businesses.find((b) => b.ownerUid === authUser.uid || b.id === `biz-${authUser.uid}`)
+      : businesses[0];
+    const newBizId = existingBiz?.id || (authUser?.uid ? `biz-${authUser.uid}` : `biz-${config.industry}-${Date.now().toString().slice(-4)}`);
     const currencySymbols: Record<string, string> = {
       USD: '$',
       PKR: 'Rs.',
@@ -3312,6 +3399,7 @@ if (hasBiz) {
           isRequired: f.required,
         })),
       catalogSchema: config.catalogSchema,
+      operationalModel: config.catalogSchema?.operationalModel,
       createdAt: new Date().toISOString(),
     };
 
@@ -3386,8 +3474,12 @@ if (hasBiz) {
         ).catch(() => {});
       }
     } catch {}
-    // Switch to POS / Dashboard
-    setCurrentModule('business_brain');
+    // Switch to tailored Operations workspace or Business Brain Dashboard
+    if (config.catalogSchema?.operationalModel && config.catalogSchema.operationalModel.workflowType !== 'item_pos_retail') {
+      setCurrentModule('operations');
+    } else {
+      setCurrentModule('business_brain');
+    }
     setActiveMode('business');
   };
 
@@ -3426,12 +3518,12 @@ if (hasBiz) {
 
 
   // Headers helper for server API calls
-  const getAuthHeaders = async () => {
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
     const isOwnerOrAdmin =
-      activeUser.roleId === 'role-owner' ||
-      activeUser.roleName.toLowerCase().includes('owner') ||
-      activeUser.roleName.toLowerCase().includes('admin') ||
-      activeUser.roleName.toLowerCase().includes('manager');
+      activeUser?.roleId === 'role-owner' ||
+      activeUser?.roleName?.toLowerCase().includes('owner') ||
+      activeUser?.roleName?.toLowerCase().includes('admin') ||
+      activeUser?.roleName?.toLowerCase().includes('manager');
 
     const adminToken = typeof window !== 'undefined' ? localStorage.getItem('avanyx_admin_jwt') : null;
     let firebaseToken = null;
@@ -3441,13 +3533,17 @@ if (hasBiz) {
       }
     } catch (e) {}
 
+    const resolvedTenantId = activeBusiness?.id || (authUser ? `biz-${authUser.uid}` : 'avanyx-default-store');
+    const resolvedUserId = authUser?.uid || activeUser?.id || 'default-user';
+
     return {
       'Content-Type': 'application/json',
       ...(firebaseToken ? { Authorization: `Bearer ${firebaseToken}` } : adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
-      'x-user-id': activeUser.id || 'anonymous',
+      'x-tenant-id': resolvedTenantId,
+      'x-user-id': resolvedUserId,
       'x-user-role': isOwnerOrAdmin ? 'ADMIN' : 'USER',
-      'x-user-email': activeUser.email || '',
-      'x-user-name': activeUser.name || 'User',
+      'x-user-email': activeUser?.email || authUser?.email || '',
+      'x-user-name': activeUser?.name || authUser?.displayName || 'User',
     };
   };
 
@@ -4544,6 +4640,9 @@ if (hasBiz) {
         updateShortcut,
         deleteShortcut,
         resetShortcuts,
+        tenantId: activeBusiness?.id || (authUser ? `biz-${authUser.uid}` : 'avanyx-default-store'),
+        userId: authUser?.uid || activeUser?.id || 'default-user',
+        getAuthHeaders,
       }}
     >
       {children}

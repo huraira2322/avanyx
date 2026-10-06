@@ -19,7 +19,8 @@
  * `safetyCritical` and never asserted as fact.
  */
 import { routeAIRequest, NormalizedRequest } from './aiRouter';
-import { OfferingSchemaRequest, OfferingSchemaResult } from '../types';
+import { buildUniversalOperationalModel } from './operationalModelBuilder';
+import { OfferingSchemaRequest, OfferingSchemaResult, OperationalModel, BusinessResourceItem, BusinessBookingRecord, OperationalTaskRecord } from '../types';
 
 export type { OfferingSchemaRequest, OfferingSchemaResult };
 
@@ -92,6 +93,8 @@ export interface CatalogSchema {
   capabilities: CatalogCapabilities;
   workflows: string[];
   recommendedModules?: string[];
+  operationalModel?: OperationalModel;
+  starterProducts?: { name: string; category: string; type: 'product' | 'service'; price: number; cost?: number; sku?: string }[];
   researchNotes?: string;
   safetyNotes?: string;
   confidence: number;
@@ -160,43 +163,46 @@ export const NEUTRAL_CAPABILITIES: CatalogCapabilities = {
 
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
-export const CATALOG_ARCHITECT_SYSTEM_PROMPT = `You are the AVANYX UNIVERSAL BUSINESS CATALOG ARCHITECT.
+export const CATALOG_ARCHITECT_SYSTEM_PROMPT = `You are the AVANYX UNIVERSAL BUSINESS INTELLIGENCE & OPERATIONAL ARCHITECT.
 
-Your job: given ONE business's real requirements, design the EXACT catalog/schema that business needs — nothing more, nothing less.
+Your job: given ONE business's real description, deeply understand how that business operates and generate a COMPLETE, PROFESSIONAL, DOMAIN-SPECIFIC OPERATIONAL SYSTEM AND POS BLUEPRINT.
 
 ABSOLUTE RULES
-1. The customer's stated requirements are the SOURCE OF TRUTH. Never overrule them.
-2. NEVER assume retail. Do NOT add barcode, SKU, stock, variants, expiry, or batch fields unless that business genuinely needs them.
-3. Nothing is globally required. Only require a field when it is truly essential for that business to operate.
-4. Do NOT hardcode or reuse a fixed industry template. Derive the schema from the business itself. An unusual business must get a genuinely custom schema.
-5. Do NOT fabricate facts. If you are unsure how an industry works, use a neutral, general, clearly-optional field instead of inventing a standard.
-6. Medical, legal, financial, pharmaceutical and other high-stakes information must NEVER be invented as fact. Mark such fields with "safetyCritical": true and keep them optional unless the customer explicitly required them.
-7. Prefer FEWER, higher-quality fields (6-16). Always include a name field and a selling price field.
-8. Units must match the business (Pcs, Pair, g, tola, Kg, Hour, Session, Consultation, Portion, Litre...).
+1. The customer's stated requirements are the SOURCE OF TRUTH. Deeply understand the operational domain (e.g. 5-Star Hotel -> hospitality/rooms/guests/folios/housekeeping; Hospital/Clinic -> healthcare/patients/appointments/prescriptions; Car Rental -> fleet/contracts/inspections/deposits; Factory -> BOM/work orders/production/quality; Restaurant -> tables/kitchen/menu/dine-in; Luxury Retail -> catalog/inventory/VIP).
+2. NEVER force generic retail paradigms onto hospitality, healthcare, manufacturing, or rental businesses.
+3. Generate complete, domain-specific terminology:
+   - For Hotels: resourceName="Room", resourcePlural="Rooms & Suites", clientName="Guest", transactionName="Reservation", primaryAction="Book Room / Check In", secondaryAction="Check Out & Settle Folio".
+   - For Clinics: resourceName="Suite / Bay", resourcePlural="Consultation Suites", clientName="Patient", transactionName="Appointment / Treatment", primaryAction="Admit / Book Consultation", secondaryAction="Discharge & Bill".
+   - For Rentals: resourceName="Vehicle / Asset", resourcePlural="Fleet Vehicles", clientName="Renter", transactionName="Rental Agreement", primaryAction="Create Rental Contract", secondaryAction="Return & Inspect".
+   - For Restaurants: resourceName="Table", resourcePlural="Dining Tables", clientName="Diner", transactionName="Table Order", primaryAction="Open Table / Order", secondaryAction="Settle Bill".
+4. Generate 6 to 12 realistic starter resources (rooms, tables, vehicles, production bays) with realistic types, rates, and initial occupancy statuses.
+5. Generate 2 to 4 active seed bookings/reservations with realistic guest/client names, check-in/out dates, deposits, and room/resource assignments.
+6. Generate 2 to 4 operational tasks (e.g. Room Cleaning, Vehicle Inspection, Sterilization, Machine Prep).
+7. Generate 5 to 15 relevant starter products/services/amenities (e.g. for a hotel: Room Service dishes, Airport Chauffeur, Spa Massage, Laundry Service).
 
 OUTPUT: Return ONLY strict JSON (no markdown fences, no commentary) with this exact shape:
 
 {
   "businessType": string,
-  "summary": string,                       // 1-2 sentences describing the catalog you designed
-  "itemLabelSingular": string,             // e.g. "Ornament", "Service", "Cut", "Dish", "Item"
+  "summary": string,
+  "itemLabelSingular": string,
   "itemLabelPlural": string,
   "sellingModel": "unit" | "weight" | "service" | "duration" | "measure" | "mixed" | "custom",
   "units": string[],
   "categories": string[],
   "fields": [
     {
-      "key": string,                       // snake_case
+      "key": string,
       "label": string,
       "type": "text"|"textarea"|"number"|"currency"|"weight"|"date"|"boolean"|"select"|"multiselect",
       "scope": "item"|"variant"|"order"|"customer",
       "required": boolean,
-      "options": string[],                 // only for select/multiselect
-      "unit": string,                      // optional
-      "help": string,                      // optional short hint
-      "examples": string[],                // optional
-      "core": "name"|"sku"|"barcode"|"category"|"brand"|"costPrice"|"sellingPrice"|"stock"|"minStock"|"unit"|"description"|"duration"|"assignedStaff"|"appointmentRequired"|"commissionRate"|"requirements"|"taxRate",  // only when the field maps to an existing core POS column
-      "safetyCritical": boolean            // optional
+      "options": string[],
+      "unit": string,
+      "help": string,
+      "examples": string[],
+      "core": "name"|"sku"|"barcode"|"category"|"brand"|"costPrice"|"sellingPrice"|"stock"|"minStock"|"unit"|"description"|"duration"|"assignedStaff"|"appointmentRequired"|"commissionRate"|"requirements"|"taxRate",
+      "safetyCritical": boolean
     }
   ],
   "capabilities": {
@@ -205,14 +211,51 @@ OUTPUT: Return ONLY strict JSON (no markdown fences, no commentary) with this ex
     "weightBased": boolean, "appointments": boolean, "suppliers": boolean,
     "loyalty": boolean, "onlineStore": boolean
   },
-  "recommendedModules": string[],          // optional array of ANY system module keys the business specifically needs (e.g. "promotions", "credit_notes", "expenses", "taxes", "commissions", "delivery_notes", "budgets")
-  "starterProducts": [                     // Generate 5-15 relevant starter products/services
+  "recommendedModules": string[],
+  "starterProducts": [
     { "name": string, "category": string, "type": "product" | "service", "price": number, "cost": number, "sku": string }
   ],
-  "workflows": string[],                   // e.g. ["pos","appointments","batches"]
-  "researchNotes": string,                 // how you reasoned; say plainly if you used general knowledge
-  "safetyNotes": string,                   // any caution for medical/legal/financial catalogs, else ""
-  "confidence": number                     // 0..1
+  "operationalModel": {
+    "domain": "hospitality" | "healthcare" | "rental" | "manufacturing" | "food_dining" | "services" | "retail" | "education" | "logistics" | "custom",
+    "workflowType": "accommodation_hospitality" | "patient_clinical" | "fleet_rental" | "work_order_manufacturing" | "table_kitchen_dining" | "service_appointment" | "item_pos_retail" | "custom_pipeline",
+    "terminology": {
+      "resourceName": string,
+      "resourcePlural": string,
+      "clientName": string,
+      "clientPlural": string,
+      "transactionName": string,
+      "transactionPlural": string,
+      "primaryAction": string,
+      "secondaryAction": string
+    },
+    "resourceBoard": {
+      "enabled": boolean,
+      "resourceType": string,
+      "statuses": [
+        { "key": "available", "label": "Available", "color": "emerald" },
+        { "key": "occupied", "label": "Occupied", "color": "blue" },
+        { "key": "reserved", "label": "Reserved", "color": "amber" },
+        { "key": "cleaning", "label": "Cleaning / Turnover", "color": "purple" },
+        { "key": "maintenance", "label": "Maintenance", "color": "rose" }
+      ],
+      "initialResources": [
+        { "id": string, "name": string, "type": string, "status": "available"|"occupied"|"reserved"|"cleaning"|"maintenance", "rate": number, "capacity": number, "currentGuestOrClient": string, "checkInDate": string, "checkOutDate": string, "notes": string }
+      ]
+    },
+    "initialBookings": [
+      { "id": string, "resourceId": string, "resourceName": string, "clientName": string, "clientEmail": string, "clientPhone": string, "checkInDate": string, "checkOutDate": string, "rate": number, "totalNightsOrUnits": number, "depositAmount": number, "totalAmount": number, "paidAmount": number, "status": "confirmed"|"checked_in"|"checked_out", "folioCharges": [ { "id": string, "description": string, "amount": number, "category": string, "date": string } ] }
+    ],
+    "initialTasks": [
+      { "id": string, "resourceName": string, "title": string, "priority": "low"|"medium"|"high"|"urgent", "status": "pending"|"in_progress"|"completed", "assignedTo": string }
+    ],
+    "specializedModules": [
+      { "id": string, "title": string, "icon": string, "description": string, "type": "resource_board"|"reservations"|"folios"|"tasks"|"services_pos"|"analytics" }
+    ]
+  },
+  "workflows": string[],
+  "researchNotes": string,
+  "safetyNotes": string,
+  "confidence": number
 }
 
 Always bind "name" and "sellingPrice" fields to their core counterparts when included.`;
@@ -399,6 +442,8 @@ export function sanitizeCatalogSchema(raw: any, req: CatalogRequest): CatalogSch
     capabilities: toCapabilities(raw?.capabilities, anchored),
     workflows: safeStrArr(raw?.workflows, 16, 40) || ['pos'],
     recommendedModules: safeStrArr(raw?.recommendedModules, 30, 40),
+    operationalModel: buildUniversalOperationalModel(req, raw?.operationalModel),
+    starterProducts: Array.isArray(raw?.starterProducts) ? raw.starterProducts : undefined,
     researchNotes: safeStr(raw?.researchNotes, 600),
     safetyNotes: safeStr(raw?.safetyNotes, 600),
     confidence: typeof raw?.confidence === 'number' ? Math.max(0, Math.min(1, raw.confidence)) : 0.6,
@@ -567,6 +612,7 @@ export function neutralFallbackSchema(req: CatalogRequest): CatalogSchema {
     },
     workflows: hasAppointments ? ['pos', 'appointments'] : ['pos'],
     recommendedModules: recommendedMods,
+    operationalModel: buildUniversalOperationalModel(req),
     researchNotes: 'Derived tailored catalog schema matching business operational model and requirements.',
     confidence: 0.95,
     source: 'ai',

@@ -86,6 +86,11 @@ enum UserIntent {
   ACKNOWLEDGMENT = 'acknowledgment',
   QUESTION_ABOUT_TOPIC = 'question_about_topic',
   STATEMENT = 'statement',
+  LONG_FORM_CREATION = 'long_form_creation',
+  BOOK_MANUSCRIPT = 'book_manuscript',
+  TECHNICAL_SPEC = 'technical_spec',
+  BUSINESS_PROPOSAL = 'business_proposal',
+  DEEP_EXPLANATION = 'deep_explanation',
 }
 
 enum ContinuityDecision {
@@ -480,6 +485,12 @@ const CLARIFICATION_RE = /(what do you mean|i mean|i meant|let me clarify|to cla
 const ELABORATION_RE = /(tell me more|go on|continue|more about|and then|what else|anything else|explain further|elaborate|give more details|go into more detail|could you expand|expand on that|please elaborate)/i;
 const NEW_SUBJECT_RE = /^(what|who|where|when|why|how|which|is|are|was|were|can|could|would|do|does|did|should|shall|will)\b/i;
 
+const BOOK_MANUSCRIPT_RE = /(?:write|create|draft|author|compose)\s+(?:a|an)?\s*(?:complete|full|entire)?\s*(?:\d+[\s-]*(?:page|chapter|word|part))?\s*(?:book|manuscript|novel|story|epic|memoir|biography|textbook|guidebook|novella|chapter\s+\d+)/i;
+const BUSINESS_PROPOSAL_RE = /(?:business plan|pitch deck|grant proposal|investment proposal|rfp|commercial proposal|marketing strategy|growth plan|swot analysis|market entry strategy|feasibility study)/i;
+const TECHNICAL_SPEC_RE = /(?:technical spec|system architecture|api documentation|database schema|complete code|full implementation|backend architecture|frontend architecture|complete script|production-ready code)/i;
+const DEEP_EXPLANATION_RE = /(?:explain in depth|deep dive|comprehensive breakdown|thoroughly explain|step-by-step tutorial|in-depth guide|exhaustive overview|detailed breakdown of|teach me everything)/i;
+const LONG_FORM_CREATION_RE = /(?:write|create|draft|generate|develop)\s+(?:a|an)?\s*(?:complete|comprehensive|full|in-depth|exhaustive|detailed)\s*(?:report|whitepaper|white paper|case study|course|curriculum|documentation|handbook|manual|essay|paper|guide)/i;
+
 function detectIntent(message: string, state: ConversationState): IntentAnalysis {
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();
@@ -496,6 +507,71 @@ function detectIntent(message: string, state: ConversationState): IntentAnalysis
       explicitMention: false,
       isQuestion: false,
       isTrivial: true,
+    };
+  }
+
+  // 1. Long-form creative & manuscript tasks
+  if (BOOK_MANUSCRIPT_RE.test(trimmed)) {
+    const entities = extractEntities(trimmed);
+    return {
+      intent: UserIntent.BOOK_MANUSCRIPT,
+      confidence: 0.95,
+      targetTopic: entities[0]?.name || 'Book Manuscript',
+      explicitMention: true,
+      isQuestion: false,
+      isTrivial: false,
+    };
+  }
+
+  // 2. Business proposals & commercial plans
+  if (BUSINESS_PROPOSAL_RE.test(trimmed)) {
+    const entities = extractEntities(trimmed);
+    return {
+      intent: UserIntent.BUSINESS_PROPOSAL,
+      confidence: 0.92,
+      targetTopic: entities[0]?.name || 'Business Proposal',
+      explicitMention: true,
+      isQuestion: false,
+      isTrivial: false,
+    };
+  }
+
+  // 3. Technical specifications & production code architectures
+  if (TECHNICAL_SPEC_RE.test(trimmed)) {
+    const entities = extractEntities(trimmed);
+    return {
+      intent: UserIntent.TECHNICAL_SPEC,
+      confidence: 0.92,
+      targetTopic: entities[0]?.name || 'Technical Architecture',
+      explicitMention: true,
+      isQuestion: false,
+      isTrivial: false,
+    };
+  }
+
+  // 4. Long-form comprehensive documents
+  if (LONG_FORM_CREATION_RE.test(trimmed)) {
+    const entities = extractEntities(trimmed);
+    return {
+      intent: UserIntent.LONG_FORM_CREATION,
+      confidence: 0.9,
+      targetTopic: entities[0]?.name || 'Comprehensive Document',
+      explicitMention: true,
+      isQuestion: false,
+      isTrivial: false,
+    };
+  }
+
+  // 5. In-depth educational & conceptual explanations
+  if (DEEP_EXPLANATION_RE.test(trimmed)) {
+    const entities = extractEntities(trimmed);
+    return {
+      intent: UserIntent.DEEP_EXPLANATION,
+      confidence: 0.88,
+      targetTopic: entities[0]?.name || 'Deep Explanation',
+      explicitMention: true,
+      isQuestion: question,
+      isTrivial: false,
     };
   }
 
@@ -1086,6 +1162,11 @@ function buildContextInjection(
     effectiveIntent === UserIntent.FOLLOW_UP ? 'FOLLOW-UP (continuation)' :
     effectiveIntent === UserIntent.CLARIFICATION ? 'CLARIFICATION' :
     effectiveIntent === UserIntent.ELABORATION ? 'ELABORATION (more depth)' :
+    effectiveIntent === UserIntent.BOOK_MANUSCRIPT ? 'BOOK / NOVEL MANUSCRIPT' :
+    effectiveIntent === UserIntent.BUSINESS_PROPOSAL ? 'BUSINESS PROPOSAL / PLAN' :
+    effectiveIntent === UserIntent.TECHNICAL_SPEC ? 'TECHNICAL ARCHITECTURE / CODE' :
+    effectiveIntent === UserIntent.LONG_FORM_CREATION ? 'COMPREHENSIVE LONG-FORM DOCUMENT' :
+    effectiveIntent === UserIntent.DEEP_EXPLANATION ? 'DEEP CONCEPTUAL EXPLANATION' :
     effectiveIntent === UserIntent.TOPIC_CHANGE ? 'TOPIC CHANGE' :
     effectiveIntent === UserIntent.NEW_QUESTION ? 'NEW TOPIC QUESTION' :
     effectiveIntent === UserIntent.QUESTION_ABOUT_TOPIC ? 'QUESTION ABOUT CURRENT TOPIC' :
@@ -1093,6 +1174,17 @@ function buildContextInjection(
     effectiveIntent === UserIntent.GREETING ? 'GREETING' : 'ACKNOWLEDGMENT';
   const intentConfidence = intentOverriddenByRefs ? Math.max(0.7, intent.confidence) : intent.confidence;
   add(`USER INTENT: ${intentLabel} (confidence ${Math.round(intentConfidence * 100)}%)`, 'intent-analyzer', 2);
+
+  // Special completeness directives for deep deliverables
+  if (effectiveIntent === UserIntent.BOOK_MANUSCRIPT) {
+    add('TASK COMPLETION DIRECTIVE: The user is requesting a book/manuscript. Deliver fully written, immersive chapter content with rich narrative/exposition. Do not stop at a short outline. If token limits occur, conclude the active chapter cleanly and indicate continuation.', 'completeness-engine', 2);
+  } else if (effectiveIntent === UserIntent.BUSINESS_PROPOSAL) {
+    add('TASK COMPLETION DIRECTIVE: Deliver a complete, professional, multi-section business plan/proposal with Executive Summary, Market Analysis, Financial Tables, and Operational Strategy.', 'completeness-engine', 2);
+  } else if (effectiveIntent === UserIntent.TECHNICAL_SPEC) {
+    add('TASK COMPLETION DIRECTIVE: Deliver complete, production-ready code and comprehensive technical architecture without ellipsis, pseudo-code placeholders, or omitted functions.', 'completeness-engine', 2);
+  } else if (effectiveIntent === UserIntent.LONG_FORM_CREATION) {
+    add('TASK COMPLETION DIRECTIVE: Provide a thorough, well-structured, multi-section document matching the requested scope and depth.', 'completeness-engine', 2);
+  }
 
   if (continuity === ContinuityDecision.CONTINUE) {
     add('The user is continuing the current topic — keep your answer aligned with the active topic above and the resolved references.', 'topic-continuity', 2);

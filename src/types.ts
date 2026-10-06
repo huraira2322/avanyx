@@ -13,6 +13,7 @@ export type IndustryType =
 
 export type SystemModuleKey =
   | 'dashboard' | 'business_brain'
+  | 'operations' | 'domain_ops'
   | 'pos'
   | 'orders' | 'sales_orders' | 'estimates' | 'invoices' | 'credit_notes' | 'delivery_notes'
   | 'products' | 'services' | 'barcodes'
@@ -133,6 +134,86 @@ export interface CatalogCapabilities {
 }
 
 /** AI-adaptive, business-specific catalog definition (see server catalogEngine). */
+export interface BusinessResourceItem {
+  id: string;
+  name: string;
+  type: string;
+  status: 'available' | 'occupied' | 'reserved' | 'cleaning' | 'maintenance' | 'out_of_service' | string;
+  rate: number;
+  rateUnit?: string;
+  capacity?: number;
+  currentGuestOrClient?: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  notes?: string;
+  features?: string[];
+  floorOrLocation?: string;
+}
+
+export interface BusinessBookingRecord {
+  id: string;
+  businessId: string;
+  resourceId: string;
+  resourceName: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  checkInDate: string;
+  checkOutDate: string;
+  rate: number;
+  totalNightsOrUnits: number;
+  depositAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  status: 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'pending';
+  notes?: string;
+  folioCharges?: { id: string; description: string; amount: number; category: string; date: string }[];
+  createdAt: string;
+}
+
+export interface OperationalTaskRecord {
+  id: string;
+  resourceId?: string;
+  resourceName?: string;
+  title: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'pending' | 'in_progress' | 'completed';
+  assignedTo?: string;
+  notes?: string;
+  dueDate?: string;
+  createdAt: string;
+}
+
+export interface OperationalModel {
+  domain: 'hospitality' | 'healthcare' | 'rental' | 'manufacturing' | 'food_dining' | 'services' | 'retail' | 'education' | 'logistics' | 'custom';
+  workflowType: 'accommodation_hospitality' | 'patient_clinical' | 'fleet_rental' | 'work_order_manufacturing' | 'table_kitchen_dining' | 'service_appointment' | 'item_pos_retail' | 'custom_pipeline';
+  terminology: {
+    resourceName: string;
+    resourcePlural: string;
+    clientName: string;
+    clientPlural: string;
+    transactionName: string;
+    transactionPlural: string;
+    primaryAction: string;
+    secondaryAction: string;
+  };
+  resourceBoard?: {
+    enabled: boolean;
+    resourceType: string;
+    statuses: { key: string; label: string; color: string }[];
+    initialResources: BusinessResourceItem[];
+  };
+  initialBookings?: BusinessBookingRecord[];
+  initialTasks?: OperationalTaskRecord[];
+  specializedModules?: {
+    id: string;
+    title: string;
+    icon: string;
+    description: string;
+    type: 'resource_board' | 'reservations' | 'folios' | 'tasks' | 'services_pos' | 'analytics' | 'custom';
+  }[];
+}
+
 export interface CatalogSchema {
   version: 1;
   businessType: string;
@@ -147,6 +228,7 @@ export interface CatalogSchema {
   workflows: string[];
   recommendedModules?: string[];
   starterProducts?: { name: string; category: string; type: 'product' | 'service'; price: number; cost?: number; sku?: string }[];
+  operationalModel?: OperationalModel;
   researchNotes?: string;
   safetyNotes?: string;
   confidence: number;
@@ -762,6 +844,7 @@ export interface BusinessProfile {
   customFields: CustomFieldDefinition[];
   /** AI-generated, business-specific catalog definition (optional). */
   catalogSchema?: CatalogSchema;
+  operationalModel?: OperationalModel;
   createdAt: ISODateString;
   updatedAt?: ISODateString;
 }

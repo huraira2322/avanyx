@@ -89,10 +89,15 @@ service cloud.firestore {
 
     // Business Root Document & Subcollections
     match /businesses/{businessId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isSuperAdmin() ||
         businessId == 'biz-' + request.auth.uid ||
         resource == null ||
+        resource.data.ownerUid == request.auth.uid ||
+        (resource.data.memberUids != null && request.auth.uid in resource.data.memberUids)
+      );
+      allow list: if isSignedIn() && (
+        isSuperAdmin() ||
         resource.data.ownerUid == request.auth.uid ||
         (resource.data.memberUids != null && request.auth.uid in resource.data.memberUids)
       );
@@ -101,8 +106,8 @@ service cloud.firestore {
                     request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if isSignedIn() && (
         isSuperAdmin() ||
-        businessId == 'biz-' + request.auth.uid ||
-        (resource != null && resource.data.ownerUid == request.auth.uid)
+        (resource != null && resource.data.ownerUid == request.auth.uid) ||
+        (resource == null && businessId == 'biz-' + request.auth.uid)
       );
 
       // Workstations Security Rule

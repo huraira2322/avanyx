@@ -23,8 +23,7 @@ import { ChatModelLogo, OmniModelLogo, FlashModelLogo, AxiomModelLogo } from './
 
 interface AvanyxLandingPageProps {
   onLaunchPos: () => void;
-  onOpenAuth: (mode?: 'login' | 'signup') => void;
-  
+  onOpenAuth: (mode?: 'login' | 'signup' | 'phone' | 'staff' | 'demo') => void;
 }
 
 export const AvanyxLandingPage: React.FC<AvanyxLandingPageProps> = ({
@@ -661,7 +660,7 @@ export const AvanyxLandingPage: React.FC<AvanyxLandingPageProps> = ({
           {/* Action CTAs */}
           <div className="hidden sm:flex items-center gap-3 shrink-0">
             <button
-              onClick={() => onOpenAuth()}
+              onClick={() => onOpenAuth('demo')}
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition cursor-pointer flex items-center gap-1.5"
             >
               <Play className="w-3.5 h-3.5 fill-current opacity-70" />
@@ -706,7 +705,7 @@ export const AvanyxLandingPage: React.FC<AvanyxLandingPageProps> = ({
             </div>
             <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
               <button
-                onClick={() => { setMobileMenuOpen(false); onOpenAuth(); }}
+                onClick={() => { setMobileMenuOpen(false); onOpenAuth('demo'); }}
                 className="w-full py-2.5 px-4 text-center rounded-xl bg-slate-100 font-medium text-slate-800 hover:bg-slate-200 cursor-pointer"
               >
                 Watch Demo
@@ -764,7 +763,7 @@ export const AvanyxLandingPage: React.FC<AvanyxLandingPageProps> = ({
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </button>
             <button
-              onClick={() => onOpenAuth()}
+              onClick={() => onOpenAuth('demo')}
               className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-base border border-slate-200 shadow-2xs flex items-center justify-center gap-2 transition cursor-pointer"
             >
               <Play className="w-4 h-4 text-indigo-600 fill-indigo-600" />

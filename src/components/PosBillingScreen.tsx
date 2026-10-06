@@ -144,7 +144,9 @@ export const PosBillingScreen: React.FC = () => {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [mockScanInput, setMockScanInput] = useState('');
   const [cameraActive, setCameraActive] = useState(false);
-  const [cameraPermissionDenied, setCameraPermissionDenied] = useState(false);
+  const [cameraPermissionDenied, setCameraPermissionDenied] = useState(() => {
+    return localStorage.getItem('avanyx_camera_denied') === 'true';
+  });
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scanSuccessMessage, setScanSuccessMessage] = useState<string | null>(null);
@@ -246,6 +248,7 @@ export const PosBillingScreen: React.FC = () => {
           const errMsg = err?.message || err?.name || '';
           if (errMsg.toLowerCase().includes('denied') || errMsg.toLowerCase().includes('notallowed') || err?.name === 'NotAllowedError') {
             setCameraPermissionDenied(true);
+            localStorage.setItem('avanyx_camera_denied', 'true');
             setCameraError('Camera access permanently blocked by browser. Please click the lock icon in the URL bar to allow it, then reload.');
           } else {
             setCameraError(errMsg || 'Camera permission denied or camera device unavailable.');

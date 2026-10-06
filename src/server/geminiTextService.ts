@@ -80,9 +80,9 @@ export const GEMINI_TEXT_MODELS: Record<string, { label: string; supportsThinkin
 
 /** Preferred model cascade for multimodal vision */
 export const VISION_MODEL_FALLBACKS: GeminiModelId[] = [
-  'gemini-3.5-flash',
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
+  'gemini-3.8-flash',
+  'gemini-flash-lite-latest',
+  'gemini-flash-latest',
   'gemini-3.1-pro-preview',
 ];
 
@@ -124,8 +124,8 @@ async function callGeminiText(
 
   // Map requested model to a verified GenAI model name if legacy or alias
   let targetModel = modelId;
-  if (targetModel === 'gemini-3.5-flash') {
-    targetModel = 'gemini-2.5-flash';
+  if (targetModel === 'gemini-3.5-flash' || targetModel === 'gemini-2.5-flash' || targetModel === 'gemini-2.0-flash') {
+    targetModel = 'gemini-3.8-flash';
   }
 
   // Convert messages to Gemini contents format with real multimodal image support

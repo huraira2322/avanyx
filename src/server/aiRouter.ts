@@ -99,10 +99,10 @@ export function getProviderHealthStatus() {
 // ─── Model Mapping ────────────────────────────────────────────────────────────
 
 const GEMINI_FALLBACK_MODELS: Record<string, GeminiModelId> = {
-  NORMAL_CHAT: 'gemini-2.5-flash',
-  FLASH: 'gemini-2.5-flash',
-  OMNI: 'gemini-3.1-pro-preview',
-  FINANCIAL_AGENT: 'gemini-2.5-flash',
+  NORMAL_CHAT: 'gemini-3.8-flash',
+  FLASH: 'gemini-3.8-flash',
+  OMNI: 'gemini-3.8-flash',
+  FINANCIAL_AGENT: 'gemini-3.8-flash',
 };
 
 function getEngineKind(engineId: string): string {
@@ -163,8 +163,8 @@ async function callGemini(messages: GeminiMessage[], engineId: string, maxTokens
 
 export async function routeAIRequest(req: NormalizedRequest & { userId?: string; requestId?: string; businessId?: string }): Promise<NormalizedResponse> {
   const startTime = Date.now();
-  const maxTokens = req.maxTokens || 4096;
-  const reqTimeoutMs = req.timeoutMs && req.timeoutMs > 0 ? req.timeoutMs : 60000;
+  const maxTokens = req.maxTokens || 8192;
+  const reqTimeoutMs = req.timeoutMs && req.timeoutMs > 0 ? req.timeoutMs : 120000;
   const reqMaxRetries = typeof req.maxRetries === 'number' ? Math.max(0, req.maxRetries) : 1;
   const systemMsg = req.messages.find((m) => m.role === 'system');
   const chatMessages = req.messages.filter((m) => m.role !== 'system');

@@ -40,7 +40,7 @@ interface AuthPortalProps {
   onSuccess?: () => void;
   isOpenModal?: boolean;
   onClose?: () => void;
-  initialMode?: 'login' | 'signup' | 'phone' | 'staff';
+  initialMode?: 'login' | 'signup' | 'phone' | 'staff' | 'demo';
   onBackToWebsite?: () => void;
 }
 
@@ -81,10 +81,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   } = useAvanyx();
 
   // Active Tab: 'owner' | 'phone' | 'staff' | 'demo'
-  const [activeTab, setActiveTab] = useState<'owner' | 'phone' | 'staff'>(() => {
+  const [activeTab, setActiveTab] = useState<'owner' | 'phone' | 'staff' | 'demo'>(() => {
     if (initialMode === 'phone') return 'phone';
     if (initialMode === 'staff') return 'staff';
-    
+    if (initialMode === 'demo') return 'demo';
     return 'owner';
   });
 
@@ -361,6 +361,22 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       setSuccessMsg(`Password reset link sent to ${forgotEmail.trim()}. Please check your inbox.`);
     } catch (err: any) {
       setErrorMsg(formatAuthError(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Demo Workspace Launch
+  const handleDemoClick = async (role: 'owner' | 'manager' | 'cashier' | 'inventory' | 'accountant') => {
+    setIsLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await quickLoginAsDemo(role);
+      setSuccessMsg(`Launching demo workspace as ${role.toUpperCase()}...`);
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to initialize demo workspace.');
     } finally {
       setIsLoading(false);
     }
@@ -656,7 +672,9 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                     setSuccessMsg('');
                   }}
                   className={`py-2 px-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                    'text-slate-500 hover:text-slate-800'
+                    activeTab === 'demo'
+                      ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-500" />

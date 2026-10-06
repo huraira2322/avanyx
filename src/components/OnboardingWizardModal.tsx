@@ -10,6 +10,7 @@ import { IndustryType, SystemModuleKey, CurrencyCode, LocaleCode, CatalogSchema 
 import { AVANYX_COLOR_PALETTES } from '../constants/themeColors';
 import { getApiUrl } from '../lib/apiConfig';
 import { deriveOnboardingFromSchema, applyModulesToSchema, buildPresetCatalogSchema, presetModulesForIndustry } from '../lib/catalogSchema';
+import { buildUniversalOperationalModel } from '../lib/operationalModelBuilder';
 
 interface OnboardingWizardModalProps {
   isOpen: boolean;
@@ -202,17 +203,21 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
     const p = prompt.toLowerCase();
     const isEggOrPoultry = /egg|poultry|chicken|layer|broiler|birds|bird|farm|hatchery|feed|dairy/.test(p);
     const isJewelryOrGold = /gold|jewelry|jewel|silver|diamond|karat|tola|ornament|gem/.test(p);
-    const isDoctorOrClinic = /doctor|clinic|patient|health|medic|prescri|hospital|consultant|therapy|dentist/.test(p);
-    const isSalonOrSpa = /salon|spa|barber|hair|facial|massage|stylist|beauty/.test(p);
-    const isRestaurant = /restaurant|cafe|food|dining|bakery|kitchen|chef|pizza|burger|drink|bar/.test(p);
-    const isRepairOrTech = /repair|phone|tech|laptop|imei|serial|screen|mechanic|garage|auto|workshop/.test(p);
+    const isPerfumeOrCosmetics = /perfume|fragrance|scent|cologne|attar|oud|cosmetics|beauty product|skincare|serum|lotion/.test(p);
+    const isApparelOrFashion = /clothing|apparel|fashion|dress|shirt|boutique|garment|shoes|footwear|tailor|suit|fabric/.test(p);
+    const isPharmacyOrChemist = /pharmacy|chemist|drug|medicine|prescription|tablet|syrup|medication/.test(p);
+    const isDoctorOrClinic = /doctor|clinic|patient|health|medic|hospital|consultant|therapy|dentist/.test(p);
+    const isSalonOrSpa = /salon|spa|barber|hair|facial|massage|stylist|grooming/.test(p);
+    const isRestaurant = /restaurant|cafe|food|dining|bakery|kitchen|chef|pizza|burger|drink|bar|coffee|tea|snack/.test(p);
+    const isRepairOrTech = /repair|phone|tech|laptop|imei|serial|screen|mechanic|garage|auto|workshop|vehicle|motor|cycle/.test(p);
+    const isFitnessOrGym = /gym|fitness|workout|trainer|membership|yoga|crossfit|training/.test(p);
     const isDinoOrVault = /dinosaur|rare specimen|incubator specimen|specimen vault|fossil/.test(p);
     const hasOnlineStore = /online|store|ecommerce|website|delivery|web/.test(p);
     const hasDiscounts = /discount|promo|coupon|deal|sale|offer/.test(p);
-    const hasAppointments = /appointment|booking|session|duration|slot|schedule/.test(p) || isDoctorOrClinic || isSalonOrSpa;
-    const hasBatches = /batch|expiry|expire|feefo|fifo|perishable|lot/.test(p) || isDoctorOrClinic || isDinoOrVault || isEggOrPoultry;
+    const hasAppointments = /appointment|booking|session|duration|slot|schedule|class|masterclass/.test(p) || isDoctorOrClinic || isSalonOrSpa || isFitnessOrGym;
+    const hasBatches = /batch|expiry|expire|feefo|fifo|perishable|lot|maturation/.test(p) || isDoctorOrClinic || isDinoOrVault || isEggOrPoultry || isPharmacyOrChemist || isPerfumeOrCosmetics;
     const hasSerials = /serial|imei|device|chassis|engine/.test(p) || isRepairOrTech || isJewelryOrGold;
-    const hasBarcodes = !isDoctorOrClinic && !isSalonOrSpa && !isDinoOrVault;
+    const hasBarcodes = !isDoctorOrClinic && !isSalonOrSpa && !isDinoOrVault && !isFitnessOrGym;
 
     let businessType = 'Custom Business';
     let singular = 'Item';
@@ -229,11 +234,31 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       singular = 'Jewelry Piece / Bullion';
       plural = 'Jewelry Items';
       sellingModel = 'weight';
+    } else if (isPerfumeOrCosmetics) {
+      businessType = 'Perfume & Fragrance Studio';
+      singular = 'Fragrance / Scent';
+      plural = 'Fragrance Products';
+      sellingModel = 'unit';
+    } else if (isApparelOrFashion) {
+      businessType = 'Apparel & Fashion Boutique';
+      singular = 'Apparel Item';
+      plural = 'Garments & Accessories';
+      sellingModel = 'unit';
+    } else if (isPharmacyOrChemist) {
+      businessType = 'Pharmacy & Healthcare';
+      singular = 'Medicine / Product';
+      plural = 'Pharmaceutical Products';
+      sellingModel = 'unit';
     } else if (isDoctorOrClinic) {
       businessType = 'Medical Clinic & Practice';
       singular = 'Patient Service';
       plural = 'Services & Consultations';
       sellingModel = 'service';
+    } else if (isFitnessOrGym) {
+      businessType = 'Gym & Fitness Center';
+      singular = 'Plan / Session';
+      plural = 'Memberships & Classes';
+      sellingModel = 'duration';
     } else if (isDinoOrVault) {
       businessType = 'Specialty Incubator & Storage';
       singular = 'Specimen / Vault';
@@ -245,12 +270,12 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       plural = 'Services';
       sellingModel = 'service';
     } else if (isRestaurant) {
-      businessType = 'Food & Beverage';
-      singular = 'Dish';
+      businessType = 'Food, Cafe & Dining';
+      singular = 'Dish / Drink';
       plural = 'Menu Items';
       sellingModel = 'unit';
     } else if (isRepairOrTech) {
-      businessType = 'Tech Repair & Service';
+      businessType = 'Tech Repair & Automotive';
       singular = 'Job / Part';
       plural = 'Repairs & Parts';
       sellingModel = 'mixed';
@@ -270,11 +295,19 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       ? ['Farm Fresh White Eggs', 'Organic Brown Eggs', 'Free Range Eggs', 'Quail Eggs', 'Poultry Feed', 'Broiler Chicken']
       : isJewelryOrGold
       ? ['Gold 24K', 'Gold 22K', 'Gold 21K', 'Gold 18K', 'Diamond Rings', 'Silver 925']
+      : isPerfumeOrCosmetics
+      ? ['Eau de Parfum', 'Artisan Attar / Oils', 'Discovery Sets', 'Workshops & Masterclasses', 'Custom Blends']
+      : isApparelOrFashion
+      ? ['Men Fashion', 'Women Fashion', 'Outerwear', 'Footwear', 'Accessories']
+      : isPharmacyOrChemist
+      ? ['Prescription Medicine', 'OTC Healthcare', 'Vitamins & Supplements', 'First Aid']
       : isDoctorOrClinic
       ? ['Consultations', 'Diagnostics', 'Procedures']
       : isDinoOrVault
       ? ['Rare Grade A', 'Incubating', 'Preserved']
-      : ['General'];
+      : isRestaurant
+      ? ['Hot Beverages', 'Cold Drinks', 'Specialty Dishes', 'Desserts']
+      : ['General Catalog'];
 
     const recommendedMods: SystemModuleKey[] = ['pos', 'products', 'settings', 'dashboard', 'business_brain'];
     if (hasOnlineStore) recommendedMods.push('online_store');
@@ -290,6 +323,25 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       { key: 'category', label: 'Category', type: 'select' as const, scope: 'item' as const, required: false, options: categories, core: 'category' as const },
       { key: 'selling_price', label: 'Rate / Price', type: 'currency' as const, scope: 'item' as const, required: true, core: 'sellingPrice' as const },
       { key: 'unit', label: 'Unit of Measure', type: 'select' as const, scope: 'item' as const, required: false, options: units, core: 'unit' as const },
+      ...(isPerfumeOrCosmetics ? [
+        { key: 'bottle_volume', label: 'Bottle Volume / Size', type: 'select' as const, scope: 'item' as const, required: false, options: ['10ml Travel', '30ml Eau de Parfum', '50ml Eau de Parfum', '100ml Flacon', 'Custom Volume'] },
+        { key: 'fragrance_family', label: 'Fragrance Olfactory Family', type: 'select' as const, scope: 'item' as const, required: false, options: ['Woody Oriental', 'Floral Fresh', 'Citrus Gourmand', 'Amber Oud', 'Aromatic Fougere'] },
+        { key: 'concentration_pct', label: 'Oil Concentration (%)', type: 'number' as const, scope: 'item' as const, required: false },
+        { key: 'batch_formula_code', label: 'Batch & Formula Code', type: 'text' as const, scope: 'item' as const, required: false },
+        { key: 'maturation_date', label: 'Alcohol Maturation Date', type: 'date' as const, scope: 'item' as const, required: false }
+      ] : []),
+      ...(isApparelOrFashion ? [
+        { key: 'size', label: 'Garment Size', type: 'select' as const, scope: 'item' as const, required: false, options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Custom Tailored'] },
+        { key: 'color_shade', label: 'Color / Pattern', type: 'text' as const, scope: 'item' as const, required: false },
+        { key: 'fabric_composition', label: 'Fabric / Material', type: 'text' as const, scope: 'item' as const, required: false },
+        { key: 'brand_label', label: 'Brand / Label', type: 'text' as const, scope: 'item' as const, required: false, core: 'brand' as const }
+      ] : []),
+      ...(isPharmacyOrChemist ? [
+        { key: 'generic_name', label: 'Generic / Formula Name', type: 'text' as const, scope: 'item' as const, required: false },
+        { key: 'dosage_form', label: 'Dosage Form', type: 'select' as const, scope: 'item' as const, required: false, options: ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Drops'] },
+        { key: 'batch_number', label: 'Batch Number', type: 'text' as const, scope: 'item' as const, required: false },
+        { key: 'expiry_date', label: 'Expiry Date', type: 'date' as const, scope: 'item' as const, required: true }
+      ] : []),
       ...(isEggOrPoultry ? [
         { key: 'egg_grade', label: 'Egg Grade / Size', type: 'select' as const, scope: 'item' as const, required: false, options: ['Grade AA', 'Grade A', 'Grade B', 'Jumbo', 'Large', 'Medium', 'Standard'] },
         { key: 'pack_candling_date', label: 'Packing / Candling Date', type: 'date' as const, scope: 'item' as const, required: false },
@@ -343,6 +395,12 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
       },
       workflows: hasAppointments ? ['pos', 'appointments'] : ['pos'],
       recommendedModules: recommendedMods,
+      operationalModel: buildUniversalOperationalModel({
+        businessRequirements: prompt,
+        businessName: businessName || 'My Business',
+        country,
+        currency,
+      }),
       confidence: 0.95,
       source: 'ai' as const
     };
@@ -750,6 +808,23 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
                     <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                       {aiRationale || aiCatalogSchema.summary}
                     </p>
+
+                    {aiCatalogSchema.operationalModel && (
+                      <div className="p-3 bg-white/70 dark:bg-[#0B1220]/70 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                          <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                            <Layers className="w-3.5 h-3.5" />
+                            Operational Engine: <strong className="capitalize">{aiCatalogSchema.operationalModel.domain} Workflow</strong>
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {aiCatalogSchema.operationalModel.terminology.resourceName} / {aiCatalogSchema.operationalModel.terminology.clientName}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                          Generated {aiCatalogSchema.operationalModel.resourceBoard?.initialResources?.length || 4} {aiCatalogSchema.operationalModel.terminology.resourcePlural.toLowerCase()}, live reservation timeline, client folio ledger, and turnover tasks.
+                        </p>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/40">
                       <div className="flex flex-wrap gap-1.5">

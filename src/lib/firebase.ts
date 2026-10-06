@@ -360,7 +360,7 @@ export async function syncUserProfileAndBusiness(fbUser: User): Promise<{
   } catch {}
 
   const defaultBizId = `biz-${fbUser.uid}`;
-  const defaultBusiness: BusinessProfile = cachedBusinesses.find(b => b.id === defaultBizId) || cachedBusinesses[0] || {
+  const defaultBusiness: BusinessProfile = cachedBusinesses.find(b => b.id === defaultBizId) || {
     id: defaultBizId,
     name: fbUser.displayName ? `${fbUser.displayName}'s Store` : 'Avanyx Store',
     ownerUid: fbUser.uid,
@@ -510,7 +510,9 @@ export async function syncUserProfileAndBusiness(fbUser: User): Promise<{
   const mergedBusinesses: BusinessProfile[] = [...loadedBusinesses];
   for (const cached of cachedBusinesses) {
     if (cached.id !== 'biz-clothing-01' && !mergedBusinesses.some(b => b.id === cached.id)) {
-      mergedBusinesses.push(cached);
+      if (cached.ownerUid === fbUser.uid || (cached.memberUids && cached.memberUids.includes(fbUser.uid))) {
+        mergedBusinesses.push(cached);
+      }
     }
   }
 

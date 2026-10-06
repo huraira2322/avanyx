@@ -107,24 +107,16 @@ async function callDeepSeek(
   if (!apiKey) {
     throw new DeepSeekError('DEEPSEEK_API_KEY is not configured in environment.', 401, { isRetryable: false });
   }
+  const modelToUse = route.model.startsWith('deepseek-v4') ? 'deepseek-chat' : route.model;
   const body: any = {
-    model: route.model,
+    model: modelToUse,
     messages,
     temperature: route.temperature,
-    max_tokens: opts?.maxTokens || 4096,
+    max_tokens: opts?.maxTokens || 8192,
     stream: false,
   };
-  // DeepSeek API requires `thinking` to be an OBJECT (ThinkingOptions), never a boolean.
-  // Only send it when thinking is requested; omit entirely for non-thinking calls
-  // (verified live: sending `thinking: false` -> 400 "expected struct ThinkingOptions").
-  if (route.thinking) {
-    body.thinking = { type: 'enabled' };
-    if (route.reasoningEffort !== 'off') {
-      body.reasoning_effort = route.reasoningEffort;
-    }
-  }
   const controller = new AbortController();
-  const timeoutMs = opts?.timeoutMs || 60000;
+  const timeoutMs = opts?.timeoutMs || 120000;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {

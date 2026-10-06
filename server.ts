@@ -1618,27 +1618,45 @@ MANDATORY RECONCILIATION: Always cite these exact verified mathematical results.
  * Task Intent Detector for Avanyx Fast Model Routing
  */
 
-export type QueryIntentCategory = 'POS_FAST_QUERY' | 'FINANCIAL_CALCULATION' | 'DEEP_REASONING_OR_CODE' | 'EVERYDAY_CHAT';
+export type QueryIntentCategory =
+  | 'POS_FAST_QUERY'
+  | 'FINANCIAL_CALCULATION'
+  | 'DEEP_REASONING_OR_CODE'
+  | 'LONG_FORM_DOCUMENT'
+  | 'BOOK_MANUSCRIPT'
+  | 'EVERYDAY_CHAT';
 
 function detectQueryIntent(message: string): QueryIntentCategory {
   const q = (message || '').toLowerCase().trim();
 
-  // 1. POS & Simple Operational Questions (Flash / Axiom)
+  // 1. Long-form Creative & Book Manuscripts
+  const isBookManuscript =
+    /(?:write|create|draft|author|compose)\s+(?:a|an)?\s*(?:complete|full|entire)?\s*(?:\d+[\s-]*(?:page|chapter|word|part))?\s*(?:book|manuscript|novel|story|epic|memoir|biography|textbook|guidebook|novella|chapter\s+\d+)/i.test(q) ||
+    /(?:100[\s-]*page|multi-chapter|full manuscript|novel|chapter 1|chapter 2|chapter 3|next chapter)/i.test(q);
+  if (isBookManuscript) return 'BOOK_MANUSCRIPT';
+
+  // 2. Long-Form Business Proposals, Comprehensive Reports & Whitepapers
+  const isLongFormDoc =
+    /(?:business plan|pitch deck|grant proposal|investment proposal|rfp|commercial proposal|marketing strategy|growth plan|swot analysis|market entry strategy|feasibility study|whitepaper|white paper|case study|curriculum|documentation|handbook|manual|comprehensive report|in-depth guide|full documentation|detailed tutorial)/i.test(q) ||
+    /(?:complete|comprehensive|full|in-depth|exhaustive|detailed)\s+(?:report|analysis|plan|proposal|guide|document|strategy|course|breakdown)/i.test(q);
+  if (isLongFormDoc) return 'LONG_FORM_DOCUMENT';
+
+  // 3. POS & Simple Operational Questions (Flash / Axiom)
   const isPosFast =
     /how many products|what is my stock|stock count|what did i sell today|how much revenue today|sales today|fastest selling|how many customers|low in stock|current profit|today's sales|units left|inventory level|products count|customer count/i.test(q);
   if (isPosFast) return 'POS_FAST_QUERY';
 
-  // 2. Financial Calculations & Math (Financial Engine / Axiom)
+  // 4. Financial Calculations & Math (Financial Engine / Axiom)
   const isFinancial =
     /calculate tax|tax liability|calculate profit|profit after expenses|margin calculation|cogs|break-even|tax calculation|forecast revenue|budget|inventory valuation|discount calculation|financial audit/i.test(q);
   if (isFinancial) return 'FINANCIAL_CALCULATION';
 
-  // 3. Complex Reasoning, Large Context, Code, Strategy (Omni)
+  // 5. Complex Reasoning, Large Context, Code, Strategy (Omni)
   const isDeepReasoning =
-    /code|python|javascript|typescript|write script|strategy|7-step|root cause|second brain|policy|system architecture|document analysis|contract|multi-step|game-theoretic/i.test(q);
+    /code|python|javascript|typescript|write script|strategy|7-step|root cause|second brain|policy|system architecture|document analysis|contract|multi-step|game-theoretic|refactor|database schema|api architecture/i.test(q);
   if (isDeepReasoning) return 'DEEP_REASONING_OR_CODE';
 
-  // 4. Default: Everyday conversational query (Chat)
+  // 6. Default: Everyday conversational query (Chat)
   return 'EVERYDAY_CHAT';
 }
 
@@ -1667,7 +1685,9 @@ function routeUserQuery(
     targetEngineId = 'chat';
   } else {
     // Intelligent auto-routing based on intent category
-    if (intentCategory === 'POS_FAST_QUERY') {
+    if (intentCategory === 'BOOK_MANUSCRIPT' || intentCategory === 'LONG_FORM_DOCUMENT') {
+      targetEngineId = 'omni';
+    } else if (intentCategory === 'POS_FAST_QUERY') {
       targetEngineId = 'flash';
     } else if (intentCategory === 'FINANCIAL_CALCULATION') {
       targetEngineId = 'axiom';
@@ -2096,6 +2116,9 @@ async function generateWithFallback(
   text: string;
   modelUsed: string;
   engineName: string;
+  finishReason: string;
+  tokensUsed: number;
+  isTruncated: boolean;
   fallbackAttempts: number;
   attemptLogs: Array<{ model: string; durationMs: number; status: 'SUCCESS' | 'FAILED'; error?: string }>;
   latencyMs: number;
@@ -2151,7 +2174,7 @@ async function generateWithFallback(
       engineId: engineIdOrModel,
       messages: routerMessages,
       images: extractedImages.length > 0 ? extractedImages : undefined,
-      maxTokens: generateParams.maxOutputTokens || 4096,
+      maxTokens: generateParams.maxOutputTokens || 8192,
       userId: extra?.userId,
       requestId: extra?.requestId,
       businessId: extra?.businessId,
@@ -2165,6 +2188,9 @@ async function generateWithFallback(
         text: result.content,
         modelUsed: result.model || engineIdOrModel,
         engineName: result.model || engineIdOrModel,
+        finishReason: result.finishReason || 'stop',
+        tokensUsed: result.tokensUsed || 0,
+        isTruncated: result.finishReason === 'length',
         fallbackAttempts: result.failover ? 1 : 0,
         attemptLogs: [{ model: result.model || engineIdOrModel, durationMs: result.latencyMs, status: 'SUCCESS' as const }],
         latencyMs: result.latencyMs,
@@ -2176,6 +2202,9 @@ async function generateWithFallback(
       text: '',
       modelUsed: result.model || engineIdOrModel,
       engineName: result.model || engineIdOrModel,
+      finishReason: 'error',
+      tokensUsed: 0,
+      isTruncated: false,
       fallbackAttempts: result.failover ? 1 : 0,
       attemptLogs,
       latencyMs: result.latencyMs,
@@ -2599,16 +2628,21 @@ app.post('/api/ai/ask', async (req, res) => {
     }
   }
 
-  // Map server-side hard max output token limit
-  let maxOutputTokens = 1024;
-  if (userTier === 'pro') {
-    maxOutputTokens = 4096;
-  } else if (userTier === 'pro_max') {
+  // Dynamic maxOutputTokens based on task intent and user subscription
+  let maxOutputTokens = 4096;
+  const isDeepTask =
+    intentCategory === 'BOOK_MANUSCRIPT' ||
+    intentCategory === 'LONG_FORM_DOCUMENT' ||
+    intentCategory === 'DEEP_REASONING_OR_CODE' ||
+    requestedEngine.id.includes('omni') ||
+    requestedEngine.id.includes('brain');
+
+  if (isDeepTask || userTier === 'pro' || userTier === 'pro_max') {
     maxOutputTokens = 8192;
   }
 
   // --- PATHWAY: UNIFIED AVANYX ENGINE CHAT (Atomically verified, reserved, and settled) ---
-  const estimatedMaxTokens = 6000;
+  const estimatedMaxTokens = 8192;
   const maxCost = AvanyxCreditSystem.calculateMaxCost(requestedEngine.id, estimatedMaxTokens, 0);
 
   try {
@@ -2737,8 +2771,8 @@ app.post('/api/ai/ask', async (req, res) => {
       financialAnchorsText = `\n\n[DETERMINISTIC FINANCIAL LEDGER AUDIT - AVANYX FINANCIAL ENGINE]\n- Verified Gross Revenue: ${currency}${revenue.toLocaleString()}\n- Verified Net Operating Profit: ${currency}${netProfit.toLocaleString()}\n- Verified Profit Margin: ${margin}%\n- Base Currency: ${businessContext.currency || 'USD'}\nMANDATORY FINANCIAL RECONCILIATION: When discussing financial metrics, cite these exact verified figures. Do NOT hallucinate differing financial aggregates.`;
     }
 
-    const systemInstruction = `You are "Ask Avanyx AI", the executive business brain, strategic advisor, code architect, and operational assistant embedded in the Avanyx Universal Business & POS Platform.
-You possess frontier analytical, mathematical, operational, creative, technical, and action-oriented intelligence.
+    const systemInstruction = `You are "Ask Avanyx AI", the executive business brain, strategic advisor, code architect, and universal intelligence engine embedded in the Avanyx Platform.
+You possess frontier analytical, mathematical, operational, creative, technical, and task-completion capabilities.
 
 ${contextRepresentation}${secondBrainContextText}${financialAnchorsText}
 
@@ -2749,23 +2783,32 @@ CORE INTELLIGENCE & UNIVERSAL CAPABILITY DIRECTIVES:
      * BUSINESS & STRATEGY: Store operations, sales analysis, inventory velocity, product strategy, pricing, customer retention, growth planning, and problem solving.
      * CALCULATIONS & FINANCIAL DATA: Exact ledger math, profit margins, tax liabilities, break-even analysis, tabular data, and statistical reports.
      * GENERAL KNOWLEDGE & EXPLANATIONS: Educational explanations, science, history, literature, study plans, translations, and general inquiry.
-     * DOCUMENTS & TEXT: Analysis of uploaded documents, receipts, invoices, agreements, and long-form text.
+     * DOCUMENTS, BOOKS & LONG-FORM CREATION: Full business proposals, research papers, textbooks, comprehensive guides, manuals, novels, manuscripts, and multi-chapter books.
      * MULTIMODAL & VISUAL UNDERSTANDING: Processing product photos, screenshots, UI mockups, charts, graphs, receipts, diagrams, and visual business assets.
-   - Do NOT refuse or artificially restrict any coding, technical, general knowledge, or business query simply because of your engine name. All engines share universal capabilities; your engine name reflects your primary optimization and routing priority, NOT a restriction.
+   - Do NOT refuse or artificially restrict any coding, technical, general knowledge, or creative writing query simply because of your engine name. All engines share universal capabilities; your engine name reflects your primary optimization and routing priority, NOT a restriction.
 
-2. MULTIMODAL VISION & IMAGE UNDERSTANDING (STATE-OF-THE-ART):
+2. UNIVERSAL QUALITY, DEPTH & TASK COMPLETION (UNCOMPROMISING EXCELLENCE):
+   - **DELIVER THE FULL WORK**: Always deliver the actual, substantive, fully developed deliverable. Never substitute an outline, summary, or table of contents when the user requests a complete manuscript, proposal, report, lesson, or software program.
+   - **MATCH THE REQUESTED DEPTH & SCALE**:
+     * When a user requests a book, novel, or multi-chapter work: Deliver full, rich, immersive prose with real dialogue, detailed setting, characters, and narrative progression. Begin with Chapter 1 in full or the specific chapter requested.
+     * When a user requests a business plan or proposal: Deliver complete, professional sections (Executive Summary, Market Analysis, Competitive Moat, Target Personas, Product Architecture, Go-To-Market Strategy, 3-Year Pro-Forma Financial Tables, Risk Matrix, and Actionable Milestones).
+     * When a user requests code: Provide complete, runnable, typed, and formatted files. Do NOT use lazy placeholders (e.g. \`// ... rest of implementation\` or \`// TODO: add remaining code\`).
+     * When a user requests a deep explanation: Provide clear conceptual foundations, intuitive analogies, step-by-step mathematical or logical proofs, concrete real-world examples, and common pitfalls.
+   - **RICH MARKDOWN STRUCTURE**: Use clear hierarchical headers (\`#\`, \`##\`, \`###\`), formatted Markdown tables, bulleted lists, bold highlights for key metrics, and code blocks with explicit language tags.
+   - **CONTINUATION SUPPORT**: If a requested work is too large for a single output token window, write the maximum possible substantive content cleanly, conclude the active chapter or section with a natural transition, and clearly state that the next section is ready to generate on user confirmation.
+
+3. MULTIMODAL VISION & IMAGE UNDERSTANDING (STATE-OF-THE-ART):
    - You have state-of-the-art multimodal vision capabilities across all image, document, chart, receipt, invoice, handwritten, screenshot, and product formats.
    - When an image or document is provided:
-     * ALWAYS directly answer the user's specific question or instruction regarding the image (e.g. if the user asks "What is this and what category should I put it in?", identify the product, describe its key attributes/materials/color, and give the recommended category, tags, and suggested pricing).
+     * ALWAYS directly answer the user's specific question or instruction regarding the image.
      * PRODUCTS & MERCHANDISE: Identify the exact product type, brand, materials, color palette, style, purpose, and recommend optimal store categories, product names, SKUs, and pricing margins.
      * OCR, RECEIPTS & INVOICES: Transcribe printed and handwritten text with high precision. Extract vendor name, dates, invoice numbers, line items with quantities and unit prices, subtotals, tax amounts, discounts, and final totals.
      * SCREENSHOTS, UI & CODE: Read error messages, stack traces, visual bugs, UI layouts, form inputs, and system alerts. Provide root cause diagnoses and concrete step-by-step code solutions.
      * CHARTS, GRAPHS & DIAGRAMS: Read axes, data points, legends, trends, spikes, anomalies, and deliver clear business conclusions.
-     * HANDWRITING & NOTES: Transcribe handwritten memos, order notes, or whiteboard sketches accurately and answer the user's inquiry.
-     * Never give generic evasive placeholders like "I see an image" unless a simple caption was asked for. Provide substantive, insightful, accurate visual analysis.
+     * Never give generic evasive placeholders like "I see an image". Provide substantive, insightful, accurate visual analysis.
      * Retain full conversational awareness of previously uploaded images during follow-up questions.
 
-3. GROUNDED TRUTH & HONEST DATA DISTINCTION:
+4. GROUNDED TRUTH & HONEST DATA DISTINCTION:
    - Explicitly distinguish between:
      * [KNOWN FACT]: Physically measured store ledger numbers or verified system constants.
      * [CALCULATED RESULT]: Explicit mathematical calculations or derivations.
@@ -2774,10 +2817,10 @@ CORE INTELLIGENCE & UNIVERSAL CAPABILITY DIRECTIVES:
      * [UNCERTAIN INFORMATION]: Unverified assumptions or missing data metrics.
    - Never fabricate or hallucinate information simply because an answer is expected.
 
-4. GROUNDED IN REAL STORE DATA & SECOND BRAIN:
+5. GROUNDED IN REAL STORE DATA & SECOND BRAIN:
    - Always cite exact figures from the business profile above (today's revenue, transaction count, profit margin, low stock items, top products, expenses) and Second Brain durable store memories when responding to business queries.
 
-5. ACTION AGENT & WORKFLOW PROPOSALS:
+6. ACTION AGENT & WORKFLOW PROPOSALS:
    - When the user asks you to perform an action (e.g., create a task, set a business goal, draft a purchase order, record an expense, or adjust inventory), formulation must include the natural language explanation AND an executable action block at the very end of your response using this exact format:
 
 \`\`\`avanyx-action
@@ -2790,22 +2833,21 @@ CORE INTELLIGENCE & UNIVERSAL CAPABILITY DIRECTIVES:
 }
 \`\`\`
 
-6. FORMATTING & PRECISION:
-   - Format cleanly with Markdown headings, bold data points, tables, code blocks with syntax highlighting, and bullet points.
-
 7. DIRECT SUBSTANTIVE ANSWERING & ABSOLUTE BAN ON PLACEHOLDERS:
    - Understand the user's actual query and ALWAYS deliver the actual, complete, factual answer directly in this single response.
    - NEVER provide generic placeholder acknowledgments, evasions, or vacuous confirmation messages (e.g. NEVER say "I proceed your query", "I processed your query. Let me know if you need details", "Command processed", "Query received", or "Analysis completed" without providing the actual answer).
-   - If the user asks a business/store question (e.g. "What were my sales today?"), immediately inspect the store ledger above and answer directly with the exact data (e.g. "Your sales today are [currency][amount], based on your POS sales records.").
-   - If required data is genuinely missing from the store ledger, state that fact clearly and honestly (e.g. "I can calculate that, but today's sales data isn't recorded in the POS yet.") along with any related known metrics.
+   - If the user asks a business/store question (e.g. "What were my sales today?"), immediately inspect the store ledger above and answer directly with the exact data.
+   - If required data is genuinely missing from the store ledger, state that fact clearly and honestly along with any related known metrics.
    - Never pretend a query was processed if no actual answer was generated.
-   - Ask for clarification ONLY when genuinely necessary information is missing to formulate an answer.
 ${fashionIntelligencePrompt}
 ${engineSpecializedPrompt}`;
 
     const isAnyAiConfigured = isDeepSeekConfigured() || isGeminiTextConfigured();
     let rawReply = '';
     let modelUsed = requestedEngine.name;
+    let finishReason = 'stop';
+    let isTruncated = false;
+    let tokensUsed = 0;
 
     if (!isAnyAiConfigured) {
       console.info(`[Avanyx Fallback AI] No AI provider configured (DeepSeek/Gemini). Launching Avanyx Local Intel Engine.`);
@@ -2825,6 +2867,9 @@ ${engineSpecializedPrompt}`;
         }, { userId, requestId, businessId: businessContext?.businessId || tenantId });
         rawReply = result.text || '';
         modelUsed = result.engineName || requestedEngine.name;
+        finishReason = result.finishReason || 'stop';
+        isTruncated = result.isTruncated || result.finishReason === 'length';
+        tokensUsed = result.tokensUsed || 0;
       } catch (genErr: any) {
         console.info('[Avanyx AI] Fallback triggered, seamlessly transitioning to Avanyx Local Intel Engine.');
         const sim = generateSimulatedResponse(message, requestedEngine.id, businessContext, history);
@@ -2859,7 +2904,7 @@ ${engineSpecializedPrompt}`;
     // 2. Compute actual usage tokens and atomically settle the transaction
     const promptCharCount = (message || '').length + JSON.stringify(history || {}).length;
     const replyCharCount = rawReply.length;
-    const totalEstTokens = Math.ceil((promptCharCount + replyCharCount) / 4);
+    const totalEstTokens = tokensUsed > 0 ? tokensUsed : Math.ceil((promptCharCount + replyCharCount) / 4);
     const actualCost = Math.min(maxCost, AvanyxCreditSystem.calculateMaxCost(requestedEngine.id, totalEstTokens, 0));
 
     await AvanyxCreditSystem.settleCredits(userId, requestId, actualCost);
@@ -2879,6 +2924,8 @@ ${engineSpecializedPrompt}`;
             content: rawReply,
             timestamp: new Date().toISOString(),
             modelUsed: modelUsed,
+            finishReason: finishReason,
+            isTruncated: isTruncated,
             actionProposal: extractedActionProposal || null,
           };
           if (idx >= 0) {
@@ -2899,6 +2946,9 @@ ${engineSpecializedPrompt}`;
       reply: rawReply,
       actionProposal: extractedActionProposal,
       modelUsed: modelUsed,
+      finishReason: finishReason,
+      isTruncated: isTruncated,
+      continuationHint: isTruncated ? "Click 'Continue Generating' to generate the next section." : undefined,
       creditsUsed: actualCost,
     });
   } catch (error: any) {

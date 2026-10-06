@@ -32,6 +32,7 @@ import { AvanyxMascot } from './components/AvanyxMascot';
 import { DigitalReceiptView } from './components/DigitalReceiptView';
 import { LivingLine } from './components/LivingLine';
 import { AvanyxLandingPage } from './components/AvanyxLandingPage';
+import { UniversalBusinessEngine } from './components/UniversalBusinessEngine';
 import { AVANYX_COLOR_PALETTES } from './constants/themeColors';
 import { trackFeatureUsage, updateUserHeartbeat } from './lib/analyticsEngine';
 import {
@@ -75,6 +76,11 @@ import {
   PiggyBank,
   Sliders,
   Calendar,
+  BedDouble,
+  Activity,
+  Car,
+  Wrench,
+  Utensils,
 } from 'lucide-react';
 import { SystemModuleKey } from './types';
 
@@ -134,6 +140,15 @@ const AvanyxAppContent: React.FC = () => {
       }
     }
     return 'landing';
+  });
+  const [authPortalInitialMode, setAuthPortalInitialMode] = useState<'login' | 'signup' | 'phone' | 'staff' | 'demo'>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.toLowerCase();
+      if (hash === '#signup') return 'signup';
+      if (hash === '#demo') return 'demo';
+      if (hash === '#staff') return 'staff';
+    }
+    return 'login';
   });
 
   const activePalette =
@@ -286,15 +301,23 @@ const AvanyxAppContent: React.FC = () => {
   if (!isAuthenticated) {
     if (publicView === 'auth') {
       return (
-        <AuthPortal onBackToWebsite={() => setPublicView('landing')} />
+        <AuthPortal
+          initialMode={authPortalInitialMode}
+          onBackToWebsite={() => setPublicView('landing')}
+        />
       );
     }
 
     return (
       <AvanyxLandingPage
-        onLaunchPos={() => setPublicView('auth')}
-        onOpenAuth={(mode) => setPublicView('auth')}
-        
+        onLaunchPos={() => {
+          setAuthPortalInitialMode('demo');
+          setPublicView('auth');
+        }}
+        onOpenAuth={(mode) => {
+          setAuthPortalInitialMode(mode || 'login');
+          setPublicView('auth');
+        }}
       />
     );
   }
@@ -360,6 +383,7 @@ const AvanyxAppContent: React.FC = () => {
     {
       title: 'Administration & System',
       items: [
+        { key: 'wallet', label: 'Wallet & Credits', icon: Wallet },
         { key: 'notifications', label: 'Notifications', icon: Bell },
         { key: 'settings', label: 'Store Settings', icon: Settings },
         { key: 'help', label: 'Help & Shortcuts', icon: HelpCircle },
@@ -368,7 +392,32 @@ const AvanyxAppContent: React.FC = () => {
   ];
 
   // ALWAYS visible modules regardless of settings
-  const alwaysVisible = ['pos', 'products', 'settings', 'help', 'notifications', 'subusers', 'business_brain'];
+  const alwaysVisible = ['pos', 'products', 'settings', 'help', 'notifications', 'subusers', 'business_brain', 'wallet', 'operations', 'domain_ops'];
+
+  const opModel = activeBusiness?.catalogSchema?.operationalModel || activeBusiness?.operationalModel;
+  const hasDomainEngine = Boolean(opModel && opModel.domain && opModel.domain !== 'retail');
+
+  const domainGroup = hasDomainEngine && opModel ? {
+    title: opModel.domain === 'hospitality' ? 'Hospitality & Front Desk' :
+           opModel.domain === 'healthcare' ? 'Clinical Practice & Patients' :
+           opModel.domain === 'rental' ? 'Fleet & Asset Rentals' :
+           opModel.domain === 'manufacturing' ? 'Production & Work Orders' :
+           opModel.domain === 'food_dining' ? 'Dining & Table Service' :
+           'Operational Engine',
+    items: [
+      {
+        key: 'operations' as const,
+        label: `${opModel.terminology?.resourcePlural || 'Operations'} Workspace`,
+        icon: opModel.domain === 'hospitality' ? BedDouble :
+              opModel.domain === 'healthcare' ? Activity :
+              opModel.domain === 'rental' ? Car :
+              opModel.domain === 'manufacturing' ? Wrench :
+              opModel.domain === 'food_dining' ? Utensils :
+              Layers,
+        badge: 'LIVE',
+      }
+    ]
+  } : null;
 
   const isModuleEnabled = (key: string) => {
     if (alwaysVisible.includes(key)) return true;
@@ -381,18 +430,28 @@ const AvanyxAppContent: React.FC = () => {
     return false;
   };
 
-  const navigationGroups = rawNavigationGroups.map(group => ({
-    ...group,
-    items: group.items.filter(item => isModuleEnabled(item.key))
-  })).filter(group => group.items.length > 0);
+  const navigationGroups = [
+    ...(domainGroup ? [domainGroup] : []),
+    ...rawNavigationGroups.map(group => ({
+      ...group,
+      items: group.items.filter(item => isModuleEnabled(item.key))
+    })).filter(group => group.items.length > 0)
+  ];
 
-  const handleSelectModule = (key: SystemModuleKey | 'settings' | 'subusers' | 'help' | 'notifications' | 'wallet') => {
+  const handleSelectModule = (key: SystemModuleKey | 'settings' | 'subusers' | 'help' | 'notifications' | 'wallet' | 'operations') => {
     setCurrentModule(key as SystemModuleKey);
     setMobileDrawerOpen(false);
   };
 
   const renderActiveModule = () => {
     switch (currentModule) {
+      case 'operations':
+      case 'domain_ops':
+        return (
+          <div className="w-full max-w-7xl 2xl:max-w-[1720px] mx-auto">
+            <UniversalBusinessEngine />
+          </div>
+        );
       case 'pos':
         return <PosBillingScreen />;
       case 'business_brain':
